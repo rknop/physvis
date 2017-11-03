@@ -12,7 +12,55 @@ from OpenGL.GLU import *
 
 
 class GLUTContext:
+
+    # ======================================================================
+    # Class methods
+
+    @classmethod
+    def class_init(cls):
+        if hasattr(GLUTContext, '_already_is_initialized') and GLUTContext._already_is_initialized != None:
+            return
+        GLUTContext._full_init = False
+        
+        glutInit(len(sys.argv), sys.argv)
+        glutInitContextVersion(3, 3)
+        glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
+        glutInitContextProfile(GLUT_CORE_PROFILE)
+        glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
+        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+
+        GLUTContext._already_is_initialized = True
+
+    @classmethod
+    def post_init(cls):
+        if GLUTContext._full_init:
+            return
+        GLUTContext._full_init = True
+
+        GLUTContext.idle_funcs = []
+        glutIdleFunc(lambda: cls.idle())
+
+        
+    @classmethod
+    def add_idle_func(cls, func):
+        GLUTContext.idle_funcs.append(func)
+
+    @classmethod
+    def remove_idle_func(cls, func):
+        GLUTContext.idle_funcs = [x for x in cls.idle_funcs if x != func]
+
+    @classmethod
+    def idle(cls):
+        for func in GLUTContext.idle_funcs:
+            func()
+        glutPostRedisplay()
+
+    # ======================================================================
+    # Instance methods
+    
     def __init__(self, width=500, height=400, title="GLUT"):
+        self.__class__.class_init()
+        
         self.width = width
         self.height = height
         self.title = title
@@ -28,16 +76,16 @@ class GLUTContext:
         glutInitWindowPosition(0, 0)
         self.window = glutCreateWindow(self.title)
 
-        # NOTE -- I think these are global so shouldn't be in the class
-
+        glutSetWindow(self.window)
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
-        glutIdleFunc(lambda : self.idle())
         glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
 
         self.create_shaders()
         self.create_VBO()
+
+        self.__class__.post_init()
 
     def cleanup(self):
         self.destroy_shaders()
@@ -80,11 +128,11 @@ class GLUTContext:
         glDisableVertexAttribArray(0)
 
         glBindBuffer(GL_ARRAY_BUFFER, 0)
-        glDeleteBuffers(1, self.colorbuffer)
-        glDeleteBuffers(1, self.vboarr)
+        glDeleteBuffers(1, [self.colorbuffer])
+        glDeleteBuffers(1, [self.vboarr])
 
         glBindVertexArray(0)
-        glDeleteVertexArrayds(1, self.vtxarr)
+        glDeleteVertexArrays(1, [self.vtxarr])
 
         err = glGetError()
         if err != GL_NO_ERROR:
@@ -146,7 +194,7 @@ void main(void)
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
-    def destroy_shaders():
+    def destroy_shaders(self):
         err = glGetError()
 
         glUseProgram(0)
@@ -164,10 +212,6 @@ void main(void)
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
-        
-    def idle(self):
-        glutPostRedisplay()
-        
     def timer(self, val):
         sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
         self.framecount = 0
@@ -191,12 +235,6 @@ void main(void)
         self.framecount += 1
 
 # ======================================================================
-glutInit(len(sys.argv), sys.argv)
-glutInitContextVersion(3, 3)
-glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
-glutInitContextProfile(GLUT_CORE_PROFILE)
-glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
-glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
 
 
 glext = GLUTContext()

@@ -117,10 +117,20 @@ class GLUTContext(Observer):
         glutCloseFunc(lambda : self.cleanup())
 
         self.create_shaders()
-        self.create_VBO()
+        # self.create_VBO()
 
+        self.objects = []
+        
         self.__class__.post_init()
 
+    def receive_message(self, message, subject):
+        sys.stderr.write("OMG!  Got message {} from subject {}, should do something!\n"
+                         .format(message, subject))
+
+    def add_object(self, obj):
+        self.objects.append(obj)
+        obj.add_listener(self)
+        
     def cleanup(self):
         self.destroy_shaders()
         self.destroy_VBO()
@@ -273,9 +283,11 @@ void main(void)
 # ======================================================================
 
 class Object(Subject):
-    def __init__(self, position=None, rotation=None, scale=None,
+    def __init__(self, context=None, position=None, rotation=None, scale=None,
                  *args, *kwargs):
         super().__init__(*args, *kwargs)
+
+        self.context = context
         
         if position is None:
             self._position = numpy.array([0., 0., 0.])
@@ -293,6 +305,9 @@ class Object(Subject):
             self._scale = scale
 
         self.shader_program = None
+
+        self.EBO = None
+        self.VBO = None
 
     @property
     def position(self):
@@ -348,6 +363,42 @@ class Object(Subject):
 
 
 # ======================================================================
+
+class Box(Object):
+    def __init__(self, *args, *kwargs):
+        super().__init__(*args, *kwargs)
+
+        self.vertices = numpy.array( [-0.5, -0.5, -0.5,
+                                      -0.5, -0.5,  0.5,
+                                      -0.5,  0.5, -0.5,
+                                      -0.5,  0.5,  0.5,
+                                       0.5, -0.5, -0.5,
+                                       0.5, -0.5,  0.5,
+                                       0.5,  0.5, -0.5,
+                                       0.5,  0.5, -0.5]
+                                     dtype=numpy.float32 )
+        self.indices = numpy.array( [0, 1, 2,
+                                     2, 1, 3,
+                                     3, 1, 5,
+                                     5, 3, 7,
+                                     7, 5, 4,
+                                     4, 7, 6,
+                                     6, 4, 0,
+                                     0, 6, 2,
+                                     2, 3 ,7,
+                                     7, 2, 6,
+                                     0, 1, 5,
+                                     5, 0, 4],
+                                    dtype=numpy.int32 )
+        self.VBO = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glBufferData(GL_ARRAY_BUFFER, self.vertices, GL_STATIC_DRAW)
+        self.EBO = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, self.indices, GL_STATIC_DRAW)
+
+        self.context.add_object(self)
+
 # ======================================================================
 # ======================================================================
 

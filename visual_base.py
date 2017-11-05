@@ -26,6 +26,22 @@ def rate(fps):
 
     time_of_last_rate_call = time.perf_counter()
         
+# https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
+#
+# My quarternions are [ sin(θ/2)*x̂, sin(θ/2)*ŷ, sin(θ/2)*ẑ, cos(θ/2) ]
+def quarternion_multiply(p, q):
+    if len(p) == 3:
+        px, py, pz = numpy.array(p)
+        pr = 0.
+    else:
+        px, py, pz, pr = numpy.array(p)
+    qx, qy, qz, qr = numpy.array(q)
+    return numpy.array( [ pr*qx + px*qr + py*qz - pz*qy,
+                          pr*qy - px*qz + py*qr + pz*qx,
+                          pr*qz + px*qy - py*qx + pz*qr,
+                          pr*qr - px*qx - py*qy - pz*qz ] , dtype=numpy.float32 )
+            
+    
 def gl_version_info():
     sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
     sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
@@ -35,7 +51,7 @@ def gl_version_info():
 
 # ======================================================================
 
-class color:
+class color(object):
     red = numpy.array( [1., 0., 0.] )
     green = numpy.array( [0., 1., 0.] )
     blue = numpy.array( [0., 0., 1.] )
@@ -48,7 +64,7 @@ class color:
 
 # ======================================================================
 
-class Subject:
+class Subject(object):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.listeners = []
@@ -68,7 +84,7 @@ class Subject:
     def remove_listener(self, listener):
         self.listeners = [x for x in self.listeners if x != listener]
 
-class Observer:
+class Observer(object):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -178,7 +194,7 @@ class GLUTContext(Observer):
                              [0, sy, 0, 0],
                              [0, 0, zz, zw],
                              [0, 0, -1, 0]], dtype=numpy.float32).T
-        
+
     # ======================================================================
     # Instance methods
     
@@ -431,27 +447,21 @@ class Object(Subject):
         super().__init__(*args, **kwargs)
 
         if context is None:
+            if not hasattr(GLUTContext, "_default_context") or GLUTContext._default_context is None:
+                GLUTContext._default_context = GLUTContext()
             self.context = GLUTContext._default_context
         else:
             self.context = context
 
         self.is_elements = False         # True if using EBO
+
+        self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quarternion
         
         if position is None:
             self._position = numpy.array([0., 0., 0.])
         else:
             self._position = numpy.array(position)
 
-        if axis is None:
-            self._axis = numpy.array([1., 0., 0.])
-        else:
-            self._axis = numpy.array(axis)
-
-        if up is None:
-            self._up = numpy.array([0., 1., 0.])
-        else:
-            self._up = numpy.array(up)
-            
         if scale is None:
             self._scale = numpy.array([1., 1., 1.])
         else:
@@ -484,6 +494,12 @@ class Object(Subject):
                                            [ 0., 0., 0., 1. ] ], dtype=numpy.float32)
         self.update_model_matrix()
         
+        if axis is not None:
+            self.axis = numpy.array(axis)
+
+        if up is not None:
+            self.up = numpy.array(up)
+            
     @property
     def position(self):
         return self._position
@@ -564,55 +580,75 @@ class Object(Subject):
         
     @property
     def axis(self):
-        return self._axis
+        v = numpy.array([1., 0., 0.], dtype=float32)
+        q = self._rotation
+        qinv = q.copy()
+        qinv[0:3] *= -1.
+        qinv /= (q*q).sum()
+        return quarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
         if len(value) != 3:
             sys.stderr.write("ERROR, axis must have 3 elements.")
             sys.exit(20)
-        self._axis = numpy.array(value)
+        R = math.sqrt(value[0]*value[0] + value[2]*value[2])
+        theta = math.atan2(value[1], R)
+        phi = math.atan2(value[2], value[0])
+        q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
+        q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
+        self._rotation = quarternion_multiply(q2, q1)
         self.update_model_matrix()
 
     @property
     def up(self):
-        return self._up
+        # return self._up
+        sys.stderr.write("up not implemented\n")
+        return None
 
     @up.setter
     def up(self, value):
-        if len(value) != 3:
-            sys.stderr.write("ERROR, up must have 3 elements.")
-        self._up = numpy.array(up)
-        self.update_model_matrix()
+        # if len(value) != 3:
+        #     sys.stderr.write("ERROR, up must have 3 elements.")
+        # self._up = numpy.array(up)
+        # self.update_model_matrix()
+        sys.stderr.write("up not implemented\n")
 
+    @property
+    def rotation(self):
+        return self._rotation
+
+    @rotation.setter
+    def rotation(self, value):
+        if len(value) != 4:
+            sys.sderr.write("rotation is a quarternion, eneds 4 values\n")
+            sys.exit(20)
+        self._rotation = numpy.array(value)
+        self.update_model_matrix()
+        
     def rotate_to(self, theta, phi):
-        self._axis = numpy.array( [math.sin(theta)*math.cos(phi),
-                                   math.sin(theta)*math.sin(phi),
-                                   math.cos(theta)] )
+        # ROB FIX THIS
         self.update_model_matrix()
         
     def update_model_matrix(self):
-        horiz = math.sqrt(self._axis[0]**2 + self._axis[2]**2)
-        theta1 = math.atan2(self._axis[1], horiz)
-        theta2 = math.atan2(self._axis[2], self._axis[0])
-        rot = numpy.matrix( [[ math.cos(theta1),  math.sin(theta1), 0.],
-                             [-math.sin(theta1),  math.cos(theta1), 0.],
-                             [        0.       ,          0.      , 1.]], dtype=numpy.float32)
-        rot *= numpy.matrix( [[ math.cos(theta2), 0.,  math.sin(theta2)],
-                              [       0.       ,  1.,        0.        ],
-                              [-math.sin(theta2), 0.,  math.cos(theta2)]], dtype=numpy.float32)
-        self._up /= math.sqrt( (self._up**2).sum() )
-        # ROB IMPLEMENT UP!
-        self.model_matrix = numpy.matrix( [[ self._scale[0], 0., 0., 0. ],
-                                           [ 0., self._scale[1], 0., 0. ],
-                                           [ 0., 0., self._scale[2], 0. ],
-                                           [ 0., 0., 0., 1.]], dtype=numpy.float32 )
+        q = self._rotation
+        s = 1./( (q*q).sum() )
+        rot = numpy.matrix(
+            [[ 1.-2*s*(q[1]*q[1]+q[2]*q[2]) ,    2*s*(q[0]*q[1]-q[2]*q[3]) ,    2*s*(q[0]*q[2]+q[1]*q[3])],
+             [    2*s*(q[0]*q[1]+q[2]*q[3]) , 1.-2*s*(q[0]*q[0]+q[2]*q[2]) ,    2*s*(q[1]*q[2]-q[0]*q[3])],
+             [    2*s*(q[0]*q[2]-q[1]*q[3]) ,    2*s*(q[1]*q[2]+q[0]*q[3]) , 1.-2*s*(q[0]*q[0]+q[1]*q[1])]],
+            dtype=numpy.float32)
+        mat = numpy.matrix( [[ self._scale[0], 0., 0., 0. ],
+                             [ 0., self._scale[1], 0., 0. ],
+                             [ 0., 0., self._scale[2], 0. ],
+                             [ 0., 0., 0., 1.]], dtype=numpy.float32 )
         rotation = numpy.identity(4)
         rotation[0:3, 0:3] = rot.T
-        self.model_matrix *= rotation
+        mat *= rotation
         translation = numpy.identity(4)
         translation[3, 0:3] = self._position
-        self.model_matrix *= translation
+        mat *= translation
+        self.model_matrix = mat
         # sys.stderr.write("model matrix: {}\n".format(self.model_matrix))
         # sys.stderr.write("scale: {}\n".format(self._scale))
 
@@ -674,7 +710,7 @@ class Object(Subject):
 # ======================================================================
 
 class Box(Object):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, length=1., width=1., height=1., *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
@@ -755,6 +791,8 @@ class Box(Object):
         glEnableVertexAttribArray(1)
 
         self.num_triangles = 12
+
+        self.scale = numpy.array( [length, height, width] ) 
         
         self.context.add_object(self)
 
@@ -799,57 +837,25 @@ class Box(Object):
             
 
 # ======================================================================
-# ======================================================================
-
-# class ThingDoer:
-#     def __init__(self, glext):
-#         self.glext = glext
-#         self.box = None
-#         self.theta = math.pi/4.
-#         self.phi = 0.
-#         self.dphi = 2*math.pi/120.
-#         self.dt = 1./30.
-        
-#     def dothings(self):
-#         # sys.stderr.write("time.perf_counter() = {}\n".format(time.perf_counter()))
-
-#         if self.box is None:
-#             # self.box = Box(self.glext)
-#             self.box = Box(self.glext, position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red)
-#             self.boxcreatetime = time.perf_counter()
-#             self.nextchange = self.boxcreatetime + self.dt
-#             self.green = True
-
-
-#         if time.perf_counter() > self.nextchange:
-#             self.phi += self.dphi
-#             if self.phi > 2.*math.pi: self.phi -= 2.*math.pi
-#             self.box.rotate_to(self.theta, self.phi)
-#             self.nextchange += self.dt
-        
-
-# ======================================================================
 
 def main():
-    glext = GLUTContext()
-
-    gl_version_info()
-
     sys.stderr.write("Making box.\n")
-    box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red)
+    box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
+              length = 1.5, width=0.25, height=0.25)
     theta = math.pi/4.
     phi = 0.
     fps = 30
     dphi = 2*math.pi/(4.*fps)
 
+    gl_version_info()
+
     while True:
         phi += dphi
         if phi > 2.*math.pi:
             phi -= 2.*math.pi
-            box.length *= 1.1
-            box.width /= 1.1
-            box.height /= 1.1
-        box.rotate_to(theta, phi)
+        box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
+                                 math.sin(theta)*math.sin(phi),
+                                 math.cos(theta)] )
         rate(fps)
         
 

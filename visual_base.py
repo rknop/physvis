@@ -580,7 +580,7 @@ class Object(Subject):
         
     @property
     def axis(self):
-        v = numpy.array([1., 0., 0.], dtype=float32)
+        v = numpy.array([1., 0., 0.], dtype=numpy.float32)
         q = self._rotation
         qinv = q.copy()
         qinv[0:3] *= -1.
@@ -626,9 +626,15 @@ class Object(Subject):
         self._rotation = numpy.array(value)
         self.update_model_matrix()
         
-    def rotate_to(self, theta, phi):
-        # ROB FIX THIS
-        self.update_model_matrix()
+    def rotate(self, angle, axis=None, origin=None):
+        if origin is not None:
+            sys.stderr.write("WARNING: Rotations not around object origin aren't currently supported.\n")
+        if axis is None:
+            axis = self.axis
+        s = math.sin(angle/2.)
+        c = math.cos(angle/2.)
+        q = numpy.array( [axis[0]*s, axis[1]*s, axis[2]*s, c] )
+        self.rotation = quarternion_multiply(q, self.rotation)
         
     def update_model_matrix(self):
         q = self._rotation
@@ -737,7 +743,7 @@ class Box(Object):
                                         0.5,  0.5, -0.5, 1.,
                                         0.5,  0.5,  0.5, 1.,
                                         0.5, -0.5, -0.5, 1.,
-                                        0.5,  0.5, -0.5, 1.,
+                                        0.5, -0.5, -0.5, 1.,
                                         0.5,  0.5,  0.5, 1.,
                                         0.5, -0.5,  0.5, 1.,
 
@@ -842,6 +848,8 @@ def main():
     sys.stderr.write("Making box.\n")
     box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
               length = 1.5, width=0.25, height=0.25)
+    box2 = Box(position = (2., 0., 0.), color=color.green,
+               length = 0.5, width=0.5, height=0.5)
     theta = math.pi/4.
     phi = 0.
     fps = 30
@@ -856,6 +864,11 @@ def main():
         box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
                                  math.sin(theta)*math.sin(phi),
                                  math.cos(theta)] )
+        box2.x = 2.*math.cos(phi)
+        if math.sin(phi)>0.:
+            box2.rotate(dphi)
+        else:
+            box2.rotate(-dphi)
         rate(fps)
         
 

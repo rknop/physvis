@@ -2,15 +2,36 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import numpy
-import numpy.linalg
 import math
 import time
+import queue
+import threading
+
+import numpy
+import numpy.linalg
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
+time_of_last_rate_call = None
+def rate(fps):
+    global time_of_last_rate_call
+    if time_of_last_rate_call is None:
+        time.sleep(1./fps)
+    else:
+        sleeptime = time_of_last_rate_call + 1./fps - time.perf_counter()
+        if sleeptime > 0:
+            time.sleep(sleeptime)
+
+    time_of_last_rate_call = time.perf_counter()
+        
+def gl_version_info():
+    sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
+    sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
+    sys.stderr.write("OpenGL vendor: {}\n".format(glGetString(GL_VENDOR)))
+    sys.stderr.write("OpenGL shading language version: {}\n"
+                     .format(glGetString(GL_SHADING_LANGUAGE_VERSION)))
 
 # ======================================================================
 
@@ -62,11 +83,17 @@ class GLUTContext(Observer):
     # ======================================================================
     # Class methods
 
-    @classmethod
-    def class_init(cls):
-        if hasattr(GLUTContext, '_already_is_initialized') and GLUTContext._already_is_initialized != None:
+    @staticmethod
+    def class_init(object):
+        if hasattr(GLUTContext, '_already_is_initialized') and GLUTContext._already_is_initialized is not None:
             return
+        GLUTContext._post_init = False
         GLUTContext._full_init = False
+        
+        if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
+            GLUTContext._default_context = object
+
+        GLUTContext.threadlock = threading.Lock()
         
         glutInit(len(sys.argv), sys.argv)
         glutInitContextVersion(3, 3)
@@ -77,26 +104,59 @@ class GLUTContext(Observer):
 
         GLUTContext._already_is_initialized = True
 
-    @classmethod
-    def post_init(cls):
-        if GLUTContext._full_init:
+    # I'm afraid of a race condition on _post_init
+    @staticmethod
+    def post_init():
+        if GLUTContext._post_init:
+            while not GLUTContext._full_init:
+                time.sleep(0.1)
             return
-        GLUTContext._full_init = True
+
+        GLUTContext._post_init = True
+        GLUTContext._full_init = False
 
         GLUTContext.idle_funcs = []
-        glutIdleFunc(lambda: cls.idle())
+        GLUTContext.things_to_run = queue.Queue()
 
+        glutIdleFunc(lambda: GLUTContext.idle())
+
+        # sys.stderr.write("Starting GLUT thread...\n")
+        GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main() )
+        GLUTContext.thread.start()
+        while not GLUTContext._full_init:
+            time.sleep(0.1)
         
-    @classmethod
-    def add_idle_func(cls, func):
+    # There's a race condition here on idle_funcs and things_to_run
+    @staticmethod
+    def thread_main():
+        glutMainLoop()
+        
+    @staticmethod
+    def add_idle_func(func):
         GLUTContext.idle_funcs.append(func)
 
-    @classmethod
-    def remove_idle_func(cls, func):
-        GLUTContext.idle_funcs = [x for x in cls.idle_funcs if x != func]
+    @staticmethod
+    def remove_idle_func(func):
+        GLUTContext.idle_funcs = [x for x in GLUTContext.idle_funcs if x != func]
 
-    @classmethod
-    def idle(cls):
+    @staticmethod
+    def run_glcode(func):
+        if not hasattr(GLUTContext, "_post_init") or not GLUTContext._post_init:
+            func()
+        else:
+            while not GLUTContext._full_init:
+                time.sleep(0.1)
+            GLUTContext.things_to_run.put(func)
+            
+    @staticmethod
+    def idle():
+        try:
+            while not GLUTContext.things_to_run.empty():
+                func = GLUTContext.things_to_run.get()
+                func()
+        except queue.Empty:
+            pass
+        
         for func in GLUTContext.idle_funcs:
             func()
         glutPostRedisplay()
@@ -124,7 +184,7 @@ class GLUTContext(Observer):
     
     def __init__(self, width=500, height=400, title="GLUT", *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.__class__.class_init()
+        GLUTContext.class_init(self)
         
         self.width = width
         self.height = height
@@ -140,23 +200,38 @@ class GLUTContext(Observer):
         self.fov = math.pi/4.
         self.clipnear = 0.1
         self.clipfar = 100.
+
+        self.objects = []
+
+        GLUTContext.run_glcode(lambda : self.gl_init())
         
+    def gl_init(self):
         glutInitWindowSize(self.width, self.height)
         glutInitWindowPosition(0, 0)
         self.window = glutCreateWindow(self.title)
-
         glutSetWindow(self.window)
+        glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
+
+        GLUTContext.post_init()
+
+        GLUTContext.run_glcode(lambda : self.gl_init2())
+        
+    def gl_init2(self):
+        self.create_shaders()
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
         glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
 
-        self.create_shaders()
-
-        self.objects = []
+    def window_visibility_handler(self, state):
+        if state != GLUT_VISIBLE:
+            return
+        glutSetWindow(self.window)
+        GLUTContext.threadlock.acquire()
+        GLUTContext._full_init = True
+        GLUTContext.threadlock.release()
+        glutVisibilityFunc(None)
         
-        self.__class__.post_init()
-
     def receive_message(self, message, subject):
         sys.stderr.write("OMG!  Got message {} from subject {}, should do something!\n"
                          .format(message, subject))
@@ -226,8 +301,8 @@ void main(void)
         glShaderSource(self.fragshdrid, fragment_shader)
         glCompileShader(self.fragshdrid)
 
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+        # sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+        # sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
         
         self.progid = glCreateProgram()
         glAttachShader(self.progid, self.vtxshdrid)
@@ -279,7 +354,7 @@ void main(void)
 
     def set_perspective(self, fov, aspect, near, far):
         matrix = self.perspective_matrix(fov, aspect, near,far)
-        sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
+        # sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
         glUseProgram(self.progid)
         projection_location = glGetUniformLocation(self.progid, "projection")
         glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
@@ -311,7 +386,7 @@ void main(void)
         self.height = height
         glViewport(0, 0, self.width, self.height)
         self.set_perspective(self.fov, self.width/self.height, self.clipnear, self.clipfar)
-    
+        
     def draw(self):
         glClearColor(0., 0., 0., 0.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -355,7 +430,10 @@ class Object(Subject):
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.context = context
+        if context is None:
+            self.context = GLUTContext._default_context
+        else:
+            self.context = context
 
         self.is_elements = False         # True if using EBO
         
@@ -415,7 +493,7 @@ class Object(Subject):
         if len(value) != 3:
             sys.stderr.write("ERROR, position must have 3 elements.")
             sys.exit(20)
-        self.position = numpy.array(value)
+        self._position = numpy.array(value)
         self.update_model_matrix()
         
     @property
@@ -445,6 +523,45 @@ class Object(Subject):
         self._position[2] = value
         self.update_model_matrix()
 
+    @property
+    def scale(self):
+        return self._scale
+
+    @scale.setter
+    def scale(self, value):
+        if len(value) != 3:
+            sys.stderr.write("ERROR, scale must have 3 elements.")
+            sys.exit(20)
+        self._scale = numpy.array(value)
+        self.update_model_matrix()
+
+    @property
+    def sx(self):
+        return self._scale[0]
+
+    @sx.setter
+    def sx(self, value):
+        self._scale[0] = value
+        self.update_model_matrix()
+        
+    @property
+    def sy(self):
+        return self._scale[1]
+
+    @sy.setter
+    def sy(self, value):
+        self._scale[1] = value
+        self.update_model_matrix()
+        
+    @property
+    def sz(self):
+        return self._scale[2]
+
+    @sz.setter
+    def sz(self, value):
+        self._scale[2] = value
+        self.update_model_matrix()
+        
     @property
     def axis(self):
         return self._axis
@@ -486,11 +603,18 @@ class Object(Subject):
                               [-math.sin(theta2), 0.,  math.cos(theta2)]], dtype=numpy.float32)
         self._up /= math.sqrt( (self._up**2).sum() )
         # ROB IMPLEMENT UP!
-        self.model_matrix[0:3, 0:3] = rot.T
-        self.model_matrix[3, 0:3] = self._position
-        self.model_matrix[0:3, 3] = 0.
-        self.model_matrix[3, 3] = 1.
-        # sys.stderr.write("model matrix:\n{}\n".format(self.model_matrix))
+        self.model_matrix = numpy.matrix( [[ self._scale[0], 0., 0., 0. ],
+                                           [ 0., self._scale[1], 0., 0. ],
+                                           [ 0., 0., self._scale[2], 0. ],
+                                           [ 0., 0., 0., 1.]], dtype=numpy.float32 )
+        rotation = numpy.identity(4)
+        rotation[0:3, 0:3] = rot.T
+        self.model_matrix *= rotation
+        translation = numpy.identity(4)
+        translation[3, 0:3] = self._position
+        self.model_matrix *= translation
+        # sys.stderr.write("model matrix: {}\n".format(self.model_matrix))
+        # sys.stderr.write("scale: {}\n".format(self._scale))
 
             
     @property
@@ -515,7 +639,10 @@ class Object(Subject):
 
     @color.setter
     def color(self, rgb):
-        self._color[0:3] = rgb
+        if len(rgb) != 3:
+            sys.stderr.write("ERROR!  Need all of r, g, and b for color.\n")
+            sys.exit(20)
+        self._color[0:3] = numpy.array(rgb)
         self.color_update()
 
     @property
@@ -631,6 +758,30 @@ class Box(Object):
         
         self.context.add_object(self)
 
+    @property
+    def length(self):
+        return self.sx
+
+    @length.setter
+    def length(self, value):
+        self.sx = value
+
+    @property
+    def width(self):
+        return self.sz
+
+    @width.setter
+    def width(self, value):
+        self.sz = value
+
+    @property
+    def height(self):
+        return self.sy
+
+    @height.setter
+    def height(self, value):
+        self.sy = value
+        
     def destroy(self):
         sys.stderr.write("Destroying box {}\n".format(self))
         glBindVertexArray(self.VAO)
@@ -650,44 +801,63 @@ class Box(Object):
 # ======================================================================
 # ======================================================================
 
-class ThingDoer:
-    def __init__(self, glext):
-        self.glext = glext
-        self.box = None
-        self.theta = math.pi/4.
-        self.phi = 0.
-        self.dphi = 2*math.pi/120.
-        self.dt = 1./30.
+# class ThingDoer:
+#     def __init__(self, glext):
+#         self.glext = glext
+#         self.box = None
+#         self.theta = math.pi/4.
+#         self.phi = 0.
+#         self.dphi = 2*math.pi/120.
+#         self.dt = 1./30.
         
-    def dothings(self):
-        # sys.stderr.write("time.perf_counter() = {}\n".format(time.perf_counter()))
+#     def dothings(self):
+#         # sys.stderr.write("time.perf_counter() = {}\n".format(time.perf_counter()))
 
-        if self.box is None:
-            # self.box = Box(self.glext)
-            self.box = Box(self.glext, position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red)
-            self.boxcreatetime = time.perf_counter()
-            self.nextchange = self.boxcreatetime + self.dt
-            self.green = True
+#         if self.box is None:
+#             # self.box = Box(self.glext)
+#             self.box = Box(self.glext, position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red)
+#             self.boxcreatetime = time.perf_counter()
+#             self.nextchange = self.boxcreatetime + self.dt
+#             self.green = True
 
 
-        if time.perf_counter() > self.nextchange:
-            self.phi += self.dphi
-            if self.phi > 2.*math.pi: self.phi -= 2.*math.pi
-            self.box.rotate_to(self.theta, self.phi)
-            self.nextchange += self.dt
+#         if time.perf_counter() > self.nextchange:
+#             self.phi += self.dphi
+#             if self.phi > 2.*math.pi: self.phi -= 2.*math.pi
+#             self.box.rotate_to(self.theta, self.phi)
+#             self.nextchange += self.dt
         
 
 # ======================================================================
+
+def main():
+    glext = GLUTContext()
+
+    gl_version_info()
+
+    sys.stderr.write("Making box.\n")
+    box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red)
+    theta = math.pi/4.
+    phi = 0.
+    fps = 30
+    dphi = 2*math.pi/(4.*fps)
+
+    while True:
+        phi += dphi
+        if phi > 2.*math.pi:
+            phi -= 2.*math.pi
+            box.length *= 1.1
+            box.width /= 1.1
+            box.height /= 1.1
+        box.rotate_to(theta, phi)
+        rate(fps)
         
-glext = GLUTContext()
 
-sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
-sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
-sys.stderr.write("OpenGL vendor: {}\n".format(glGetString(GL_VENDOR)))
-sys.stderr.write("OpenGL shading language version: {}\n"
-                 .format(glGetString(GL_SHADING_LANGUAGE_VERSION)))
 
-thingdoer = ThingDoer(glext)
-glext.add_idle_func( lambda: thingdoer.dothings() )
+    
+    
+# ======================================================================
 
-glutMainLoop()
+if __name__ == "__main__":
+    main()
+

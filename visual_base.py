@@ -58,7 +58,7 @@ class color(object):
     yellow = numpy.array( [1., 1., 0.] )
     cyan = numpy.array( [0., 1., 1.] )
     magenta = numpy.array( [1., 0., 1.] )
-    orange = numpy.array( [1., 0., 0.5] )
+    orange = numpy.array( [1., 0.5, 0.] )
     black = numpy.array( [0., 0. ,0.] )
     white = numpy.array( [1., 1., 1.] )
 
@@ -581,12 +581,12 @@ class Object(Subject):
         
     @property
     def axis(self):
-        v = numpy.array([1., 0., 0.], dtype=numpy.float32)
+        v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
         q = self._rotation
         qinv = q.copy()
         qinv[0:3] *= -1.
         qinv /= (q*q).sum()
-        return quarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
+        return uarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
@@ -599,6 +599,7 @@ class Object(Subject):
         q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
         q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
         self._rotation = quarternion_multiply(q2, q1)
+        self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
         self.update_model_matrix()
 
     @property
@@ -622,7 +623,7 @@ class Object(Subject):
     @rotation.setter
     def rotation(self, value):
         if len(value) != 4:
-            sys.sderr.write("rotation is a quarternion, eneds 4 values\n")
+            sys.sderr.write("rotation is a quarternion, needs 4 values\n")
             sys.exit(20)
         self._rotation = numpy.array(value)
         self.update_model_matrix()
@@ -1045,7 +1046,6 @@ class Icosahedron(Object):
     def __init__(self, radius=1., subdivisions=0, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-
         if subdivisions > 4.:
             raise Exception(">4 subdivisions is absurd. Even 4 is probably too many!!!")
 
@@ -1090,16 +1090,149 @@ class Sphere(Icosahedron):
 
 # ======================================================================
 
+class Cylinder(Object):
+
+    @staticmethod
+    def make_cylinder_vertices():
+        if not hasattr(Cylinder, "_vertices"):
+            num_edge_points = 32
+
+            vertices = numpy.empty( 4*4*num_edge_points + 8, dtype=numpy.float32)
+            normals = numpy.empty( 3*4*num_edge_points + 6, dtype=numpy.float32)
+            indices = numpy.empty( 3* (4*num_edge_points) , dtype=numpy.uint16 )
+
+            # We need two copies of each vertex since they have different normals.
+            # Order: bottom for sides, top for sides, bottom for endcap, top for endcap
+
+            for i in range(num_edge_points):
+                phi = float(i)/float(num_edge_points) * 2*math.pi
+                vertices[4*i+0] = 0.
+                vertices[4*i+1] = math.cos(phi)
+                vertices[4*i+2] = math.sin(phi)
+                vertices[4*i+3] = 1.
+                normals[3*i:3*i+3] = [0., math.cos(phi), math.sin(phi)]
+
+                vertices[4*(num_edge_points+i)+0] = 1.
+                vertices[4*(num_edge_points+i)+1] = math.cos(phi)
+                vertices[4*(num_edge_points+i)+2] = math.sin(phi)
+                vertices[4*(num_edge_points+i)+3] = 1.
+                normals[3*(num_edge_points+i):3*(num_edge_points+i)+3] = [0., math.cos(phi), math.sin(phi)]
+
+                vertices[4*(2*num_edge_points+i)+0] = 0.
+                vertices[4*(2*num_edge_points+i)+1] = math.cos(phi)
+                vertices[4*(2*num_edge_points+i)+2] = math.sin(phi)
+                vertices[4*(2*num_edge_points+i)+3] = 1.
+                normals[3*(2*num_edge_points+i):3*(2*num_edge_points+i)+3] = [-1., 0., 0.]
+
+                vertices[4*(3*num_edge_points+i)+0] = 1.
+                vertices[4*(3*num_edge_points+i)+1] = math.cos(phi)
+                vertices[4*(3*num_edge_points+i)+2] = math.sin(phi)
+                vertices[4*(3*num_edge_points+i)+3] = 1.
+                normals[3*(3*num_edge_points+i):3*(3*num_edge_points+i)+3] = [1., 0., 0.]
+
+            vertices[16*num_edge_points:16*num_edge_points+4] = [0., 0., 0., 1.]
+            vertices[16*num_edge_points+4:16*num_edge_points+8] = [1., 0., 0., 1.]
+            normals[12*num_edge_points:12*num_edge_points+3] = [-1., 0., 0.]
+            normals[12*num_edge_points+3:12*num_edge_points+6] = [1., 0., 0.]
+
+            for i in range(num_edge_points-1):
+                # Bottom endcap
+                indices[3*(2*num_edge_points+i) : 3*(2*num_edge_points+i)+3] = [ 2*num_edge_points+i,
+                                                                                 2*num_edge_points+i+1,
+                                                                                 4*num_edge_points ]
+                # Top endcap
+                indices[3*(3*num_edge_points+i) : 3*(3*num_edge_points+i)+3] = [ 3*num_edge_points+i,
+                                                                                 3*num_edge_points+i+1,
+                                                                                 4*num_edge_points+1 ]
+                # Sides
+                indices[2*3*i:2*3*i+3] = [i, i+1, num_edge_points+i]
+                indices[2*3*i+3:2*3*i+6] = [num_edge_points+i, num_edge_points+i+1, i+1]
+            # Wraparonds
+            indices[3*(3*num_edge_points-1) : 3*(3*num_edge_points-1)+3] = [ 3*num_edge_points-1,
+                                                                             2*num_edge_points,
+                                                                             4*num_edge_points ]
+            indices[3*(4*num_edge_points-1) : 4*(4*num_edge_points-1)+3] = [ 4*num_edge_points-1,
+                                                                             3*num_edge_points,
+                                                                             4*num_edge_points+1 ]
+            indices[2*(3*(num_edge_points-1)):2*(3*(num_edge_points-1))+3] = [num_edge_points-1, 0, 2*num_edge_points-1]
+            indices[2*(3*(num_edge_points-1))+3:2*(3*(num_edge_points-1))+6] = [ num_edge_points-1, num_edge_points, 0]
+
+            # for i in range(len(indices)):
+            #     sys.stderr.write("{}\n".format(vertices[indices[i]:indices[i]+4]))
+            
+            Cylinder._vertices = vertices
+            Cylinder._normals = normals
+            Cylinder._indices = indices
+
+            Cylinder._vertexbuffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Cylinder._vertexbuffer)
+            glBufferData(GL_ARRAY_BUFFER, Cylinder._vertices, GL_STATIC_DRAW)
+
+            Cylinder._normalbuffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Cylinder._normalbuffer)
+            glBufferData(GL_ARRAY_BUFFER, Cylinder._normals, GL_STATIC_DRAW)
+
+            Cylinder._indexbuffer = glGenBuffers(1)
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indexbuffer)
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indices, GL_STATIC_DRAW)
+
+            Cylinder._numvertices = len(Cylinder._vertices)
+            Cylinder._numfaces = len(Cylinder._indices) // 3
+
+    def __init__(self, radius=1., *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.VAO = glGenVertexArrays(1)
+        glBindVertexArray(self.VAO)
+
+        Cylinder.make_cylinder_vertices()
+
+        self.VBO = Cylinder._vertexbuffer
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(0)
+
+        self.normalbuffer = Cylinder._normalbuffer
+        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(1)
+
+        self.EBO = Cylinder._indexbuffer
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+
+        self.num_triangles = Cylinder._numfaces
+        self.is_elements = True
+
+        self.context.add_object(self)
+
+        sys.stderr.write("Setting cylinder radius to {}\n".format(radius))
+        self._radius = radius
+        self.scale = [self._scale[0], radius, radius]
+
+    @property
+    def radius(self):
+        return self._radius
+
+    @radius.setter
+    def radius(self, value):
+        self._radius = value
+        self.scale = [self._scale[0], value, value]
+        
+# ======================================================================
+
 def main():
     sys.stderr.write("Making box.\n")
     box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
               length = 1.5, width=0.25, height=0.25)
-    sys.stderr.write("Making Ball.\n")
-    ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
-    sys.stderr.write("Making box2.\n")
-    box2 = Box(position = (1., 1., 1.), axis = (0.5, 0.5, 0.7071), color=color.cyan,
-               length=0.25, width=0.25, height=0.25)
+    # sys.stderr.write("Making Ball.\n")
+    # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
+    # sys.stderr.write("Making box2.\n")
+    # box2 = Box(position = (1., 1., 1.), axis = (0.5, 0.5, 0.7071), color=color.cyan,
+    #            length=0.25, width=0.25, height=0.25)
 
+    rod = Cylinder(position = (0., 1., 0.), color=color.orange,
+                   axis=(2., -2., 0.), radius=0.125)
+    
     theta = math.pi/4.
     phi = 0.
     fps = 30
@@ -1114,19 +1247,19 @@ def main():
         box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
                                  math.sin(theta)*math.sin(phi),
                                  math.cos(theta)] )
-        ball.x = 2.*math.cos(phi)
-        if math.sin(phi)>0.:
-            ball.rotate(dphi)
-        else:
-            ball.rotate(-dphi)
+        # ball.x = 2.*math.cos(phi)
+        # if math.sin(phi)>0.:
+        #     ball.rotate(dphi)
+        # else:
+        #     ball.rotate(-dphi)
+
+        # box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
+        #                                       quarternion_multiply( [ 0, 1.5*math.sin(phi), 1.5*math.cos(phi) ],
+        #                                                             [0., 0., math.cos(math.pi/6), math.sin(math.pi/6)]
+        #                                                             )
+        #                                       )[0:3]
+
         rate(fps)
-
-        box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
-
-                                              quarternion_multiply( [ 0, 1.5*math.sin(phi), 1.5*math.cos(phi) ],
-                                                                    [0., 0., math.cos(math.pi/6), math.sin(math.pi/6)]
-                                                                    )
-                                              )[0:3]
                                               
 
     

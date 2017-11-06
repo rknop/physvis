@@ -420,8 +420,9 @@ void main(void)
                 color_location = glGetUniformLocation(self.progid, "color")
                 glUniform4fv(color_location, 1, obj._color)
                 if obj.is_elements:
+                    glBindVertexArray(obj.VAO)
                     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.EBO)
-                    glDrawElements(GL_TRIANGLES, len(obj.indices), GL_UNSIGNED_INT, None)
+                    glDrawElements(GL_TRIANGLES, obj.num_triangles*3, GL_UNSIGNED_SHORT, None)
                 else:
                     glBindVertexArray(obj.VAO)
                     glDrawArrays(GL_TRIANGLES, 0, obj.num_triangles*3)
@@ -841,15 +842,190 @@ class Box(Object):
                              .format(err, gluSerrorString(err)))
             
             
+# ======================================================================
 
+class Icosahedron(Object):
+    def __init__(self, radius=1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
+        self.edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
+        self.faces = numpy.zeros( (20, 3), dtype=numpy.uint16 )
+
+        # Vertices: 1 at top (+x), 5 next row, 5 next row, 1 at bottom
+
+        r = 0.5
+        self._radius = r
+        self.vertices[0:4] = [r, 0., 0., 1.]
+        angles = numpy.arange(0, 2*math.pi, 2*math.pi/5)
+        for i in range(len(angles)):
+            self.vertices[4+4*i:8+4*i] = [ 0.447213595499958*r,
+                                           0.8944271909999162*r*math.cos(angles[i]),
+                                           0.8944271909999162*r*math.sin(angles[i]),
+                                           1.]
+            self.vertices[24+4*i:28+4*i] = [-0.447213595499958*r,
+                                             0.8944271909999162*r*math.cos(angles[i]+angles[1]/2.),
+                                             0.8944271909999162*r*math.sin(angles[i]+angles[1]/2.),
+                                            1.]
+        self.vertices[44:48] = [-r, 0., 0., 1.]
+
+        self.edges[0:5, :]   = [ [0, 1], [0, 2], [0, 3], [0, 4], [0, 5] ]
+        self.edges[5:10, :]  = [ [1, 2], [2, 3], [3, 4], [4, 5], [5, 1] ]
+        self.edges[10:20, :] = [ [1, 6], [2, 6], [2, 7], [3, 7], [3, 8],
+                                 [4, 8], [4, 9], [5, 9], [5, 10], [1, 10] ]
+        self.edges[20:25, :] = [ [6, 7], [7, 8], [8, 9], [9, 10], [10, 6] ]
+        self.edges[25:30, :] = [ [6, 11], [7, 11], [8, 11], [9, 11], [10, 11] ]
+
+        self.faces[0:5, :] = [ [0, 5, 1], [1, 6, 2], [2, 7, 3], [3, 8, 4], [4, 9, 0] ]
+        self.faces[5:10, :] = [ [5, 10, 11], [6, 12, 13], [7, 14, 15], [8, 16, 17],
+                                [9, 18, 19] ]
+        self.faces[10:15, :] = [ [20, 12, 11], [21, 14, 13], [22, 16, 15],
+                                 [23, 18, 17], [24, 10, 19] ]
+        self.faces[15:20, :] = [ [25, 26, 20], [26, 27, 21], [27, 28, 22],
+                                 [28, 29, 23], [29, 25, 24] ]
+
+        self.subdivide()
+        self.subdivide()
+
+        self.normals = numpy.zeros( 3*len(self.vertices)//4, dtype=numpy.float32 )
+        for i in range(len(self.vertices)//4):
+            self.normals[3*i:3*i+3] = ( self.vertices[4*i:4*i+3] /
+                                        math.sqrt( (self.vertices[4*i:4*i+3]**2).sum() ))
+
+        self.indices = numpy.zeros( self.faces.shape[0] * 3, dtype=numpy.uint16 )
+        v = numpy.zeros(6, dtype=numpy.uint16)
+        for i in range(self.faces.shape[0]):
+            dex = 0
+            for j in range(3):
+                for k in range(2):
+                    v[dex] = self.edges[self.faces[i, j], k]
+                    dex += 1
+            if len(numpy.unique(v)) != 3:
+                sys.stderr.write("ERROR with face {}, {} vertices: {}\n"
+                                 .format(i, len(numpy.unique(v)), numpy.unique(v)))
+                sys.exit(20)
+            if ( ( self.edges[self.faces[i, 0], 0] == self.edges[self.faces[i, 1], 0] ) or
+                 ( self.edges[self.faces[i, 0], 0] == self.edges[self.faces[i, 1], 1] ) ):
+                self.indices[3*i+0] = self.edges[self.faces[i, 0], 1]
+                self.indices[3*i+1] = self.edges[self.faces[i, 0], 0]
+            else:
+                self.indices[3*i+0] = self.edges[self.faces[i, 0], 0]
+                self.indices[3*i+1] = self.edges[self.faces[i, 0], 1]
+            if ( ( self.edges[self.faces[i, 1], 0] == self.edges[self.faces[i, 0], 0] ) or
+                 ( self.edges[self.faces[i, 1], 0] == self.edges[self.faces[i, 0], 1] ) ):
+                self.indices[3*i+2] = self.edges[self.faces[i, 1], 1]
+            else:
+                self.indices[3*i+2] = self.edges[self.faces[i, 1], 0]
+
+        self.VAO = glGenVertexArrays(1)
+        glBindVertexArray(self.VAO)
+                          
+        self.VBO = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glBufferData(GL_ARRAY_BUFFER, self.vertices, GL_STATIC_DRAW)
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(0)
+
+        self.normalbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+        glBufferData(GL_ARRAY_BUFFER, self.normals, GL_STATIC_DRAW)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(1)
+
+        self.EBO = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, self.indices, GL_STATIC_DRAW)
+
+        sys.stderr.write("{} triangles, {} indices, {} vertices\n"
+                         .format(self.faces.shape[0], len(self.indices),
+                                 len(self.vertices)//4))
+        
+        self.num_triangles = self.faces.shape[0]
+        self.is_elements = True
+
+        self.context.add_object(self)
+
+    def subdivide(self):
+        newverts = numpy.zeros( len(self.vertices) + 4*self.edges.shape[0], dtype=numpy.float32 )
+        newverts[0:len(self.vertices)] = self.vertices
+        numoldverts = len(self.vertices) // 4
+        
+        for i in range(self.edges.shape[0]):
+            vertex = 0.5 * ( self.vertices[ 4*self.edges[i, 0] : 4*self.edges[i, 0]+4 ] +
+                             self.vertices[ 4*self.edges[i, 1] : 4*self.edges[i, 1]+4 ] )
+            vertex[0:3] *= self._radius / math.sqrt( (vertex[0:3]**2).sum() )
+            newverts[len(self.vertices) + 4*i : len(self.vertices) + 4*i + 4] = vertex
+
+        newedges = numpy.zeros( (2*self.edges.shape[0] + 3*self.faces.shape[0], 2 ) ,
+                                dtype=numpy.uint16 )
+        newfaces = numpy.zeros( (4*self.faces.shape[0], 3) , dtype=numpy.uint16 )
+
+        for en in range(self.edges.shape[0]):
+            newedges[2*en, 0] = self.edges[en, 0]
+            newedges[2*en, 1] = numoldverts+en
+            newedges[2*en+1, 0] = self.edges[en, 1]
+            newedges[2*en+1, 1] = numoldverts+en
+        for fn in range(self.faces.shape[0]):
+            newedges[2*self.edges.shape[0] + 3*fn + 0, 0] = numoldverts + self.faces[fn, 0]
+            newedges[2*self.edges.shape[0] + 3*fn + 0, 1] = numoldverts + self.faces[fn, 1]
+            newedges[2*self.edges.shape[0] + 3*fn + 1, 0] = numoldverts + self.faces[fn, 1]
+            newedges[2*self.edges.shape[0] + 3*fn + 1, 1] = numoldverts + self.faces[fn, 2]
+            newedges[2*self.edges.shape[0] + 3*fn + 2, 0] = numoldverts + self.faces[fn, 2]
+            newedges[2*self.edges.shape[0] + 3*fn + 2, 1] = numoldverts + self.faces[fn, 0]
+
+        for fn in range(self.faces.shape[0]):
+            if ( self.edges[self.faces[fn, 0], 0] == self.edges[self.faces[fn, 1], 0] or
+                 self.edges[self.faces[fn, 0], 0] == self.edges[self.faces[fn, 1], 1] ):
+                corner1 = self.edges[self.faces[fn, 0], 1]
+                corner2 = self.edges[self.faces[fn, 0], 0]
+            else:
+                corner1 = self.edges[self.faces[fn, 0], 0]
+                corner2 = self.edges[self.faces[fn, 0], 1]
+            if ( self.edges[self.faces[fn, 1], 0] == self.edges[self.faces[fn, 0], 0] or
+                 self.edges[self.faces[fn, 1], 0] == self.edges[self.faces[fn, 0], 1] ):
+                corner3 = self.edges[self.faces[fn, 1], 1]
+            else:
+                corner3 = self.edges[self.faces[fn, 1], 0]
+
+            if newedges[2*self.faces[fn, 0], 0] == corner1:
+                edge1l = 2*self.faces[fn, 0]
+                edge1r = 2*self.faces[fn, 0] + 1
+            else:
+                edge1l = 2*self.faces[fn, 0] + 1
+                edge1r = 2*self.faces[fn, 0]
+            if newedges[2*self.faces[fn, 1], 0] == corner2:
+                edge2l = 2*self.faces[fn, 1]
+                edge2r = 2*self.faces[fn, 1] + 1
+            else:
+                edge2l = 2*self.faces[fn, 1] + 1
+                edge2r = 2*self.faces[fn, 1]
+            if newedges[2*self.faces[fn, 2], 0] == corner3:
+                edge3l = 2*self.faces[fn, 2]
+                edge3r = 2*self.faces[fn, 2] + 1
+            else:
+                edge3l = 2*self.faces[fn, 2] + 1
+                edge3r = 2*self.faces[fn, 2]
+            mid1 = 2*self.edges.shape[0] + 3*fn
+            mid2 = 2*self.edges.shape[0] + 3*fn + 1
+            mid3 = 2*self.edges.shape[0] + 3*fn + 2
+                
+            newfaces[4*fn,     :] = [edge1l, mid3, edge3r]
+            newfaces[4*fn + 1, :] = [edge1r, edge2l, mid1]
+            newfaces[4*fn + 2, :] = [mid2, edge2r, edge3l]
+            newfaces[4*fn + 3, :] = [mid1, mid2, mid3]
+
+        self.vertices = newverts
+        self.edges = newedges
+        self.faces = newfaces
+                    
 # ======================================================================
 
 def main():
     sys.stderr.write("Making box.\n")
     box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
               length = 1.5, width=0.25, height=0.25)
-    box2 = Box(position = (2., 0., 0.), color=color.green,
-               length = 0.5, width=0.5, height=0.5)
+    sys.stderr.write("Making Icosahedron.\n")
+    d20 = Icosahedron(position= (2., 0., 0.), color=color.green)
     theta = math.pi/4.
     phi = 0.
     fps = 30
@@ -864,11 +1040,11 @@ def main():
         box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
                                  math.sin(theta)*math.sin(phi),
                                  math.cos(theta)] )
-        box2.x = 2.*math.cos(phi)
+        d20.x = 2.*math.cos(phi)
         if math.sin(phi)>0.:
-            box2.rotate(dphi)
+            d20.rotate(dphi)
         else:
-            box2.rotate(-dphi)
+            d20.rotate(-dphi)
         rate(fps)
         
 

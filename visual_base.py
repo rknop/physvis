@@ -717,83 +717,96 @@ class Object(Subject):
 # ======================================================================
 
 class Box(Object):
+
+    @staticmethod
+    def make_box_buffers():
+        if not hasattr(Box, "_box_vertices"):
+            Box._box_vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
+                                               -0.5, -0.5, -0.5, 1.,
+                                                0.5, -0.5,  0.5, 1.,
+                                                0.5, -0.5,  0.5, 1.,
+                                               -0.5, -0.5, -0.5, 1.,
+                                                0.5, -0.5, -0.5, 1.,
+
+                                               -0.5,  0.5,  0.5, 1.,
+                                                0.5,  0.5,  0.5, 1.,
+                                               -0.5,  0.5, -0.5, 1.,
+                                               -0.5,  0.5, -0.5, 1.,
+                                                0.5,  0.5,  0.5, 1.,
+                                                0.5,  0.5, -0.5, 1.,
+
+                                               -0.5, -0.5, -0.5, 1.,
+                                               -0.5, -0.5,  0.5, 1.,
+                                               -0.5,  0.5, -0.5, 1.,
+                                               -0.5,  0.5, -0.5, 1.,
+                                               -0.5, -0.5,  0.5, 1.,
+                                               -0.5,  0.5,  0.5, 1.,
+                                               
+                                                0.5,  0.5, -0.5, 1.,
+                                                0.5,  0.5,  0.5, 1.,
+                                                0.5, -0.5, -0.5, 1.,
+                                                0.5, -0.5, -0.5, 1.,
+                                                0.5,  0.5,  0.5, 1.,
+                                                0.5, -0.5,  0.5, 1.,
+
+                                               -0.5, -0.5,  0.5, 1.,
+                                                0.5, -0.5,  0.5, 1.,
+                                               -0.5,  0.5,  0.5, 1.,
+                                               -0.5,  0.5,  0.5, 1.,
+                                                0.5, -0.5,  0.5, 1.,
+                                                0.5,  0.5,  0.5, 1.,
+
+                                                0.5, -0.5, -0.5, 1.,
+                                               -0.5, -0.5, -0.5, 1.,
+                                                0.5,  0.5, -0.5, 1.,
+                                                0.5,  0.5, -0.5, 1.,
+                                               -0.5, -0.5, -0.5, 1.,
+                                               -0.5,  0.5, -0.5, 1. ],
+                                             dtype = numpy.float32 )
+            Box._vertices_buffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Box._vertices_buffer)
+            glBufferData(GL_ARRAY_BUFFER, Box._box_vertices, GL_STATIC_DRAW)
+
+        if not hasattr(Box, "_box_normals"):
+            Box._box_normals = numpy.array( [ 0., -1., 0., 0., -1., 0., 0., -1., 0.,
+                                              0., -1., 0., 0., -1., 0., 0., -1., 0.,
+
+                                              0., 1., 0., 0., 1., 0., 0., 1., 0.,
+                                              0., 1., 0., 0., 1., 0., 0., 1., 0.,
+
+                                              -1., 0., 0., -1., 0., 0., -1., 0., 0.,
+                                              -1., 0., 0., -1., 0., 0., -1., 0., 0.,
+
+                                              1., 0., 0., 1., 0., 0., 1., 0., 0.,
+                                              1., 0., 0., 1., 0., 0., 1., 0., 0.,
+
+                                              0., 0., 1., 0., 0., 1., 0., 0., 1.,
+                                              0., 0., 1., 0., 0., 1., 0., 0., 1.,
+
+                                              0., 0., -1., 0., 0., -1., 0., 0., -1.,
+                                              0., 0., -1., 0., 0., -1., 0., 0., -1. ],
+                                            dtype = numpy.float32 )
+
+            Box._normals_buffer = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Box._normals_buffer)
+            glBufferData(GL_ARRAY_BUFFER, Box._box_normals, GL_STATIC_DRAW)
+
+        
+    
     def __init__(self, length=1., width=1., height=1., *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
-                                       -0.5, -0.5, -0.5, 1.,
-                                        0.5, -0.5,  0.5, 1.,
-                                        0.5, -0.5,  0.5, 1.,
-                                       -0.5, -0.5, -0.5, 1.,
-                                        0.5, -0.5, -0.5, 1.,
-
-                                       -0.5,  0.5,  0.5, 1.,
-                                        0.5,  0.5,  0.5, 1.,
-                                       -0.5,  0.5, -0.5, 1.,
-                                       -0.5,  0.5, -0.5, 1.,
-                                        0.5,  0.5,  0.5, 1.,
-                                        0.5,  0.5, -0.5, 1.,
-
-                                       -0.5, -0.5, -0.5, 1.,
-                                       -0.5, -0.5,  0.5, 1.,
-                                       -0.5,  0.5, -0.5, 1.,
-                                       -0.5,  0.5, -0.5, 1.,
-                                       -0.5, -0.5,  0.5, 1.,
-                                       -0.5,  0.5,  0.5, 1.,
-                                       
-                                        0.5,  0.5, -0.5, 1.,
-                                        0.5,  0.5,  0.5, 1.,
-                                        0.5, -0.5, -0.5, 1.,
-                                        0.5, -0.5, -0.5, 1.,
-                                        0.5,  0.5,  0.5, 1.,
-                                        0.5, -0.5,  0.5, 1.,
-
-                                       -0.5, -0.5,  0.5, 1.,
-                                        0.5, -0.5,  0.5, 1.,
-                                       -0.5,  0.5,  0.5, 1.,
-                                       -0.5,  0.5,  0.5, 1.,
-                                        0.5, -0.5,  0.5, 1.,
-                                        0.5,  0.5,  0.5, 1.,
-
-                                        0.5, -0.5, -0.5, 1.,
-                                       -0.5, -0.5, -0.5, 1.,
-                                        0.5,  0.5, -0.5, 1.,
-                                        0.5,  0.5, -0.5, 1.,
-                                       -0.5, -0.5, -0.5, 1.,
-                                       -0.5,  0.5, -0.5, 1. ],
-                                     dtype = numpy.float32 )
-
-        self.normals = numpy.array( [ 0., -1., 0., 0., -1., 0., 0., -1., 0.,
-                                      0., -1., 0., 0., -1., 0., 0., -1., 0.,
-
-                                      0., 1., 0., 0., 1., 0., 0., 1., 0.,
-                                      0., 1., 0., 0., 1., 0., 0., 1., 0.,
-
-                                      -1., 0., 0., -1., 0., 0., -1., 0., 0.,
-                                      -1., 0., 0., -1., 0., 0., -1., 0., 0.,
-
-                                      1., 0., 0., 1., 0., 0., 1., 0., 0.,
-                                      1., 0., 0., 1., 0., 0., 1., 0., 0.,
-
-                                      0., 0., 1., 0., 0., 1., 0., 0., 1.,
-                                      0., 0., 1., 0., 0., 1., 0., 0., 1.,
-
-                                      0., 0., -1., 0., 0., -1., 0., 0., -1.,
-                                      0., 0., -1., 0., 0., -1., 0., 0., -1. ],
-                                    dtype = numpy.float32 )
+        Box.make_box_buffers()
 
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
                           
-        self.VBO = glGenBuffers(1)
+        self.VBO = Box._vertices_buffer
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
-        glBufferData(GL_ARRAY_BUFFER, self.vertices, GL_STATIC_DRAW)
         glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
         glEnableVertexAttribArray(0)
 
-        self.normalbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferData(GL_ARRAY_BUFFER, self.normals, GL_STATIC_DRAW)
+        glBindBuffer(GL_ARRAY_BUFFER, Box._normals_buffer)
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
         glEnableVertexAttribArray(1)
 
@@ -845,187 +858,248 @@ class Box(Object):
 # ======================================================================
 
 class Icosahedron(Object):
-    def __init__(self, radius=1, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        self.vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
-        self.edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
-        self.faces = numpy.zeros( (20, 3), dtype=numpy.uint16 )
+    @staticmethod
+    def make_icosahedron_vertices(subdivisions=0):
+        # Maybe I should get a lock in case there is multiprocessing?
+        if not hasattr(Icosahedron, "_vertices"):
+            Icosahedron._vertices = [None, None, None, None, None]
+            Icosahedron._vertexbuffer = [None, None, None, None, None]
+            Icosahedron._normals = [None, None, None, None, None]
+            Icosahedron._normalbuffer = [None, None, None, None, None]
+            Icosahedron._indices = [None, None, None, None, None]
+            Icosahedron._indexbuffer = [None, None, None, None, None]
+            Icosahedron._numvertices = [None, None, None, None, None]
+            Icosahedron._numedges = [None, None, None, None, None]
+            Icosahedron._numfaces = [None, None, None, None, None]
+            
+        if Icosahedron._vertices[subdivisions] is None:
 
-        # Vertices: 1 at top (+x), 5 next row, 5 next row, 1 at bottom
+            sys.stderr.write("Creating icosahedron vertex data for {} subdivisions\n".format(subdivisions))
+            
+            vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
+            edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
+            faces = numpy.zeros( (20, 3), dtype=numpy.uint16 )
 
-        r = 0.5
-        self._radius = r
-        self.vertices[0:4] = [r, 0., 0., 1.]
-        angles = numpy.arange(0, 2*math.pi, 2*math.pi/5)
-        for i in range(len(angles)):
-            self.vertices[4+4*i:8+4*i] = [ 0.447213595499958*r,
-                                           0.8944271909999162*r*math.cos(angles[i]),
-                                           0.8944271909999162*r*math.sin(angles[i]),
-                                           1.]
-            self.vertices[24+4*i:28+4*i] = [-0.447213595499958*r,
-                                             0.8944271909999162*r*math.cos(angles[i]+angles[1]/2.),
-                                             0.8944271909999162*r*math.sin(angles[i]+angles[1]/2.),
+            # Vertices: 1 at top (+x), 5 next row, 5 next row, 1 at bottom
+
+            r = 1.0
+            vertices[0:4] = [r, 0., 0., 1.]
+            angles = numpy.arange(0, 2*math.pi, 2*math.pi/5)
+            for i in range(len(angles)):
+                vertices[4+4*i:8+4*i] = [ 0.447213595499958*r,
+                                          0.8944271909999162*r*math.cos(angles[i]),
+                                          0.8944271909999162*r*math.sin(angles[i]),
+                                          1.]
+                vertices[24+4*i:28+4*i] = [-0.447213595499958*r,
+                                            0.8944271909999162*r*math.cos(angles[i]+angles[1]/2.),
+                                            0.8944271909999162*r*math.sin(angles[i]+angles[1]/2.),
                                             1.]
-        self.vertices[44:48] = [-r, 0., 0., 1.]
+            vertices[44:48] = [-r, 0., 0., 1.]
 
-        self.edges[0:5, :]   = [ [0, 1], [0, 2], [0, 3], [0, 4], [0, 5] ]
-        self.edges[5:10, :]  = [ [1, 2], [2, 3], [3, 4], [4, 5], [5, 1] ]
-        self.edges[10:20, :] = [ [1, 6], [2, 6], [2, 7], [3, 7], [3, 8],
-                                 [4, 8], [4, 9], [5, 9], [5, 10], [1, 10] ]
-        self.edges[20:25, :] = [ [6, 7], [7, 8], [8, 9], [9, 10], [10, 6] ]
-        self.edges[25:30, :] = [ [6, 11], [7, 11], [8, 11], [9, 11], [10, 11] ]
+            edges[0:5, :]   = [ [0, 1], [0, 2], [0, 3], [0, 4], [0, 5] ]
+            edges[5:10, :]  = [ [1, 2], [2, 3], [3, 4], [4, 5], [5, 1] ]
+            edges[10:20, :] = [ [1, 6], [2, 6], [2, 7], [3, 7], [3, 8],
+                                [4, 8], [4, 9], [5, 9], [5, 10], [1, 10] ]
+            edges[20:25, :] = [ [6, 7], [7, 8], [8, 9], [9, 10], [10, 6] ]
+            edges[25:30, :] = [ [6, 11], [7, 11], [8, 11], [9, 11], [10, 11] ]
 
-        self.faces[0:5, :] = [ [0, 5, 1], [1, 6, 2], [2, 7, 3], [3, 8, 4], [4, 9, 0] ]
-        self.faces[5:10, :] = [ [5, 10, 11], [6, 12, 13], [7, 14, 15], [8, 16, 17],
-                                [9, 18, 19] ]
-        self.faces[10:15, :] = [ [20, 12, 11], [21, 14, 13], [22, 16, 15],
-                                 [23, 18, 17], [24, 10, 19] ]
-        self.faces[15:20, :] = [ [25, 26, 20], [26, 27, 21], [27, 28, 22],
-                                 [28, 29, 23], [29, 25, 24] ]
+            faces[0:5, :] = [ [0, 5, 1], [1, 6, 2], [2, 7, 3], [3, 8, 4], [4, 9, 0] ]
+            faces[5:10, :] = [ [5, 10, 11], [6, 12, 13], [7, 14, 15], [8, 16, 17],
+                               [9, 18, 19] ]
+            faces[10:15, :] = [ [20, 12, 11], [21, 14, 13], [22, 16, 15],
+                                [23, 18, 17], [24, 10, 19] ]
+            faces[15:20, :] = [ [25, 26, 20], [26, 27, 21], [27, 28, 22],
+                                [28, 29, 23], [29, 25, 24] ]
 
-        self.subdivide()
-        self.subdivide()
+            for i in range(int(subdivisions)):
+                vertices, edges, faces = Icosahedron.subdivide(vertices, edges, faces, r)
 
-        self.normals = numpy.zeros( 3*len(self.vertices)//4, dtype=numpy.float32 )
-        for i in range(len(self.vertices)//4):
-            self.normals[3*i:3*i+3] = ( self.vertices[4*i:4*i+3] /
-                                        math.sqrt( (self.vertices[4*i:4*i+3]**2).sum() ))
+            normals = numpy.zeros( 3*len(vertices)//4, dtype=numpy.float32 )
+            for i in range(len(vertices)//4):
+                normals[3*i:3*i+3] = ( vertices[4*i:4*i+3] /
+                                            math.sqrt( (vertices[4*i:4*i+3]**2).sum() ))
 
-        self.indices = numpy.zeros( self.faces.shape[0] * 3, dtype=numpy.uint16 )
-        v = numpy.zeros(6, dtype=numpy.uint16)
-        for i in range(self.faces.shape[0]):
-            dex = 0
-            for j in range(3):
-                for k in range(2):
-                    v[dex] = self.edges[self.faces[i, j], k]
-                    dex += 1
-            if len(numpy.unique(v)) != 3:
-                sys.stderr.write("ERROR with face {}, {} vertices: {}\n"
-                                 .format(i, len(numpy.unique(v)), numpy.unique(v)))
-                sys.exit(20)
-            if ( ( self.edges[self.faces[i, 0], 0] == self.edges[self.faces[i, 1], 0] ) or
-                 ( self.edges[self.faces[i, 0], 0] == self.edges[self.faces[i, 1], 1] ) ):
-                self.indices[3*i+0] = self.edges[self.faces[i, 0], 1]
-                self.indices[3*i+1] = self.edges[self.faces[i, 0], 0]
-            else:
-                self.indices[3*i+0] = self.edges[self.faces[i, 0], 0]
-                self.indices[3*i+1] = self.edges[self.faces[i, 0], 1]
-            if ( ( self.edges[self.faces[i, 1], 0] == self.edges[self.faces[i, 0], 0] ) or
-                 ( self.edges[self.faces[i, 1], 0] == self.edges[self.faces[i, 0], 1] ) ):
-                self.indices[3*i+2] = self.edges[self.faces[i, 1], 1]
-            else:
-                self.indices[3*i+2] = self.edges[self.faces[i, 1], 0]
+            indices = numpy.zeros( faces.shape[0] * 3, dtype=numpy.uint16 )
+            v = numpy.zeros(6, dtype=numpy.uint16)
+            for i in range(faces.shape[0]):
+                dex = 0
+                for j in range(3):
+                    for k in range(2):
+                        v[dex] = edges[faces[i, j], k]
+                        dex += 1
+                if len(numpy.unique(v)) != 3:
+                    sys.stderr.write("ERROR with face {}, {} vertices: {}\n"
+                                     .format(i, len(numpy.unique(v)), numpy.unique(v)))
+                    sys.exit(20)
+                if ( ( edges[faces[i, 0], 0] == edges[faces[i, 1], 0] ) or
+                     ( edges[faces[i, 0], 0] == edges[faces[i, 1], 1] ) ):
+                    indices[3*i+0] = edges[faces[i, 0], 1]
+                    indices[3*i+1] = edges[faces[i, 0], 0]
+                else:
+                    indices[3*i+0] = edges[faces[i, 0], 0]
+                    indices[3*i+1] = edges[faces[i, 0], 1]
+                if ( ( edges[faces[i, 1], 0] == edges[faces[i, 0], 0] ) or
+                     ( edges[faces[i, 1], 0] == edges[faces[i, 0], 1] ) ):
+                    indices[3*i+2] = edges[faces[i, 1], 1]
+                else:
+                    indices[3*i+2] = edges[faces[i, 1], 0]
 
-        self.VAO = glGenVertexArrays(1)
-        glBindVertexArray(self.VAO)
-                          
-        self.VBO = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
-        glBufferData(GL_ARRAY_BUFFER, self.vertices, GL_STATIC_DRAW)
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(0)
+            sys.stderr.write("{} triangles, {} indices, {} vertices\n"
+                             .format(faces.shape[0], len(indices), len(vertices)//4))
+            
+            Icosahedron._vertices[subdivisions] = vertices
+            Icosahedron._normals[subdivisions] = normals
+            Icosahedron._indices[subdivisions] = indices
 
-        self.normalbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferData(GL_ARRAY_BUFFER, self.normals, GL_STATIC_DRAW)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(1)
+            Icosahedron._vertexbuffer[subdivisions] = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._vertexbuffer[subdivisions])
+            glBufferData(GL_ARRAY_BUFFER, Icosahedron._vertices[subdivisions], GL_STATIC_DRAW)
 
-        self.EBO = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, self.indices, GL_STATIC_DRAW)
+            Icosahedron._normalbuffer[subdivisions] = glGenBuffers(1)
+            glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._normalbuffer[subdivisions])
+            glBufferData(GL_ARRAY_BUFFER, Icosahedron._normals[subdivisions], GL_STATIC_DRAW)
 
-        sys.stderr.write("{} triangles, {} indices, {} vertices\n"
-                         .format(self.faces.shape[0], len(self.indices),
-                                 len(self.vertices)//4))
+            Icosahedron._indexbuffer[subdivisions] = glGenBuffers(1)
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indexbuffer[subdivisions])
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indices[subdivisions], GL_STATIC_DRAW)
+
+            Icosahedron._numvertices[subdivisions] = len(vertices)
+            Icosahedron._numedges[subdivisions] = len(edges)
+            Icosahedron._numfaces[subdivisions] = len(faces)
+            
+
+    @staticmethod
+    def subdivide(vertices, edges, faces, r=1.0):
+        newverts = numpy.zeros( len(vertices) + 4*edges.shape[0], dtype=numpy.float32 )
+        newverts[0:len(vertices)] = vertices
+        numoldverts = len(vertices) // 4
         
-        self.num_triangles = self.faces.shape[0]
-        self.is_elements = True
+        for i in range(edges.shape[0]):
+            vertex = 0.5 * ( vertices[ 4*edges[i, 0] : 4*edges[i, 0]+4 ] +
+                             vertices[ 4*edges[i, 1] : 4*edges[i, 1]+4 ] )
+            vertex[0:3] *= r / math.sqrt( (vertex[0:3]**2).sum() )
+            newverts[len(vertices) + 4*i : len(vertices) + 4*i + 4] = vertex
 
-        self.context.add_object(self)
-
-    def subdivide(self):
-        newverts = numpy.zeros( len(self.vertices) + 4*self.edges.shape[0], dtype=numpy.float32 )
-        newverts[0:len(self.vertices)] = self.vertices
-        numoldverts = len(self.vertices) // 4
-        
-        for i in range(self.edges.shape[0]):
-            vertex = 0.5 * ( self.vertices[ 4*self.edges[i, 0] : 4*self.edges[i, 0]+4 ] +
-                             self.vertices[ 4*self.edges[i, 1] : 4*self.edges[i, 1]+4 ] )
-            vertex[0:3] *= self._radius / math.sqrt( (vertex[0:3]**2).sum() )
-            newverts[len(self.vertices) + 4*i : len(self.vertices) + 4*i + 4] = vertex
-
-        newedges = numpy.zeros( (2*self.edges.shape[0] + 3*self.faces.shape[0], 2 ) ,
+        newedges = numpy.zeros( (2*edges.shape[0] + 3*faces.shape[0], 2 ) ,
                                 dtype=numpy.uint16 )
-        newfaces = numpy.zeros( (4*self.faces.shape[0], 3) , dtype=numpy.uint16 )
+        newfaces = numpy.zeros( (4*faces.shape[0], 3) , dtype=numpy.uint16 )
 
-        for en in range(self.edges.shape[0]):
-            newedges[2*en, 0] = self.edges[en, 0]
+        for en in range(edges.shape[0]):
+            newedges[2*en, 0] = edges[en, 0]
             newedges[2*en, 1] = numoldverts+en
-            newedges[2*en+1, 0] = self.edges[en, 1]
+            newedges[2*en+1, 0] = edges[en, 1]
             newedges[2*en+1, 1] = numoldverts+en
-        for fn in range(self.faces.shape[0]):
-            newedges[2*self.edges.shape[0] + 3*fn + 0, 0] = numoldverts + self.faces[fn, 0]
-            newedges[2*self.edges.shape[0] + 3*fn + 0, 1] = numoldverts + self.faces[fn, 1]
-            newedges[2*self.edges.shape[0] + 3*fn + 1, 0] = numoldverts + self.faces[fn, 1]
-            newedges[2*self.edges.shape[0] + 3*fn + 1, 1] = numoldverts + self.faces[fn, 2]
-            newedges[2*self.edges.shape[0] + 3*fn + 2, 0] = numoldverts + self.faces[fn, 2]
-            newedges[2*self.edges.shape[0] + 3*fn + 2, 1] = numoldverts + self.faces[fn, 0]
+        for fn in range(faces.shape[0]):
+            newedges[2*edges.shape[0] + 3*fn + 0, 0] = numoldverts + faces[fn, 0]
+            newedges[2*edges.shape[0] + 3*fn + 0, 1] = numoldverts + faces[fn, 1]
+            newedges[2*edges.shape[0] + 3*fn + 1, 0] = numoldverts + faces[fn, 1]
+            newedges[2*edges.shape[0] + 3*fn + 1, 1] = numoldverts + faces[fn, 2]
+            newedges[2*edges.shape[0] + 3*fn + 2, 0] = numoldverts + faces[fn, 2]
+            newedges[2*edges.shape[0] + 3*fn + 2, 1] = numoldverts + faces[fn, 0]
 
-        for fn in range(self.faces.shape[0]):
-            if ( self.edges[self.faces[fn, 0], 0] == self.edges[self.faces[fn, 1], 0] or
-                 self.edges[self.faces[fn, 0], 0] == self.edges[self.faces[fn, 1], 1] ):
-                corner1 = self.edges[self.faces[fn, 0], 1]
-                corner2 = self.edges[self.faces[fn, 0], 0]
+        for fn in range(faces.shape[0]):
+            if ( edges[faces[fn, 0], 0] == edges[faces[fn, 1], 0] or
+                 edges[faces[fn, 0], 0] == edges[faces[fn, 1], 1] ):
+                corner1 = edges[faces[fn, 0], 1]
+                corner2 = edges[faces[fn, 0], 0]
             else:
-                corner1 = self.edges[self.faces[fn, 0], 0]
-                corner2 = self.edges[self.faces[fn, 0], 1]
-            if ( self.edges[self.faces[fn, 1], 0] == self.edges[self.faces[fn, 0], 0] or
-                 self.edges[self.faces[fn, 1], 0] == self.edges[self.faces[fn, 0], 1] ):
-                corner3 = self.edges[self.faces[fn, 1], 1]
+                corner1 = edges[faces[fn, 0], 0]
+                corner2 = edges[faces[fn, 0], 1]
+            if ( edges[faces[fn, 1], 0] == edges[faces[fn, 0], 0] or
+                 edges[faces[fn, 1], 0] == edges[faces[fn, 0], 1] ):
+                corner3 = edges[faces[fn, 1], 1]
             else:
-                corner3 = self.edges[self.faces[fn, 1], 0]
+                corner3 = edges[faces[fn, 1], 0]
 
-            if newedges[2*self.faces[fn, 0], 0] == corner1:
-                edge1l = 2*self.faces[fn, 0]
-                edge1r = 2*self.faces[fn, 0] + 1
+            if newedges[2*faces[fn, 0], 0] == corner1:
+                edge1l = 2*faces[fn, 0]
+                edge1r = 2*faces[fn, 0] + 1
             else:
-                edge1l = 2*self.faces[fn, 0] + 1
-                edge1r = 2*self.faces[fn, 0]
-            if newedges[2*self.faces[fn, 1], 0] == corner2:
-                edge2l = 2*self.faces[fn, 1]
-                edge2r = 2*self.faces[fn, 1] + 1
+                edge1l = 2*faces[fn, 0] + 1
+                edge1r = 2*faces[fn, 0]
+            if newedges[2*faces[fn, 1], 0] == corner2:
+                edge2l = 2*faces[fn, 1]
+                edge2r = 2*faces[fn, 1] + 1
             else:
-                edge2l = 2*self.faces[fn, 1] + 1
-                edge2r = 2*self.faces[fn, 1]
-            if newedges[2*self.faces[fn, 2], 0] == corner3:
-                edge3l = 2*self.faces[fn, 2]
-                edge3r = 2*self.faces[fn, 2] + 1
+                edge2l = 2*faces[fn, 1] + 1
+                edge2r = 2*faces[fn, 1]
+            if newedges[2*faces[fn, 2], 0] == corner3:
+                edge3l = 2*faces[fn, 2]
+                edge3r = 2*faces[fn, 2] + 1
             else:
-                edge3l = 2*self.faces[fn, 2] + 1
-                edge3r = 2*self.faces[fn, 2]
-            mid1 = 2*self.edges.shape[0] + 3*fn
-            mid2 = 2*self.edges.shape[0] + 3*fn + 1
-            mid3 = 2*self.edges.shape[0] + 3*fn + 2
+                edge3l = 2*faces[fn, 2] + 1
+                edge3r = 2*faces[fn, 2]
+            mid1 = 2*edges.shape[0] + 3*fn
+            mid2 = 2*edges.shape[0] + 3*fn + 1
+            mid3 = 2*edges.shape[0] + 3*fn + 2
                 
             newfaces[4*fn,     :] = [edge1l, mid3, edge3r]
             newfaces[4*fn + 1, :] = [edge1r, edge2l, mid1]
             newfaces[4*fn + 2, :] = [mid2, edge2r, edge3l]
             newfaces[4*fn + 3, :] = [mid1, mid2, mid3]
 
-        self.vertices = newverts
-        self.edges = newedges
-        self.faces = newfaces
-                    
+        return (newverts, newedges, newfaces)
+    
+    
+    def __init__(self, radius=1., subdivisions=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+        if subdivisions > 4.:
+            raise Exception(">4 subdivisions is absurd. Even 4 is probably too many!!!")
+
+        self.VAO = glGenVertexArrays(1)
+        glBindVertexArray(self.VAO)
+
+        Icosahedron.make_icosahedron_vertices(subdivisions)
+        
+        self.VBO = Icosahedron._vertexbuffer[subdivisions]
+        glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(0)
+
+        self.normalbuffer = Icosahedron._normalbuffer[subdivisions]
+        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(1)
+
+        self.EBO = Icosahedron._indexbuffer[subdivisions]
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, self.EBO)
+
+        self.num_triangles = Icosahedron._numfaces[subdivisions]
+        self.is_elements = True
+
+        self.radius = radius
+        
+        self.context.add_object(self)
+
+
+    @property
+    def radius(self):
+        return self.scale.sum()/3.
+
+    @radius.setter
+    def radius(self, r):
+        self.scale = numpy.array( [r, r, r] )
+
+
+class Sphere(Icosahedron):
+    def __init__(self, subdivisions=2, *args, **kwargs):
+        super().__init__(subdivisions=subdivisions, *args, **kwargs)
+
 # ======================================================================
 
 def main():
     sys.stderr.write("Making box.\n")
     box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
               length = 1.5, width=0.25, height=0.25)
-    sys.stderr.write("Making Icosahedron.\n")
-    d20 = Icosahedron(position= (2., 0., 0.), color=color.green)
+    sys.stderr.write("Making Ball.\n")
+    ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
+    sys.stderr.write("Making box2.\n")
+    box2 = Box(position = (1., 1., 1.), axis = (0.5, 0.5, 0.7071), color=color.cyan,
+               length=0.25, width=0.25, height=0.25)
+
     theta = math.pi/4.
     phi = 0.
     fps = 30
@@ -1040,14 +1114,20 @@ def main():
         box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
                                  math.sin(theta)*math.sin(phi),
                                  math.cos(theta)] )
-        d20.x = 2.*math.cos(phi)
+        ball.x = 2.*math.cos(phi)
         if math.sin(phi)>0.:
-            d20.rotate(dphi)
+            ball.rotate(dphi)
         else:
-            d20.rotate(-dphi)
+            ball.rotate(-dphi)
         rate(fps)
-        
 
+        box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
+
+                                              quarternion_multiply( [ 0, 1.5*math.sin(phi), 1.5*math.cos(phi) ],
+                                                                    [0., 0., math.cos(math.pi/6), math.sin(math.pi/6)]
+                                                                    )
+                                              )[0:3]
+                                              
 
     
     

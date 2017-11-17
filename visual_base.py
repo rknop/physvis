@@ -95,22 +95,25 @@ class Observer(object):
 # ======================================================================
         
 class GLUTContext(Observer):
-
+    _threadlock = threading.Lock()
+    _class_init_1 = False
+    _class_init_2 = False
+    
     # ======================================================================
     # Class methods
 
     @staticmethod
     def class_init(object):
-        if hasattr(GLUTContext, '_already_is_initialized') and GLUTContext._already_is_initialized is not None:
-            return
-        GLUTContext._post_init = False
-        GLUTContext._full_init = False
+        sys.stderr.write("Starting class_init\n")
+        GLUTContext._threadlock.acquire()
         
+        if GLUTContext._class_init_1:
+            GLUTContext._threadlock.release()
+            return
+
         if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
             GLUTContext._default_context = object
 
-        GLUTContext.threadlock = threading.Lock()
-        
         glutInit(len(sys.argv), sys.argv)
         glutInitContextVersion(3, 3)
         glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
@@ -118,33 +121,37 @@ class GLUTContext(Observer):
         glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
 
-        GLUTContext._already_is_initialized = True
+        GLUTContext._class_init_1 = True
+        GLUTContext._threadlock.release()
 
-    # I'm afraid of a race condition on _post_init
     @staticmethod
-    def post_init():
-        if GLUTContext._post_init:
-            while not GLUTContext._full_init:
-                time.sleep(0.1)
-            return
+    def class_init_2():
+        sys.stderr.write("Starting class_init_2\n")
+        GLUTContext._threadlock.acquire()
+        if not GLUTContext._class_init_1:
+            GLUTContext._threadlock.release()
+            raise Exception("class_init_2() called with _class_init_1 False")
 
-        GLUTContext._post_init = True
-        GLUTContext._full_init = False
+        if GLUTContext._class_init_2:
+            GLUTContext._threadlock.release()
+            return
 
         GLUTContext.idle_funcs = []
         GLUTContext.things_to_run = queue.Queue()
 
         glutIdleFunc(lambda: GLUTContext.idle())
 
-        # sys.stderr.write("Starting GLUT thread...\n")
+        sys.stderr.write("Starting GLUT thread...\n")
         GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main() )
         GLUTContext.thread.start()
-        while not GLUTContext._full_init:
-            time.sleep(0.1)
+
+        GLUTContext._class_init_2 = True
+        GLUTContext._threadlock.release()
         
     # There's a race condition here on idle_funcs and things_to_run
     @staticmethod
     def thread_main():
+        sys.stderr.write("Starting thread_main\n")
         glutMainLoop()
         
     @staticmethod
@@ -157,12 +164,8 @@ class GLUTContext(Observer):
 
     @staticmethod
     def run_glcode(func):
-        if not hasattr(GLUTContext, "_post_init") or not GLUTContext._post_init:
-            func()
-        else:
-            while not GLUTContext._full_init:
-                time.sleep(0.1)
-            GLUTContext.things_to_run.put(func)
+        sys.stderr.write("Starting run_glcode\n")
+        GLUTContext.things_to_run.put(func)
             
     @staticmethod
     def idle():
@@ -200,8 +203,10 @@ class GLUTContext(Observer):
     
     def __init__(self, width=500, height=400, title="GLUT", *args, **kwargs):
         super().__init__(*args, **kwargs)
+        sys.stderr.write("Starting __init__")
         GLUTContext.class_init(self)
-        
+
+        self.window_is_initialized = False
         self.width = width
         self.height = height
         self.title = title
@@ -219,33 +224,37 @@ class GLUTContext(Observer):
 
         self.objects = []
 
-        GLUTContext.run_glcode(lambda : self.gl_init())
-        
-    def gl_init(self):
         glutInitWindowSize(self.width, self.height)
         glutInitWindowPosition(0, 0)
         self.window = glutCreateWindow(self.title)
         glutSetWindow(self.window)
         glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
 
-        GLUTContext.post_init()
+        GLUTContext.class_init_2()
 
-        GLUTContext.run_glcode(lambda : self.gl_init2())
-        
-    def gl_init2(self):
+        GLUTContext.run_glcode(lambda : self.gl_init())
+
+        while not self.window_is_initialized:
+            time.sleep(0.1)
+        sys.stderr.write("Exiting __init__\n")
+            
+    def gl_init(self):
+        sys.stderr.write("Starting gl_init\n")
         self.create_shaders()
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
         glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
-
+        self.window_is_initialized = True
+        sys.stderr.write("Exiting gl_init\n")
+        
     def window_visibility_handler(self, state):
         if state != GLUT_VISIBLE:
             return
         glutSetWindow(self.window)
-        GLUTContext.threadlock.acquire()
+        GLUTContext._threadlock.acquire()
         GLUTContext._full_init = True
-        GLUTContext.threadlock.release()
+        GLUTContext._threadlock.release()
         glutVisibilityFunc(None)
         
     def receive_message(self, message, subject):
@@ -447,6 +456,8 @@ class Object(Subject):
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        sys.stderr.write("Starting Object.__init__")
+        
         if context is None:
             if not hasattr(GLUTContext, "_default_context") or GLUTContext._default_context is None:
                 GLUTContext._default_context = GLUTContext()
@@ -721,6 +732,7 @@ class Box(Object):
 
     @staticmethod
     def make_box_buffers():
+        GLUTContext._threadlock.acquire()
         if not hasattr(Box, "_box_vertices"):
             Box._box_vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
                                                -0.5, -0.5, -0.5, 1.,
@@ -764,11 +776,7 @@ class Box(Object):
                                                -0.5, -0.5, -0.5, 1.,
                                                -0.5,  0.5, -0.5, 1. ],
                                              dtype = numpy.float32 )
-            Box._vertices_buffer = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Box._vertices_buffer)
-            glBufferData(GL_ARRAY_BUFFER, Box._box_vertices, GL_STATIC_DRAW)
 
-        if not hasattr(Box, "_box_normals"):
             Box._box_normals = numpy.array( [ 0., -1., 0., 0., -1., 0., 0., -1., 0.,
                                               0., -1., 0., 0., -1., 0., 0., -1., 0.,
 
@@ -788,17 +796,33 @@ class Box(Object):
                                               0., 0., -1., 0., 0., -1., 0., 0., -1. ],
                                             dtype = numpy.float32 )
 
-            Box._normals_buffer = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Box._normals_buffer)
-            glBufferData(GL_ARRAY_BUFFER, Box._box_normals, GL_STATIC_DRAW)
+            GLUTContext.run_glcode(Box.make_box_gl_buffers)
 
+        GLUTContext._threadlock.release()
+
+    @staticmethod
+    def make_box_gl_buffers():
+        Box._vertices_buffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Box._vertices_buffer)
+        glBufferData(GL_ARRAY_BUFFER, Box._box_vertices, GL_STATIC_DRAW)
+        Box._normals_buffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Box._normals_buffer)
+        glBufferData(GL_ARRAY_BUFFER, Box._box_normals, GL_STATIC_DRAW)
         
     
     def __init__(self, length=1., width=1., height=1., *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self._box_initialized = False
+        
         Box.make_box_buffers()
 
+        GLUTContext.run_glcode(lambda : self.glinit(length, width, height))
+        
+        while not self._box_initialized:
+            time.sleep(0.01)
+
+    def glinit(self, length, width, height):
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
                           
@@ -817,6 +841,8 @@ class Box(Object):
         
         self.context.add_object(self)
 
+        self._box_initialized = True
+        
     @property
     def length(self):
         return self.sx
@@ -842,6 +868,7 @@ class Box(Object):
         self.sy = value
         
     def destroy(self):
+        # ROB TODO : Put this in the gl thread
         sys.stderr.write("Destroying box {}\n".format(self))
         glBindVertexArray(self.VAO)
         glDisableVertexAttribArray(1)
@@ -862,7 +889,7 @@ class Icosahedron(Object):
 
     @staticmethod
     def make_icosahedron_vertices(subdivisions=0):
-        # Maybe I should get a lock in case there is multiprocessing?
+        GLUTContext._threadlock.acquire()
         if not hasattr(Icosahedron, "_vertices"):
             Icosahedron._vertices = [None, None, None, None, None]
             Icosahedron._vertexbuffer = [None, None, None, None, None]
@@ -953,21 +980,27 @@ class Icosahedron(Object):
             Icosahedron._normals[subdivisions] = normals
             Icosahedron._indices[subdivisions] = indices
 
-            Icosahedron._vertexbuffer[subdivisions] = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._vertexbuffer[subdivisions])
-            glBufferData(GL_ARRAY_BUFFER, Icosahedron._vertices[subdivisions], GL_STATIC_DRAW)
+            GLUTContext.run_glcode(lambda : Icosahedron.make_icosahedron_gl_buffers(subdivisions))
 
-            Icosahedron._normalbuffer[subdivisions] = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._normalbuffer[subdivisions])
-            glBufferData(GL_ARRAY_BUFFER, Icosahedron._normals[subdivisions], GL_STATIC_DRAW)
+        GLUTContext._threadlock.release()
 
-            Icosahedron._indexbuffer[subdivisions] = glGenBuffers(1)
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indexbuffer[subdivisions])
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indices[subdivisions], GL_STATIC_DRAW)
+    @staticmethod
+    def make_icosahedron_gl_buffers(subdivisions):
+        Icosahedron._vertexbuffer[subdivisions] = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._vertexbuffer[subdivisions])
+        glBufferData(GL_ARRAY_BUFFER, Icosahedron._vertices[subdivisions], GL_STATIC_DRAW)
 
-            Icosahedron._numvertices[subdivisions] = len(vertices)
-            Icosahedron._numedges[subdivisions] = len(edges)
-            Icosahedron._numfaces[subdivisions] = len(faces)
+        Icosahedron._normalbuffer[subdivisions] = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._normalbuffer[subdivisions])
+        glBufferData(GL_ARRAY_BUFFER, Icosahedron._normals[subdivisions], GL_STATIC_DRAW)
+
+        Icosahedron._indexbuffer[subdivisions] = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indexbuffer[subdivisions])
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indices[subdivisions], GL_STATIC_DRAW)
+
+        Icosahedron._numvertices[subdivisions] = len(vertices)
+        Icosahedron._numedges[subdivisions] = len(edges)
+        Icosahedron._numfaces[subdivisions] = len(faces)
             
 
     @staticmethod
@@ -1049,11 +1082,12 @@ class Icosahedron(Object):
         if subdivisions > 4.:
             raise Exception(">4 subdivisions is absurd. Even 4 is probably too many!!!")
 
+        GLUTContext.run_glcode(lambda : self.glinit(radius, subdivisions))
+
+    def glinit(self, radius, subdivisions):
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
 
-        Icosahedron.make_icosahedron_vertices(subdivisions)
-        
         self.VBO = Icosahedron._vertexbuffer[subdivisions]
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
         glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
@@ -1094,6 +1128,7 @@ class Cylinder(Object):
 
     @staticmethod
     def make_cylinder_vertices():
+        GLUTContext._threadlock.acquire()
         if not hasattr(Cylinder, "_vertices"):
             num_edge_points = 32
 
@@ -1164,28 +1199,37 @@ class Cylinder(Object):
             Cylinder._normals = normals
             Cylinder._indices = indices
 
-            Cylinder._vertexbuffer = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Cylinder._vertexbuffer)
-            glBufferData(GL_ARRAY_BUFFER, Cylinder._vertices, GL_STATIC_DRAW)
+            GLUTContext.run_glcode(Cylinder.make_cylinder_glbuffers)
+            
+        GLUTContext._threadlock.release()
 
-            Cylinder._normalbuffer = glGenBuffers(1)
-            glBindBuffer(GL_ARRAY_BUFFER, Cylinder._normalbuffer)
-            glBufferData(GL_ARRAY_BUFFER, Cylinder._normals, GL_STATIC_DRAW)
+    @staticmethod
+    def make_cylinder_glbuffers():
+        Cylinder._vertexbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Cylinder._vertexbuffer)
+        glBufferData(GL_ARRAY_BUFFER, Cylinder._vertices, GL_STATIC_DRAW)
 
-            Cylinder._indexbuffer = glGenBuffers(1)
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indexbuffer)
-            glBufferData(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indices, GL_STATIC_DRAW)
+        Cylinder._normalbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, Cylinder._normalbuffer)
+        glBufferData(GL_ARRAY_BUFFER, Cylinder._normals, GL_STATIC_DRAW)
 
-            Cylinder._numvertices = len(Cylinder._vertices)
-            Cylinder._numfaces = len(Cylinder._indices) // 3
+        Cylinder._indexbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indexbuffer)
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, Cylinder._indices, GL_STATIC_DRAW)
+
+        Cylinder._numvertices = len(Cylinder._vertices)
+        Cylinder._numfaces = len(Cylinder._indices) // 3
 
     def __init__(self, radius=1., *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        Cylinder.make_cylinder_vertices()
+
+        GLUTContext.run_glcode(lambda : self.glinit(radius))
+
+    def glinit(self, radius):
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
-
-        Cylinder.make_cylinder_vertices()
 
         self.VBO = Cylinder._vertexbuffer
         glBindBuffer(GL_ARRAY_BUFFER, self.VBO)
@@ -1203,11 +1247,11 @@ class Cylinder(Object):
         self.num_triangles = Cylinder._numfaces
         self.is_elements = True
 
-        self.context.add_object(self)
-
         sys.stderr.write("Setting cylinder radius to {}\n".format(radius))
         self._radius = radius
         self.scale = [self._scale[0], radius, radius]
+
+        self.context.add_object(self)
 
     @property
     def radius(self):

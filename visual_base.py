@@ -6,6 +6,7 @@ import math
 import time
 import queue
 import threading
+import random
 
 import numpy
 import numpy.linalg
@@ -95,7 +96,7 @@ class Observer(object):
 # ======================================================================
         
 class GLUTContext(Observer):
-    _threadlock = threading.Lock()
+    _threadlock = threading.RLock()
     _class_init_1 = False
     _class_init_2 = False
     
@@ -105,48 +106,43 @@ class GLUTContext(Observer):
     @staticmethod
     def class_init(object):
         sys.stderr.write("Starting class_init\n")
-        GLUTContext._threadlock.acquire()
-        
-        if GLUTContext._class_init_1:
-            GLUTContext._threadlock.release()
-            return
 
-        if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
-            GLUTContext._default_context = object
+        with GLUTContext._threadlock:
+            if GLUTContext._class_init_1:
+                return
 
-        glutInit(len(sys.argv), sys.argv)
-        glutInitContextVersion(3, 3)
-        glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
-        glutInitContextProfile(GLUT_CORE_PROFILE)
-        glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
-        glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+            if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
+                GLUTContext._default_context = object
 
-        GLUTContext._class_init_1 = True
-        GLUTContext._threadlock.release()
+            glutInit(len(sys.argv), sys.argv)
+            glutInitContextVersion(3, 3)
+            glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
+            glutInitContextProfile(GLUT_CORE_PROFILE)
+            glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
+            glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+
+            GLUTContext._class_init_1 = True
 
     @staticmethod
     def class_init_2():
         sys.stderr.write("Starting class_init_2\n")
-        GLUTContext._threadlock.acquire()
-        if not GLUTContext._class_init_1:
-            GLUTContext._threadlock.release()
-            raise Exception("class_init_2() called with _class_init_1 False")
+        with GLUTContext._threadlock:
+            if not GLUTContext._class_init_1:
+                raise Exception("class_init_2() called with _class_init_1 False")
 
-        if GLUTContext._class_init_2:
-            GLUTContext._threadlock.release()
-            return
+            if GLUTContext._class_init_2:
+                return
 
-        GLUTContext.idle_funcs = []
-        GLUTContext.things_to_run = queue.Queue()
+            GLUTContext.idle_funcs = []
+            GLUTContext.things_to_run = queue.Queue()
 
-        glutIdleFunc(lambda: GLUTContext.idle())
+            glutIdleFunc(lambda: GLUTContext.idle())
 
-        sys.stderr.write("Starting GLUT thread...\n")
-        GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main() )
-        GLUTContext.thread.start()
+            sys.stderr.write("Starting GLUT thread...\n")
+            GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main() )
+            GLUTContext.thread.start()
 
-        GLUTContext._class_init_2 = True
-        GLUTContext._threadlock.release()
+            GLUTContext._class_init_2 = True
         
     # There's a race condition here on idle_funcs and things_to_run
     @staticmethod
@@ -180,24 +176,6 @@ class GLUTContext(Observer):
             func()
         glutPostRedisplay()
 
-    @staticmethod
-    def perspective_matrix(fovy, aspect, near, far):
-        # Math from
-        # https://www.opengl.org/discussion_boards/showthread.php/197893-View-and-Perspective-matrices
-        #
-        # I should understand this
-        #
-        # aspect is width/height
-
-        s = 1.0/math.tan(fovy/2.0)
-        sx, sy = s / aspect, s
-        zz = (far+near)/(near-far)
-        zw = 2*far*near/(near-far)
-        return numpy.matrix([[sx, 0, 0, 0],
-                             [0, sy, 0, 0],
-                             [0, 0, zz, zw],
-                             [0, 0, -1, 0]], dtype=numpy.float32).T
-
     # ======================================================================
     # Instance methods
     
@@ -214,13 +192,10 @@ class GLUTContext(Observer):
         self.vtxarr = None
         self.vboarr = None
         self.colorbuffer = None
-        self.vtxshdrid = None
-        self.fragshdrid = None
-        self.progid = None
 
-        self.fov = math.pi/4.
-        self.clipnear = 0.1
-        self.clipfar = 100.
+        self._fov = math.pi/4.
+        self._clipnear = 0.1
+        self._clipfar = 1000.
 
         self.objects = []
 
@@ -240,7 +215,6 @@ class GLUTContext(Observer):
             
     def gl_init(self):
         sys.stderr.write("Starting gl_init\n")
-        self.create_shaders()
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
         glutTimerFunc(0, lambda val : self.timer(val), 0)
@@ -252,9 +226,8 @@ class GLUTContext(Observer):
         if state != GLUT_VISIBLE:
             return
         glutSetWindow(self.window)
-        GLUTContext._threadlock.acquire()
-        GLUTContext._full_init = True
-        GLUTContext._threadlock.release()
+        with GLUTContext._threadlock:
+            GLUTContext._full_init = True
         glutVisibilityFunc(None)
         
     def receive_message(self, message, subject):
@@ -272,9 +245,119 @@ class GLUTContext(Observer):
         obj.remove_listener(self)
         
     def cleanup(self):
-        self.destroy_shaders()
-        # DO MORE
+        pass
+        # DO THINGS!!!!!!!!!!!!!!!!
         
+    def timer(self, val):
+        sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
+        self.framecount = 0
+        glutTimerFunc(2000, lambda val : self.timer(val), 0)
+
+    def resize2d(self, width, height):
+        sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
+        self.width = width
+        self.height = height
+        glViewport(0, 0, self.width, self.height)
+
+    # I worry aboutoptimization of this one.  Making a separate Python
+    # function call for every object could end up being slow.  I should
+    # test that at some poitn with lots of objects.
+    def draw(self):
+        glClearColor(0., 0., 0., 0.)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glEnable(GL_DEPTH_TEST)
+        
+        lastshader = None
+        for obj in self.objects:
+            if obj.visible:
+                # sys.stderr.write("Trying to draw {} in color {}\n".format(obj, obj._color))
+                if obj.shader.progid != lastshader:
+                    glUseProgram(obj.shader.progid)
+                    obj.shader.set_perspective(self._fov, self.width/self.height, self._clipnear, self._clipfar)
+                    lastshader = obj.shader.progid
+                obj.shader.set_model_matrix(obj.model_matrix)
+                obj.shader.set_color(obj._color)
+                if obj.draw_as_lines:
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                else:
+                    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+                if obj.is_elements:
+                    glBindVertexArray(obj.VAO)
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.EBO)
+                    glDrawElements(GL_TRIANGLES, obj.num_triangles*3, GL_UNSIGNED_SHORT, None)
+                else:
+                    glBindVertexArray(obj.VAO)
+                    glDrawArrays(GL_TRIANGLES, 0, obj.num_triangles*3)
+
+        # err = glGetError()
+        # if err != GL_NO_ERROR:
+        #     sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
+        #     sys.exit(-1)
+
+        glutSwapBuffers()
+        glutPostRedisplay()
+
+        self.framecount += 1
+
+# ======================================================================
+# ======================================================================
+# ======================================================================
+
+class Shader(object):
+    _basic_shader = None
+
+    @staticmethod
+    def get(name):
+        if name == "Basic Shader":
+            with GLUTContext._threadlock:
+                if Shader._basic_shader == None:
+                    sys.stderr.write("Asking for a BasicShader\n")
+                    Shader._basic_shader = BasicShader()
+            return Shader._basic_shader
+
+        else:
+            raise Exception("Unknown shader \"{}\"".format(name))
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.progid = None
+
+    def get_shader(self):
+        return self.progid
+
+    @staticmethod
+    def perspective_matrix(fovy, aspect, near, far):
+        # Math from
+        # https://www.opengl.org/discussion_boards/showthread.php/197893-View-and-Perspective-matrices
+        #
+        # I should understand this
+        #
+        # aspect is width/height
+
+        s = 1.0/math.tan(fovy/2.0)
+        sx, sy = s / aspect, s
+        zz = (far+near)/(near-far)
+        zw = 2*far*near/(near-far)
+        return numpy.matrix([[sx, 0, 0, 0],
+                             [0, sy, 0, 0],
+                             [0, 0, zz, zw],
+                             [0, 0, -1, 0]], dtype=numpy.float32).T
+
+
+    
+class BasicShader(Shader):
+    def __init__(self, *args, **kwargs):
+        sys.stderr.write("Initializing a Basic Shader...\n")
+        super().__init__(*args, **kwargs)
+        self._name = "Basic Shader"
+        self._shaders_destroyed = False
+
+        self.vtxshdrid = None
+        self.fragshdrid = None
+        self.progid = None
+
+        GLUTContext.run_glcode(lambda : self.create_shaders())
+
     def create_shaders(self):
         err = glGetError()
 
@@ -356,10 +439,21 @@ void main(void)
         loc = glGetUniformLocation(self.progid, "light2dir")
         glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
 
-        self.set_perspective(self.fov, self.width/self.height, self.clipnear, self.clipfar)
+        self.set_perspective(math.pi/4, 1., 0.1, 1000.)    # Default fov, aspect clipnear, clipfar
         self.set_camera_position(0., 0., 5.)
 
+    # This makes me feel very queasy.  A wait for another thread in
+    #   a __del__ is probably just asking for circular references
+    #   to trip you up.  *But*, I gotta run all my GL code in
+    #   a single thread.  So... hurm.
+    def __del__(self):
+        sys.stderr.write("BasicShader __del__\n")
+        GLUTContext.run_glcode(lambda : self.destroy_shaders())
+        while not self._shaders_destroyed:
+            time.sleep(0.1)
+        
     def destroy_shaders(self):
+        sys.stderr.write("BasicShader destroy_shaders\n")
         err = glGetError()
 
         glUseProgram(0)
@@ -377,6 +471,8 @@ void main(void)
             sys.stderr.write("Error {} destroying shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
+        self._shaders_destroyed = True
+
     def set_perspective(self, fov, aspect, near, far):
         matrix = self.perspective_matrix(fov, aspect, near,far)
         # sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
@@ -393,6 +489,10 @@ void main(void)
         view_location = glGetUniformLocation(self.progid, "view")
         glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix)
 
+    def set_color(self, color):
+        color_location = glGetUniformLocation(self.progid, "color")
+        glUniform4fv(color_location, 1, color)
+
     def set_model_matrix(self, matrix):
         glUseProgram(self.progid)
         model_location = glGetUniformLocation(self.progid, "model")
@@ -400,51 +500,7 @@ void main(void)
         modnorm_location = glGetUniformLocation(self.progid, "model_normal")
         glUniformMatrix3fv(modnorm_location, 1, GL_FALSE, numpy.linalg.inv(matrix[0:3, 0:3]).T)
         
-    def timer(self, val):
-        sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
-        self.framecount = 0
-        glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
-    def resize2d(self, width, height):
-        sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
-        self.width = width
-        self.height = height
-        glViewport(0, 0, self.width, self.height)
-        self.set_perspective(self.fov, self.width/self.height, self.clipnear, self.clipfar)
-        
-    def draw(self):
-        glClearColor(0., 0., 0., 0.)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glEnable(GL_DEPTH_TEST)
-        
-        # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-
-        glUseProgram(self.progid)
-        
-        for obj in self.objects:
-            if obj.visible:
-                # sys.stderr.write("Trying to draw {} in color {}\n".format(obj, obj._color))
-                self.set_model_matrix(obj.model_matrix)
-                color_location = glGetUniformLocation(self.progid, "color")
-                glUniform4fv(color_location, 1, obj._color)
-                if obj.is_elements:
-                    glBindVertexArray(obj.VAO)
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, obj.EBO)
-                    glDrawElements(GL_TRIANGLES, obj.num_triangles*3, GL_UNSIGNED_SHORT, None)
-                else:
-                    glBindVertexArray(obj.VAO)
-                    glDrawArrays(GL_TRIANGLES, 0, obj.num_triangles*3)
-
-        # err = glGetError()
-        # if err != GL_NO_ERROR:
-        #     sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
-        #     sys.exit(-1)
-
-        glutSwapBuffers()
-        glutPostRedisplay()
-
-        self.framecount += 1
 
 # ======================================================================
 # ======================================================================
@@ -466,6 +522,7 @@ class Object(Subject):
             self.context = context
 
         self.is_elements = False         # True if using EBO
+        self.draw_as_lines = False
 
         self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quarternion
         
@@ -479,7 +536,7 @@ class Object(Subject):
         else:
             self._scale = scale
 
-        self.shader_program = None
+        self.shader = Shader.get("Basic Shader")
 
         if color is None and opacity is None:
             self._color = numpy.array( [1., 1., 1., 1.], dtype=numpy.float32 )
@@ -597,7 +654,7 @@ class Object(Subject):
         qinv = q.copy()
         qinv[0:3] *= -1.
         qinv /= (q*q).sum()
-        return uarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
+        return quarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
@@ -616,8 +673,7 @@ class Object(Subject):
     @property
     def up(self):
         # return self._up
-        sys.stderr.write("up not implemented\n")
-        return None
+        raise Exception("up not implemented")
 
     @up.setter
     def up(self, value):
@@ -625,7 +681,7 @@ class Object(Subject):
         #     sys.stderr.write("ERROR, up must have 3 elements.")
         # self._up = numpy.array(up)
         # self.update_model_matrix()
-        sys.stderr.write("up not implemented\n")
+        raise Exception("up not implemented")
 
     @property
     def rotation(self):
@@ -710,14 +766,7 @@ class Object(Subject):
         self.color_update()
 
     def color_update(self):
-        glUseProgram(self.context.progid)
-        color_location = glGetUniformLocation(self.context.progid, "color")
-        glUniform4fv(color_location, 1, self.color)
-
-        # sys.stderr.write("{}\n".format(glGetProgramInfoLog(self.context.progid)))
-        # err = glGetError()
-        # sys.stderr.write("After color_update, err={} ({})\n".format(err, gluErrorString(err)))
-        
+        self.shader.set_color(self.color)
 
     def __del__(self):
         self.visible = False
@@ -732,73 +781,71 @@ class Box(Object):
 
     @staticmethod
     def make_box_buffers():
-        GLUTContext._threadlock.acquire()
-        if not hasattr(Box, "_box_vertices"):
-            Box._box_vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
-                                               -0.5, -0.5, -0.5, 1.,
-                                                0.5, -0.5,  0.5, 1.,
-                                                0.5, -0.5,  0.5, 1.,
-                                               -0.5, -0.5, -0.5, 1.,
-                                                0.5, -0.5, -0.5, 1.,
+        with GLUTContext._threadlock:
+            if not hasattr(Box, "_box_vertices"):
+                Box._box_vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
+                                                   -0.5, -0.5, -0.5, 1.,
+                                                    0.5, -0.5,  0.5, 1.,
+                                                    0.5, -0.5,  0.5, 1.,
+                                                   -0.5, -0.5, -0.5, 1.,
+                                                    0.5, -0.5, -0.5, 1.,
 
-                                               -0.5,  0.5,  0.5, 1.,
-                                                0.5,  0.5,  0.5, 1.,
-                                               -0.5,  0.5, -0.5, 1.,
-                                               -0.5,  0.5, -0.5, 1.,
-                                                0.5,  0.5,  0.5, 1.,
-                                                0.5,  0.5, -0.5, 1.,
+                                                   -0.5,  0.5,  0.5, 1.,
+                                                    0.5,  0.5,  0.5, 1.,
+                                                   -0.5,  0.5, -0.5, 1.,
+                                                   -0.5,  0.5, -0.5, 1.,
+                                                    0.5,  0.5,  0.5, 1.,
+                                                    0.5,  0.5, -0.5, 1.,
 
-                                               -0.5, -0.5, -0.5, 1.,
-                                               -0.5, -0.5,  0.5, 1.,
-                                               -0.5,  0.5, -0.5, 1.,
-                                               -0.5,  0.5, -0.5, 1.,
-                                               -0.5, -0.5,  0.5, 1.,
-                                               -0.5,  0.5,  0.5, 1.,
-                                               
-                                                0.5,  0.5, -0.5, 1.,
-                                                0.5,  0.5,  0.5, 1.,
-                                                0.5, -0.5, -0.5, 1.,
-                                                0.5, -0.5, -0.5, 1.,
-                                                0.5,  0.5,  0.5, 1.,
-                                                0.5, -0.5,  0.5, 1.,
+                                                   -0.5, -0.5, -0.5, 1.,
+                                                   -0.5, -0.5,  0.5, 1.,
+                                                   -0.5,  0.5, -0.5, 1.,
+                                                   -0.5,  0.5, -0.5, 1.,
+                                                   -0.5, -0.5,  0.5, 1.,
+                                                   -0.5,  0.5,  0.5, 1.,
 
-                                               -0.5, -0.5,  0.5, 1.,
-                                                0.5, -0.5,  0.5, 1.,
-                                               -0.5,  0.5,  0.5, 1.,
-                                               -0.5,  0.5,  0.5, 1.,
-                                                0.5, -0.5,  0.5, 1.,
-                                                0.5,  0.5,  0.5, 1.,
+                                                    0.5,  0.5, -0.5, 1.,
+                                                    0.5,  0.5,  0.5, 1.,
+                                                    0.5, -0.5, -0.5, 1.,
+                                                    0.5, -0.5, -0.5, 1.,
+                                                    0.5,  0.5,  0.5, 1.,
+                                                    0.5, -0.5,  0.5, 1.,
 
-                                                0.5, -0.5, -0.5, 1.,
-                                               -0.5, -0.5, -0.5, 1.,
-                                                0.5,  0.5, -0.5, 1.,
-                                                0.5,  0.5, -0.5, 1.,
-                                               -0.5, -0.5, -0.5, 1.,
-                                               -0.5,  0.5, -0.5, 1. ],
-                                             dtype = numpy.float32 )
+                                                   -0.5, -0.5,  0.5, 1.,
+                                                    0.5, -0.5,  0.5, 1.,
+                                                   -0.5,  0.5,  0.5, 1.,
+                                                   -0.5,  0.5,  0.5, 1.,
+                                                    0.5, -0.5,  0.5, 1.,
+                                                    0.5,  0.5,  0.5, 1.,
 
-            Box._box_normals = numpy.array( [ 0., -1., 0., 0., -1., 0., 0., -1., 0.,
-                                              0., -1., 0., 0., -1., 0., 0., -1., 0.,
+                                                    0.5, -0.5, -0.5, 1.,
+                                                   -0.5, -0.5, -0.5, 1.,
+                                                    0.5,  0.5, -0.5, 1.,
+                                                    0.5,  0.5, -0.5, 1.,
+                                                   -0.5, -0.5, -0.5, 1.,
+                                                   -0.5,  0.5, -0.5, 1. ],
+                                                 dtype = numpy.float32 )
 
-                                              0., 1., 0., 0., 1., 0., 0., 1., 0.,
-                                              0., 1., 0., 0., 1., 0., 0., 1., 0.,
+                Box._box_normals = numpy.array( [ 0., -1., 0., 0., -1., 0., 0., -1., 0.,
+                                                  0., -1., 0., 0., -1., 0., 0., -1., 0.,
 
-                                              -1., 0., 0., -1., 0., 0., -1., 0., 0.,
-                                              -1., 0., 0., -1., 0., 0., -1., 0., 0.,
+                                                  0., 1., 0., 0., 1., 0., 0., 1., 0.,
+                                                  0., 1., 0., 0., 1., 0., 0., 1., 0.,
 
-                                              1., 0., 0., 1., 0., 0., 1., 0., 0.,
-                                              1., 0., 0., 1., 0., 0., 1., 0., 0.,
+                                                  -1., 0., 0., -1., 0., 0., -1., 0., 0.,
+                                                  -1., 0., 0., -1., 0., 0., -1., 0., 0.,
 
-                                              0., 0., 1., 0., 0., 1., 0., 0., 1.,
-                                              0., 0., 1., 0., 0., 1., 0., 0., 1.,
+                                                  1., 0., 0., 1., 0., 0., 1., 0., 0.,
+                                                  1., 0., 0., 1., 0., 0., 1., 0., 0.,
 
-                                              0., 0., -1., 0., 0., -1., 0., 0., -1.,
-                                              0., 0., -1., 0., 0., -1., 0., 0., -1. ],
-                                            dtype = numpy.float32 )
+                                                  0., 0., 1., 0., 0., 1., 0., 0., 1.,
+                                                  0., 0., 1., 0., 0., 1., 0., 0., 1.,
 
-            GLUTContext.run_glcode(Box.make_box_gl_buffers)
+                                                  0., 0., -1., 0., 0., -1., 0., 0., -1.,
+                                                  0., 0., -1., 0., 0., -1., 0., 0., -1. ],
+                                                dtype = numpy.float32 )
 
-        GLUTContext._threadlock.release()
+                GLUTContext.run_glcode(Box.make_box_gl_buffers)
 
     @staticmethod
     def make_box_gl_buffers():
@@ -889,103 +936,102 @@ class Icosahedron(Object):
 
     @staticmethod
     def make_icosahedron_vertices(subdivisions=0):
-        GLUTContext._threadlock.acquire()
-        if not hasattr(Icosahedron, "_vertices"):
-            Icosahedron._vertices = [None, None, None, None, None]
-            Icosahedron._vertexbuffer = [None, None, None, None, None]
-            Icosahedron._normals = [None, None, None, None, None]
-            Icosahedron._normalbuffer = [None, None, None, None, None]
-            Icosahedron._indices = [None, None, None, None, None]
-            Icosahedron._indexbuffer = [None, None, None, None, None]
-            Icosahedron._numvertices = [None, None, None, None, None]
-            Icosahedron._numedges = [None, None, None, None, None]
-            Icosahedron._numfaces = [None, None, None, None, None]
-            
-        if Icosahedron._vertices[subdivisions] is None:
+        with GLUTContext._threadlock:
+            if not hasattr(Icosahedron, "_vertices"):
+                Icosahedron._vertices = [None, None, None, None, None]
+                Icosahedron._vertexbuffer = [None, None, None, None, None]
+                Icosahedron._normals = [None, None, None, None, None]
+                Icosahedron._normalbuffer = [None, None, None, None, None]
+                Icosahedron._indices = [None, None, None, None, None]
+                Icosahedron._indexbuffer = [None, None, None, None, None]
+                Icosahedron._numvertices = [None, None, None, None, None]
+                Icosahedron._numedges = [None, None, None, None, None]
+                Icosahedron._numfaces = [None, None, None, None, None]
 
-            sys.stderr.write("Creating icosahedron vertex data for {} subdivisions\n".format(subdivisions))
-            
-            vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
-            edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
-            faces = numpy.zeros( (20, 3), dtype=numpy.uint16 )
+            if Icosahedron._vertices[subdivisions] is None:
 
-            # Vertices: 1 at top (+x), 5 next row, 5 next row, 1 at bottom
+                sys.stderr.write("Creating icosahedron vertex data for {} subdivisions\n".format(subdivisions))
 
-            r = 1.0
-            vertices[0:4] = [r, 0., 0., 1.]
-            angles = numpy.arange(0, 2*math.pi, 2*math.pi/5)
-            for i in range(len(angles)):
-                vertices[4+4*i:8+4*i] = [ 0.447213595499958*r,
-                                          0.8944271909999162*r*math.cos(angles[i]),
-                                          0.8944271909999162*r*math.sin(angles[i]),
-                                          1.]
-                vertices[24+4*i:28+4*i] = [-0.447213595499958*r,
-                                            0.8944271909999162*r*math.cos(angles[i]+angles[1]/2.),
-                                            0.8944271909999162*r*math.sin(angles[i]+angles[1]/2.),
-                                            1.]
-            vertices[44:48] = [-r, 0., 0., 1.]
+                vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
+                edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
+                faces = numpy.zeros( (20, 3), dtype=numpy.uint16 )
 
-            edges[0:5, :]   = [ [0, 1], [0, 2], [0, 3], [0, 4], [0, 5] ]
-            edges[5:10, :]  = [ [1, 2], [2, 3], [3, 4], [4, 5], [5, 1] ]
-            edges[10:20, :] = [ [1, 6], [2, 6], [2, 7], [3, 7], [3, 8],
-                                [4, 8], [4, 9], [5, 9], [5, 10], [1, 10] ]
-            edges[20:25, :] = [ [6, 7], [7, 8], [8, 9], [9, 10], [10, 6] ]
-            edges[25:30, :] = [ [6, 11], [7, 11], [8, 11], [9, 11], [10, 11] ]
+                # Vertices: 1 at top (+x), 5 next row, 5 next row, 1 at bottom
 
-            faces[0:5, :] = [ [0, 5, 1], [1, 6, 2], [2, 7, 3], [3, 8, 4], [4, 9, 0] ]
-            faces[5:10, :] = [ [5, 10, 11], [6, 12, 13], [7, 14, 15], [8, 16, 17],
-                               [9, 18, 19] ]
-            faces[10:15, :] = [ [20, 12, 11], [21, 14, 13], [22, 16, 15],
-                                [23, 18, 17], [24, 10, 19] ]
-            faces[15:20, :] = [ [25, 26, 20], [26, 27, 21], [27, 28, 22],
-                                [28, 29, 23], [29, 25, 24] ]
+                r = 1.0
+                vertices[0:4] = [r, 0., 0., 1.]
+                angles = numpy.arange(0, 2*math.pi, 2*math.pi/5)
+                for i in range(len(angles)):
+                    vertices[4+4*i:8+4*i] = [ 0.447213595499958*r,
+                                              0.8944271909999162*r*math.cos(angles[i]),
+                                              0.8944271909999162*r*math.sin(angles[i]),
+                                              1.]
+                    vertices[24+4*i:28+4*i] = [-0.447213595499958*r,
+                                                0.8944271909999162*r*math.cos(angles[i]+angles[1]/2.),
+                                                0.8944271909999162*r*math.sin(angles[i]+angles[1]/2.),
+                                                1.]
+                vertices[44:48] = [-r, 0., 0., 1.]
 
-            for i in range(int(subdivisions)):
-                vertices, edges, faces = Icosahedron.subdivide(vertices, edges, faces, r)
+                edges[0:5, :]   = [ [0, 1], [0, 2], [0, 3], [0, 4], [0, 5] ]
+                edges[5:10, :]  = [ [1, 2], [2, 3], [3, 4], [4, 5], [5, 1] ]
+                edges[10:20, :] = [ [1, 6], [2, 6], [2, 7], [3, 7], [3, 8],
+                                    [4, 8], [4, 9], [5, 9], [5, 10], [1, 10] ]
+                edges[20:25, :] = [ [6, 7], [7, 8], [8, 9], [9, 10], [10, 6] ]
+                edges[25:30, :] = [ [6, 11], [7, 11], [8, 11], [9, 11], [10, 11] ]
 
-            normals = numpy.zeros( 3*len(vertices)//4, dtype=numpy.float32 )
-            for i in range(len(vertices)//4):
-                normals[3*i:3*i+3] = ( vertices[4*i:4*i+3] /
-                                            math.sqrt( (vertices[4*i:4*i+3]**2).sum() ))
+                faces[0:5, :] = [ [0, 5, 1], [1, 6, 2], [2, 7, 3], [3, 8, 4], [4, 9, 0] ]
+                faces[5:10, :] = [ [5, 10, 11], [6, 12, 13], [7, 14, 15], [8, 16, 17],
+                                   [9, 18, 19] ]
+                faces[10:15, :] = [ [20, 12, 11], [21, 14, 13], [22, 16, 15],
+                                    [23, 18, 17], [24, 10, 19] ]
+                faces[15:20, :] = [ [25, 26, 20], [26, 27, 21], [27, 28, 22],
+                                    [28, 29, 23], [29, 25, 24] ]
 
-            indices = numpy.zeros( faces.shape[0] * 3, dtype=numpy.uint16 )
-            v = numpy.zeros(6, dtype=numpy.uint16)
-            for i in range(faces.shape[0]):
-                dex = 0
-                for j in range(3):
-                    for k in range(2):
-                        v[dex] = edges[faces[i, j], k]
-                        dex += 1
-                if len(numpy.unique(v)) != 3:
-                    sys.stderr.write("ERROR with face {}, {} vertices: {}\n"
-                                     .format(i, len(numpy.unique(v)), numpy.unique(v)))
-                    sys.exit(20)
-                if ( ( edges[faces[i, 0], 0] == edges[faces[i, 1], 0] ) or
-                     ( edges[faces[i, 0], 0] == edges[faces[i, 1], 1] ) ):
-                    indices[3*i+0] = edges[faces[i, 0], 1]
-                    indices[3*i+1] = edges[faces[i, 0], 0]
-                else:
-                    indices[3*i+0] = edges[faces[i, 0], 0]
-                    indices[3*i+1] = edges[faces[i, 0], 1]
-                if ( ( edges[faces[i, 1], 0] == edges[faces[i, 0], 0] ) or
-                     ( edges[faces[i, 1], 0] == edges[faces[i, 0], 1] ) ):
-                    indices[3*i+2] = edges[faces[i, 1], 1]
-                else:
-                    indices[3*i+2] = edges[faces[i, 1], 0]
+                for i in range(int(subdivisions)):
+                    vertices, edges, faces = Icosahedron.subdivide(vertices, edges, faces, r)
 
-            sys.stderr.write("{} triangles, {} indices, {} vertices\n"
-                             .format(faces.shape[0], len(indices), len(vertices)//4))
-            
-            Icosahedron._vertices[subdivisions] = vertices
-            Icosahedron._normals[subdivisions] = normals
-            Icosahedron._indices[subdivisions] = indices
+                normals = numpy.zeros( 3*len(vertices)//4, dtype=numpy.float32 )
+                for i in range(len(vertices)//4):
+                    normals[3*i:3*i+3] = ( vertices[4*i:4*i+3] /
+                                                math.sqrt( (vertices[4*i:4*i+3]**2).sum() ))
 
-            GLUTContext.run_glcode(lambda : Icosahedron.make_icosahedron_gl_buffers(subdivisions))
+                indices = numpy.zeros( faces.shape[0] * 3, dtype=numpy.uint16 )
+                v = numpy.zeros(6, dtype=numpy.uint16)
+                for i in range(faces.shape[0]):
+                    dex = 0
+                    for j in range(3):
+                        for k in range(2):
+                            v[dex] = edges[faces[i, j], k]
+                            dex += 1
+                    if len(numpy.unique(v)) != 3:
+                        sys.stderr.write("ERROR with face {}, {} vertices: {}\n"
+                                         .format(i, len(numpy.unique(v)), numpy.unique(v)))
+                        sys.exit(20)
+                    if ( ( edges[faces[i, 0], 0] == edges[faces[i, 1], 0] ) or
+                         ( edges[faces[i, 0], 0] == edges[faces[i, 1], 1] ) ):
+                        indices[3*i+0] = edges[faces[i, 0], 1]
+                        indices[3*i+1] = edges[faces[i, 0], 0]
+                    else:
+                        indices[3*i+0] = edges[faces[i, 0], 0]
+                        indices[3*i+1] = edges[faces[i, 0], 1]
+                    if ( ( edges[faces[i, 1], 0] == edges[faces[i, 0], 0] ) or
+                         ( edges[faces[i, 1], 0] == edges[faces[i, 0], 1] ) ):
+                        indices[3*i+2] = edges[faces[i, 1], 1]
+                    else:
+                        indices[3*i+2] = edges[faces[i, 1], 0]
 
-        GLUTContext._threadlock.release()
+                sys.stderr.write("{} triangles, {} indices, {} vertices\n"
+                                 .format(faces.shape[0], len(indices), len(vertices)//4))
+
+                Icosahedron._vertices[subdivisions] = vertices
+                Icosahedron._normals[subdivisions] = normals
+                Icosahedron._indices[subdivisions] = indices
+
+                GLUTContext.run_glcode(lambda : Icosahedron.
+                                       make_icosahedron_gl_buffers(subdivisions, vertices, edges, faces))
 
     @staticmethod
-    def make_icosahedron_gl_buffers(subdivisions):
+    def make_icosahedron_gl_buffers(subdivisions, vertices, edges, faces):
         Icosahedron._vertexbuffer[subdivisions] = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, Icosahedron._vertexbuffer[subdivisions])
         glBufferData(GL_ARRAY_BUFFER, Icosahedron._vertices[subdivisions], GL_STATIC_DRAW)
@@ -1082,6 +1128,8 @@ class Icosahedron(Object):
         if subdivisions > 4.:
             raise Exception(">4 subdivisions is absurd. Even 4 is probably too many!!!")
 
+        Icosahedron.make_icosahedron_vertices(subdivisions)
+        
         GLUTContext.run_glcode(lambda : self.glinit(radius, subdivisions))
 
     def glinit(self, radius, subdivisions):
@@ -1128,80 +1176,78 @@ class Cylinder(Object):
 
     @staticmethod
     def make_cylinder_vertices():
-        GLUTContext._threadlock.acquire()
-        if not hasattr(Cylinder, "_vertices"):
-            num_edge_points = 32
+        with GLUTContext._threadlock:
+            if not hasattr(Cylinder, "_vertices"):
+                num_edge_points = 32
 
-            vertices = numpy.empty( 4*4*num_edge_points + 8, dtype=numpy.float32)
-            normals = numpy.empty( 3*4*num_edge_points + 6, dtype=numpy.float32)
-            indices = numpy.empty( 3* (4*num_edge_points) , dtype=numpy.uint16 )
+                vertices = numpy.empty( 4*4*num_edge_points + 8, dtype=numpy.float32)
+                normals = numpy.empty( 3*4*num_edge_points + 6, dtype=numpy.float32)
+                indices = numpy.empty( 3* (4*num_edge_points) , dtype=numpy.uint16 )
 
-            # We need two copies of each vertex since they have different normals.
-            # Order: bottom for sides, top for sides, bottom for endcap, top for endcap
+                # We need two copies of each vertex since they have different normals.
+                # Order: bottom for sides, top for sides, bottom for endcap, top for endcap
 
-            for i in range(num_edge_points):
-                phi = float(i)/float(num_edge_points) * 2*math.pi
-                vertices[4*i+0] = 0.
-                vertices[4*i+1] = math.cos(phi)
-                vertices[4*i+2] = math.sin(phi)
-                vertices[4*i+3] = 1.
-                normals[3*i:3*i+3] = [0., math.cos(phi), math.sin(phi)]
+                for i in range(num_edge_points):
+                    phi = float(i)/float(num_edge_points) * 2*math.pi
+                    vertices[4*i+0] = 0.
+                    vertices[4*i+1] = math.cos(phi)
+                    vertices[4*i+2] = math.sin(phi)
+                    vertices[4*i+3] = 1.
+                    normals[3*i:3*i+3] = [0., math.cos(phi), math.sin(phi)]
 
-                vertices[4*(num_edge_points+i)+0] = 1.
-                vertices[4*(num_edge_points+i)+1] = math.cos(phi)
-                vertices[4*(num_edge_points+i)+2] = math.sin(phi)
-                vertices[4*(num_edge_points+i)+3] = 1.
-                normals[3*(num_edge_points+i):3*(num_edge_points+i)+3] = [0., math.cos(phi), math.sin(phi)]
+                    vertices[4*(num_edge_points+i)+0] = 1.
+                    vertices[4*(num_edge_points+i)+1] = math.cos(phi)
+                    vertices[4*(num_edge_points+i)+2] = math.sin(phi)
+                    vertices[4*(num_edge_points+i)+3] = 1.
+                    normals[3*(num_edge_points+i):3*(num_edge_points+i)+3] = [0., math.cos(phi), math.sin(phi)]
 
-                vertices[4*(2*num_edge_points+i)+0] = 0.
-                vertices[4*(2*num_edge_points+i)+1] = math.cos(phi)
-                vertices[4*(2*num_edge_points+i)+2] = math.sin(phi)
-                vertices[4*(2*num_edge_points+i)+3] = 1.
-                normals[3*(2*num_edge_points+i):3*(2*num_edge_points+i)+3] = [-1., 0., 0.]
+                    vertices[4*(2*num_edge_points+i)+0] = 0.
+                    vertices[4*(2*num_edge_points+i)+1] = math.cos(phi)
+                    vertices[4*(2*num_edge_points+i)+2] = math.sin(phi)
+                    vertices[4*(2*num_edge_points+i)+3] = 1.
+                    normals[3*(2*num_edge_points+i):3*(2*num_edge_points+i)+3] = [-1., 0., 0.]
 
-                vertices[4*(3*num_edge_points+i)+0] = 1.
-                vertices[4*(3*num_edge_points+i)+1] = math.cos(phi)
-                vertices[4*(3*num_edge_points+i)+2] = math.sin(phi)
-                vertices[4*(3*num_edge_points+i)+3] = 1.
-                normals[3*(3*num_edge_points+i):3*(3*num_edge_points+i)+3] = [1., 0., 0.]
+                    vertices[4*(3*num_edge_points+i)+0] = 1.
+                    vertices[4*(3*num_edge_points+i)+1] = math.cos(phi)
+                    vertices[4*(3*num_edge_points+i)+2] = math.sin(phi)
+                    vertices[4*(3*num_edge_points+i)+3] = 1.
+                    normals[3*(3*num_edge_points+i):3*(3*num_edge_points+i)+3] = [1., 0., 0.]
 
-            vertices[16*num_edge_points:16*num_edge_points+4] = [0., 0., 0., 1.]
-            vertices[16*num_edge_points+4:16*num_edge_points+8] = [1., 0., 0., 1.]
-            normals[12*num_edge_points:12*num_edge_points+3] = [-1., 0., 0.]
-            normals[12*num_edge_points+3:12*num_edge_points+6] = [1., 0., 0.]
+                vertices[16*num_edge_points:16*num_edge_points+4] = [0., 0., 0., 1.]
+                vertices[16*num_edge_points+4:16*num_edge_points+8] = [1., 0., 0., 1.]
+                normals[12*num_edge_points:12*num_edge_points+3] = [-1., 0., 0.]
+                normals[12*num_edge_points+3:12*num_edge_points+6] = [1., 0., 0.]
 
-            for i in range(num_edge_points-1):
-                # Bottom endcap
-                indices[3*(2*num_edge_points+i) : 3*(2*num_edge_points+i)+3] = [ 2*num_edge_points+i,
-                                                                                 2*num_edge_points+i+1,
+                for i in range(num_edge_points-1):
+                    # Bottom endcap
+                    indices[3*(2*num_edge_points+i) : 3*(2*num_edge_points+i)+3] = [ 2*num_edge_points+i,
+                                                                                     2*num_edge_points+i+1,
+                                                                                     4*num_edge_points ]
+                    # Top endcap
+                    indices[3*(3*num_edge_points+i) : 3*(3*num_edge_points+i)+3] = [ 3*num_edge_points+i,
+                                                                                     3*num_edge_points+i+1,
+                                                                                     4*num_edge_points+1 ]
+                    # Sides
+                    indices[2*3*i:2*3*i+3] = [i, i+1, num_edge_points+i]
+                    indices[2*3*i+3:2*3*i+6] = [num_edge_points+i, num_edge_points+i+1, i+1]
+                # Wraparonds
+                indices[3*(3*num_edge_points-1) : 3*(3*num_edge_points-1)+3] = [ 3*num_edge_points-1,
+                                                                                 2*num_edge_points,
                                                                                  4*num_edge_points ]
-                # Top endcap
-                indices[3*(3*num_edge_points+i) : 3*(3*num_edge_points+i)+3] = [ 3*num_edge_points+i,
-                                                                                 3*num_edge_points+i+1,
+                indices[3*(4*num_edge_points-1) : 4*(4*num_edge_points-1)+3] = [ 4*num_edge_points-1,
+                                                                                 3*num_edge_points,
                                                                                  4*num_edge_points+1 ]
-                # Sides
-                indices[2*3*i:2*3*i+3] = [i, i+1, num_edge_points+i]
-                indices[2*3*i+3:2*3*i+6] = [num_edge_points+i, num_edge_points+i+1, i+1]
-            # Wraparonds
-            indices[3*(3*num_edge_points-1) : 3*(3*num_edge_points-1)+3] = [ 3*num_edge_points-1,
-                                                                             2*num_edge_points,
-                                                                             4*num_edge_points ]
-            indices[3*(4*num_edge_points-1) : 4*(4*num_edge_points-1)+3] = [ 4*num_edge_points-1,
-                                                                             3*num_edge_points,
-                                                                             4*num_edge_points+1 ]
-            indices[2*(3*(num_edge_points-1)):2*(3*(num_edge_points-1))+3] = [num_edge_points-1, 0, 2*num_edge_points-1]
-            indices[2*(3*(num_edge_points-1))+3:2*(3*(num_edge_points-1))+6] = [ num_edge_points-1, num_edge_points, 0]
+                indices[2*(3*(num_edge_points-1)):2*(3*(num_edge_points-1))+3] = [num_edge_points-1, 0, 2*num_edge_points-1]
+                indices[2*(3*(num_edge_points-1))+3:2*(3*(num_edge_points-1))+6] = [ num_edge_points-1, num_edge_points, 0]
 
-            # for i in range(len(indices)):
-            #     sys.stderr.write("{}\n".format(vertices[indices[i]:indices[i]+4]))
-            
-            Cylinder._vertices = vertices
-            Cylinder._normals = normals
-            Cylinder._indices = indices
+                # for i in range(len(indices)):
+                #     sys.stderr.write("{}\n".format(vertices[indices[i]:indices[i]+4]))
 
-            GLUTContext.run_glcode(Cylinder.make_cylinder_glbuffers)
-            
-        GLUTContext._threadlock.release()
+                Cylinder._vertices = vertices
+                Cylinder._normals = normals
+                Cylinder._indices = indices
+
+                GLUTContext.run_glcode(Cylinder.make_cylinder_glbuffers)
 
     @staticmethod
     def make_cylinder_glbuffers():
@@ -1265,9 +1311,19 @@ class Cylinder(Object):
 # ======================================================================
 
 def main():
-    sys.stderr.write("Making box.\n")
-    box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
-              length = 1.5, width=0.25, height=0.25)
+    sys.stderr.write("Making boxes.\n")
+
+    boxes = []
+    phases = []
+    n = 10
+    for i in range(n):
+        for j in range (n):
+            x = i*4./n - 2.
+            y = j*4./n - 2.
+            phases.append(random.random()*2.*math.pi)
+            boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=color.red,
+                              length=1.5, width=0.25,height=0.25))
+        
     # sys.stderr.write("Making Ball.\n")
     # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
     # sys.stderr.write("Making box2.\n")
@@ -1288,9 +1344,10 @@ def main():
         phi += dphi
         if phi > 2.*math.pi:
             phi -= 2.*math.pi
-        box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
-                                 math.sin(theta)*math.sin(phi),
-                                 math.cos(theta)] )
+        for i in range(len(boxes)):
+            boxes[i].axis = numpy.array( [math.sin(theta)*math.cos(phi+phases[i]),
+                                          math.sin(theta)*math.sin(phi+phases[i]),
+                                          math.cos(theta)] )
         # ball.x = 2.*math.cos(phi)
         # if math.sin(phi)>0.:
         #     ball.rotate(dphi)

@@ -1321,7 +1321,8 @@ def main():
             x = i*4./n - 2.
             y = j*4./n - 2.
             phases.append(random.random()*2.*math.pi)
-            boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=color.red,
+            col = ( random.random(), random.random(), random.random() )
+            boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
                               length=1.5, width=0.25,height=0.25))
         
     # sys.stderr.write("Making Ball.\n")

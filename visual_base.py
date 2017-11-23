@@ -207,6 +207,7 @@ class GLUTContext(Observer):
         self._mousey0 = 0.
         self._origtheta = 0.
         self._origphi = 0.
+        self._origcamz = 0.
         
         self.objects = []
         self.shaders = []
@@ -249,7 +250,6 @@ class GLUTContext(Observer):
             glutSetWindow(self.window)
 
             if state == GLUT_UP:
-                sys.stderr.write("Right button up!\n")
                 glutMotionFunc(None)
                 if self._camtheta > math.pi:
                     self._camtheta = math.pi
@@ -261,14 +261,30 @@ class GLUTContext(Observer):
                     self._camphi += 2.*math.pi
                     
             elif state == GLUT_DOWN:
-                sys.stderr.write("Right button down!\n")
                 self._mousex0 = x
                 self._mousey0 = y
                 self._origtheta = self._camtheta
                 self._origphi = self._camphi
                 glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
 
+        if button == GLUT_MIDDLE_BUTTON:
+            glutSetWindow(self.window)
+
+            if state == GLUT_UP:
+                sys.stderr.write("MMB up\n")
+                glutMotionFunc(None)
+
+            elif state ==GLUT_DOWN:
+                sys.stderr.write("MMB down\n")
+                self._mousex0 = x
+                self._mousey0 = y
+                self._origcamz = self._camz
+                glutMotionFunc(lambda x, y : self.mmb_moved(x, y))
+
+                
         if (state == GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
+            glutSetWindow(self.window)
+
             if button == 3:
                 self._camz *= 0.9
             else:
@@ -282,6 +298,13 @@ class GLUTContext(Observer):
         self._camtheta = self._origtheta - dy * math.pi / self.height
         self._camphi = self._origphi + dx * 2.*math.pi / self.width
         self.update_cam_posrot_gl()
+
+
+    def mmb_moved(self, x, y):
+        dy = y - self._mousey0
+        self._camz = self._origcamz * 10.**(dy/self.width)
+        self.update_cam_posrot_gl()
+
         
     def receive_message(self, message, subject):
         sys.stderr.write("OMG!  Got message {} from subject {}, should do something!\n"

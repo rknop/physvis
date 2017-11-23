@@ -773,7 +773,7 @@ class Object(Subject):
             sys.exit(20)
         R = math.sqrt(value[0]*value[0] + value[2]*value[2])
         theta = math.atan2(value[1], R)
-        phi = math.atan2(value[2], value[0])
+        phi = -math.atan2(value[2], value[0])
         q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
         q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
         self._rotation = quarternion_multiply(q2, q1)
@@ -1348,7 +1348,7 @@ class Cylinder(Object):
                                                                                  3*num_edge_points,
                                                                                  4*num_edge_points+1 ]
                 indices[2*(3*(num_edge_points-1)):2*(3*(num_edge_points-1))+3] = [num_edge_points-1, 0, 2*num_edge_points-1]
-                indices[2*(3*(num_edge_points-1))+3:2*(3*(num_edge_points-1))+6] = [ num_edge_points-1, num_edge_points, 0]
+                indices[2*(3*(num_edge_points-1))+3:2*(3*(num_edge_points-1))+6] = [ num_edge_points, 2*num_edge_points-1, 0]
 
                 # for i in range(len(indices)):
                 #     sys.stderr.write("{}\n".format(vertices[indices[i]:indices[i]+4]))
@@ -1433,7 +1433,7 @@ def main():
             phases.append(random.random()*2.*math.pi)
             col = ( random.random(), random.random(), random.random() )
             boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
-                              length=1.5, width=0.25,height=0.25))
+                              length=1.5, width=0.05,height=0.05))
         
     # sys.stderr.write("Making Ball.\n")
     # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
@@ -1441,8 +1441,8 @@ def main():
     # box2 = Box(position = (1., 1., 1.), axis = (0.5, 0.5, 0.7071), color=color.cyan,
     #            length=0.25, width=0.25, height=0.25)
 
-    rod = Cylinder(position = (0., 1., 0.), color=color.orange,
-                   axis=(2., -2., 0.), radius=0.125)
+    rod = Cylinder(position = (0., 0., 0.), color=color.orange,
+                   radius=0.125, axis=(0., 0., 1.))
     
     theta = math.pi/4.
     phi = 0.

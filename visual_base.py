@@ -193,12 +193,24 @@ class GLUTContext(Observer):
         self.vboarr = None
         self.colorbuffer = None
 
+        self._camx = 0.
+        self._camy = 0.
+        self._camz = 5.
+        self._camtheta = math.pi/2.
+        self._camphi = 0.
+
         self._fov = math.pi/4.
         self._clipnear = 0.1
         self._clipfar = 1000.
 
+        self._mousex0 = 0.
+        self._mousey0 = 0.
+        self._origtheta = 0.
+        self._origphi = 0.
+        
         self.objects = []
-
+        self.shaders = []
+        
         glutInitWindowSize(self.width, self.height)
         glutInitWindowPosition(0, 0)
         self.window = glutCreateWindow(self.title)
@@ -215,6 +227,8 @@ class GLUTContext(Observer):
             
     def gl_init(self):
         sys.stderr.write("Starting gl_init\n")
+        glutSetWindow(self.window)
+        glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
         glutTimerFunc(0, lambda val : self.timer(val), 0)
@@ -229,6 +243,45 @@ class GLUTContext(Observer):
         with GLUTContext._threadlock:
             GLUTContext._full_init = True
         glutVisibilityFunc(None)
+
+    def mouse_button_handler(self, button, state, x, y):
+        if button == GLUT_RIGHT_BUTTON:
+            glutSetWindow(self.window)
+
+            if state == GLUT_UP:
+                sys.stderr.write("Right button up!\n")
+                glutMotionFunc(None)
+                if self._camtheta > math.pi:
+                    self._camtheta = math.pi
+                if self._camtheta < 0.:
+                    self._camtheta = 0.
+                if self._camphi > 2.*math.pi:
+                    self._camphi -= 2.*math.pi
+                if self._camphi < 0.:
+                    self._camphi += 2.*math.pi
+                    
+            elif state == GLUT_DOWN:
+                sys.stderr.write("Right button down!\n")
+                self._mousex0 = x
+                self._mousey0 = y
+                self._origtheta = self._camtheta
+                self._origphi = self._camphi
+                glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
+
+        if (state == GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
+            if button == 3:
+                self._camz *= 0.9
+            else:
+                self._camz *= 1.1
+            self.update_cam_posrot_gl()
+                
+                
+    def rmb_moved(self, x, y):
+        dx = x - self._mousex0
+        dy = y - self._mousey0
+        self._camtheta = self._origtheta - dy * math.pi / self.height
+        self._camphi = self._origphi + dx * 2.*math.pi / self.width
+        self.update_cam_posrot_gl()
         
     def receive_message(self, message, subject):
         sys.stderr.write("OMG!  Got message {} from subject {}, should do something!\n"
@@ -243,6 +296,14 @@ class GLUTContext(Observer):
         sys.stderr.write("Removing object {}.\n".format(obj))
         self.objects = [x for x in self.objects if x != obj]
         obj.remove_listener(self)
+
+    def add_shader(self, shader):
+        sys.stderr.write("Adding shader {}\n".format(shader._name))
+        self.shaders.append(shader)
+
+    def remove_shader(self, shader):
+        sys.stderr.write("Removing shader {}\n".format(shader._name))
+        self.shaders = [ x for x in self.shaders if x != shader ]
         
     def cleanup(self):
         pass
@@ -257,8 +318,20 @@ class GLUTContext(Observer):
         sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
         self.width = width
         self.height = height
-        glViewport(0, 0, self.width, self.height)
+        GLUTContext.run_glcode(lambda : self.resize2d_gl())
 
+    def resize2d_gl(self):
+        glViewport(0, 0, self.width, self.height)
+        for shader in self.shaders:
+            shader.set_perspective_matrix(self._fov, self.width/self.height,
+                                          self._clipnear, self._clipfar)
+
+    def update_cam_posrot_gl(self):
+        # sys.stderr.write("Moving camera to [{:.2f}, {:.2f}, {:.2f}], setting rotation to [{:.3f}, {:.3f}]\n"
+        #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
+        for shader in self.shaders:
+            shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
+            
     # I worry aboutoptimization of this one.  Making a separate Python
     # function call for every object could end up being slow.  I should
     # test that at some poitn with lots of objects.
@@ -304,16 +377,18 @@ class GLUTContext(Observer):
 # ======================================================================
 
 class Shader(object):
-    _basic_shader = None
+    _basic_shader = {}
 
     @staticmethod
-    def get(name):
+    def get(name, context):
         if name == "Basic Shader":
             with GLUTContext._threadlock:
-                if Shader._basic_shader == None:
+                if ( (not context in Shader._basic_shader) or
+                     (Shader._basic_shader[context] == None) ):
                     sys.stderr.write("Asking for a BasicShader\n")
-                    Shader._basic_shader = BasicShader()
-            return Shader._basic_shader
+                    Shader._basic_shader[context] = BasicShader(context)
+                    context.add_shader(Shader._basic_shader[context])
+            return Shader._basic_shader[context]
 
         else:
             raise Exception("Unknown shader \"{}\"".format(name))
@@ -346,9 +421,10 @@ class Shader(object):
 
     
 class BasicShader(Shader):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, context, *args, **kwargs):
         sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(*args, **kwargs)
+        self.context = context
         self._name = "Basic Shader"
         self._shaders_destroyed = False
 
@@ -439,8 +515,10 @@ void main(void)
         loc = glGetUniformLocation(self.progid, "light2dir")
         glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
 
-        self.set_perspective(math.pi/4, 1., 0.1, 1000.)    # Default fov, aspect clipnear, clipfar
-        self.set_camera_position(0., 0., 5.)
+        self.set_perspective(self.context._fov, self.context.width/self.context.height,
+                             self.context._clipnear, self.context._clipfar)
+        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
+                               self.context._camtheta, self.context._camphi)
 
     # This makes me feel very queasy.  A wait for another thread in
     #   a __del__ is probably just asking for circular references
@@ -480,14 +558,23 @@ void main(void)
         projection_location = glGetUniformLocation(self.progid, "projection")
         glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
         
-    def set_camera_position(self, x, y, z):
-        matrix = numpy.matrix([[ 1., 0., 0., 0.],
-                               [ 0., 1., 0., 0.],
-                               [ 0., 0., 1., 0.],
-                               [-x, -y, -z,  1.]] ,dtype=numpy.float32)
+    def set_camera_posrot(self, x, y, z, theta, phi):
+        theta -= math.pi/2.
+        if (theta >  math.pi/2): theta =  math.pi/2.
+        if (theta < -math.pi/2): theta = -math.pi/2.
+        if (phi > 2.*math.pi): phi -= 2.*math.pi
+        if (phi < 0.): phi += 2.*math.pi
+        ct = math.cos(theta)
+        st = math.sin(theta)
+        cp = math.cos(phi)
+        sp = math.sin(phi)
+        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  , -x ],
+                               [ -sp*st  ,  ct   , cp*st , -y ],
+                               [ -sp*ct  , -st   , cp*ct , -z ],
+                               [    0.   ,   0.  ,   0.  ,  1.]], dtype=numpy.float32)
         glUseProgram(self.progid)
         view_location = glGetUniformLocation(self.progid, "view")
-        glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix)
+        glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
 
     def set_color(self, color):
         color_location = glGetUniformLocation(self.progid, "color")
@@ -536,7 +623,7 @@ class Object(Subject):
         else:
             self._scale = scale
 
-        self.shader = Shader.get("Basic Shader")
+        self.shader = Shader.get("Basic Shader", self.context)
 
         if color is None and opacity is None:
             self._color = numpy.array( [1., 1., 1., 1.], dtype=numpy.float32 )

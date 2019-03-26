@@ -43,13 +43,6 @@ def quarternion_multiply(p, q):
                           pr*qr - px*qx - py*qy - pz*qz ] , dtype=numpy.float32 )
             
     
-def gl_version_info():
-    sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
-    sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
-    sys.stderr.write("OpenGL vendor: {}\n".format(glGetString(GL_VENDOR)))
-    sys.stderr.write("OpenGL shading language version: {}\n"
-                     .format(glGetString(GL_SHADING_LANGUAGE_VERSION)))
-
 # ======================================================================
 
 class color(object):
@@ -94,6 +87,19 @@ class Observer(object):
 
 
 # ======================================================================
+#
+# AK.  It's been a while, and I didn't comment.
+#
+# I think I was trying to set this up so taht you couold have more
+# than one GLUTContext object... but then the class stuff seems
+# to be setting things up so there's only one GLUT Context, and I'm
+# not 100% clear on what a GLUT Context fully means.
+#
+# I added passing "instance" to class_init_2, as it seemed that
+# I had to initialize GLUT in the same therad as the mainloop.  I suspect
+# that the whole setup of the thing is now more complicated than it
+# needs to be, and it certainly won't work with more than one window
+# now.  Rethinking is needed.
         
 class GLUTContext(Observer):
     _threadlock = threading.RLock()
@@ -124,7 +130,7 @@ class GLUTContext(Observer):
             GLUTContext._class_init_1 = True
 
     @staticmethod
-    def class_init_2():
+    def class_init_2(instance):
         sys.stderr.write("Starting class_init_2\n")
         with GLUTContext._threadlock:
             if not GLUTContext._class_init_1:
@@ -136,18 +142,21 @@ class GLUTContext(Observer):
             GLUTContext.idle_funcs = []
             GLUTContext.things_to_run = queue.Queue()
 
-            glutIdleFunc(lambda: GLUTContext.idle())
-
             sys.stderr.write("Starting GLUT thread...\n")
-            GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main() )
+            GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
             GLUTContext.thread.start()
 
             GLUTContext._class_init_2 = True
         
     # There's a race condition here on idle_funcs and things_to_run
     @staticmethod
-    def thread_main():
+    def thread_main(instance):
         sys.stderr.write("Starting thread_main\n")
+        glutInitWindowSize(instance.width, instance.height)
+        glutInitWindowPosition(0, 0)
+        instance.window = glutCreateWindow(instance.title)
+        glutSetWindow(instance.window)
+        glutIdleFunc(lambda: GLUTContext.idle())
         glutMainLoop()
         
     @staticmethod
@@ -176,6 +185,14 @@ class GLUTContext(Observer):
             func()
         glutPostRedisplay()
 
+    @staticmethod
+    def do_gl_version_info():
+        sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
+        sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
+        sys.stderr.write("OpenGL vendor: {}\n".format(glGetString(GL_VENDOR)))
+        sys.stderr.write("OpenGL shading language version: {}\n"
+                         .format(glGetString(GL_SHADING_LANGUAGE_VERSION)))
+        
     # ======================================================================
     # Instance methods
     
@@ -212,13 +229,7 @@ class GLUTContext(Observer):
         self.objects = []
         self.shaders = []
         
-        glutInitWindowSize(self.width, self.height)
-        glutInitWindowPosition(0, 0)
-        self.window = glutCreateWindow(self.title)
-        glutSetWindow(self.window)
-        glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
-
-        GLUTContext.class_init_2()
+        GLUTContext.class_init_2(self)
 
         GLUTContext.run_glcode(lambda : self.gl_init())
 
@@ -232,11 +243,15 @@ class GLUTContext(Observer):
         glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
+        glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
         glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
         self.window_is_initialized = True
         sys.stderr.write("Exiting gl_init\n")
         
+    def gl_version_info():
+        GLUTContext.run_glcode(lambda : GLUTContext.do_gl_version_info())
+
     def window_visibility_handler(self, state):
         if state != GLUT_VISIBLE:
             return
@@ -1449,7 +1464,7 @@ def main():
     fps = 30
     dphi = 2*math.pi/(4.*fps)
 
-    gl_version_info()
+    GLUTContext.gl_version_info()
 
     while True:
         phi += dphi

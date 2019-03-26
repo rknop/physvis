@@ -597,7 +597,7 @@ class Object(Subject):
         qinv = q.copy()
         qinv[0:3] *= -1.
         qinv /= (q*q).sum()
-        return uarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
+        return quarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
@@ -980,6 +980,10 @@ class Icosahedron(Object):
             Icosahedron._normals[subdivisions] = normals
             Icosahedron._indices[subdivisions] = indices
 
+            Icosahedron._numvertices[subdivisions] = len(vertices)
+            Icosahedron._numedges[subdivisions] = len(edges)
+            Icosahedron._numfaces[subdivisions] = len(faces)
+
             GLUTContext.run_glcode(lambda : Icosahedron.make_icosahedron_gl_buffers(subdivisions))
 
         GLUTContext._threadlock.release()
@@ -998,9 +1002,6 @@ class Icosahedron(Object):
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indexbuffer[subdivisions])
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, Icosahedron._indices[subdivisions], GL_STATIC_DRAW)
 
-        Icosahedron._numvertices[subdivisions] = len(vertices)
-        Icosahedron._numedges[subdivisions] = len(edges)
-        Icosahedron._numfaces[subdivisions] = len(faces)
             
 
     @staticmethod
@@ -1082,6 +1083,8 @@ class Icosahedron(Object):
         if subdivisions > 4.:
             raise Exception(">4 subdivisions is absurd. Even 4 is probably too many!!!")
 
+        Icosahedron.make_icosahedron_vertices(subdivisions)
+        
         GLUTContext.run_glcode(lambda : self.glinit(radius, subdivisions))
 
     def glinit(self, radius, subdivisions):
@@ -1268,8 +1271,8 @@ def main():
     sys.stderr.write("Making box.\n")
     box = Box(position = (0., 0., 0.), axis = (1., -1., 1.), color=color.red,
               length = 1.5, width=0.25, height=0.25)
-    # sys.stderr.write("Making Ball.\n")
-    # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
+    sys.stderr.write("Making Ball.\n")
+    ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
     # sys.stderr.write("Making box2.\n")
     # box2 = Box(position = (1., 1., 1.), axis = (0.5, 0.5, 0.7071), color=color.cyan,
     #            length=0.25, width=0.25, height=0.25)
@@ -1291,11 +1294,11 @@ def main():
         box.axis = numpy.array( [math.sin(theta)*math.cos(phi),
                                  math.sin(theta)*math.sin(phi),
                                  math.cos(theta)] )
-        # ball.x = 2.*math.cos(phi)
-        # if math.sin(phi)>0.:
-        #     ball.rotate(dphi)
-        # else:
-        #     ball.rotate(-dphi)
+        ball.x = 2.*math.cos(phi)
+        if math.sin(phi)>0.:
+            ball.rotate(dphi)
+        else:
+            ball.rotate(-dphi)
 
         # box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
         #                                       quarternion_multiply( [ 0, 1.5*math.sin(phi), 1.5*math.cos(phi) ],

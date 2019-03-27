@@ -11,6 +11,7 @@ import queue
 import threading
 import random
 import uuid
+import ctypes
 
 import numpy
 import numpy.linalg
@@ -176,27 +177,29 @@ class GLObjectCollection(Observer):
         glEnableVertexAttribArray(1)
                      
         # Model Matrix uses 4 attributes
-
+        # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
+        # and http://sol.gfxile.net/instancing.html
+        
         glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4*4*4, 0)
-        glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4*4*4, 4*4*1)
-        glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4*4*4, 4*4*2)
-        glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4*4*4, 4*4*3)
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(0))
+        glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*1))
+        glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*2))
+        glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*3))
         glEnableVertexAttribArray(2)
         glEnableVertexAttribArray(3)
         glEnableVertexAttribArray(4)
         glEnableVertexAttribArray(5)
-        glVertexAttribDivisor(2, 1)          # I don't understand why these are necessary (...are they?)
+        glVertexAttribDivisor(2, 1)
         glVertexAttribDivisor(3, 1)
         glVertexAttribDivisor(4, 1)
-        glVertexAttribDivisor(5, 1)
-        
+        glVertexAttribDivisor(5, 1) 
+       
         # Model normal matrix uses 3 attributes
         
         glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, 0)
-        glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, 4*3)
-        glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, 4*3*2)
+        glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(0))
+        glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3))
+        glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
         glEnableVertexAttribArray(6)
         glEnableVertexAttribArray(7)
         glEnableVertexAttribArray(8)
@@ -278,6 +281,9 @@ class GLObjectCollection(Observer):
         glUseProgram(self.shader.progid)
         self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
                                     self.context._clipnear, self.context._clipfar)
+        self.shader.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
+                                      self.context._camtheta, self.context._camphi)
+            
         if self.draw_as_lines:
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         else:
@@ -672,6 +678,8 @@ void main(void)
 {
   gl_Position =  projection * view * model * in_Position;
   aNormal = model_normal * in_Normal;
+  // gl_Position = projection * view * in_Position;
+  // aNormal = in_Normal;
   aColor = color;
 }"""
 
@@ -694,8 +702,8 @@ void main(void)
   vec3 diff1 = max(dot(norm, light1dir), 0.) * light1color;
   vec3 diff2 = max(dot(norm, light2dir), 0.) * light2color;
   vec3 col = (ambientcolor + diff1 + diff2) * vec3(aColor);
-  // out_Color = vec4(col, aColor[3]);
-  out_Color = vec4(1.0, 0.5, 0.5, 1.0);
+  out_Color = vec4(col, aColor[3]);
+  // out_Color = vec4(1.0, 0.5, 0.5, 1.0);
 }"""
 
         sys.stderr.write("\nAbout to compile shaders....\n")
@@ -796,6 +804,7 @@ void main(void)
                                [ -sp*st  ,  ct   , cp*st , -y ],
                                [ -sp*ct  , -st   , cp*ct , -z ],
                                [    0.   ,   0.  ,   0.  ,  1.]], dtype=numpy.float32)
+        # sys.stderr.write("View matrix:\n{}\n".format(matrix.T))
         glUseProgram(self.progid)
         view_location = glGetUniformLocation(self.progid, "view")
         glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
@@ -1588,7 +1597,8 @@ class Box(Object):
 def main():
     sys.stderr.write("Making boxes.\n")
 
-    box = Box(color=color.red)
+    box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
+    box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
     
     # boxes = []
     # phases = []

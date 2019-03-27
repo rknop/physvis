@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import numpy
 
 class TestClass:
+    _testarr = numpy.array( [1., 2., 3., 4.] )
+    
     def __init__(self, initstring = "default initstring"):
         self.__class__.initstring = initstring
+        self.testarr = TestClass._testarr.copy()
         
     def instance_method(self):
         cls = self.__class__
@@ -52,3 +56,5 @@ it3.class_method("it3!")
 it1.instance_method()
 it2.instance_method()
 it3.instance_method()
+
+sys.stderr.write("{}\n".format(it3.testarr))

@@ -189,23 +189,16 @@ class GLObjectCollection(Observer):
         glEnableVertexAttribArray(3)
         glEnableVertexAttribArray(4)
         glEnableVertexAttribArray(5)
-        glVertexAttribDivisor(2, 1)
-        glVertexAttribDivisor(3, 1)
-        glVertexAttribDivisor(4, 1)
-        glVertexAttribDivisor(5, 1) 
        
         # Model normal matrix uses 3 attributes
         
         glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
         glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(0))
-        glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3))
+        glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*1))
         glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
         glEnableVertexAttribArray(6)
         glEnableVertexAttribArray(7)
         glEnableVertexAttribArray(8)
-        glVertexAttribDivisor(6, 1)
-        glVertexAttribDivisor(7, 1)
-        glVertexAttribDivisor(8, 1)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
         glVertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 0, None)
@@ -236,42 +229,57 @@ class GLObjectCollection(Observer):
         n = len(self.objects) - 1 
         self.context.run_glcode(lambda : self.push_all_object_info(n))
 
+    def update_object_matrix(self, obj):
+        found = False
+        # sys.stderr.write("Going to try to update object matrix for {}\n".format(obj._id))
+        for i in range(len(self.objects)):
+            if self.objects[i]._id == obj._id:
+                found = True
+                break
+
+        if not found:
+            # sys.stderr.write("...not found\n")
+            return
+
+        # sys.stderr.write("...found at {}!\n".format(i))
+        # sys.stderr.write("\nmatrixdata:\n{}\n".format(obj.matrixdata))
+        # sys.stderr.write("\nnormalmatrixdata:\n{}\n".format(obj.normalmatrixdata))
+
+        self.context.run_glcode(lambda : self.do_update_object_matrix(i, obj))
+
+    def do_update_object_matrix(self, dex, obj):
+        glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
+        glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
+            
+        
     def push_all_object_info(self, dex):
 
-        sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-                         .format(dex, self.objects[dex].num_triangles,
-                                 self.object_triangle_index[dex]))
-        sys.stderr.write("\nvertexdata: {}\n".format(self.objects[dex].vertexdata))
-        sys.stderr.write("\nnormaldata: {}\n".format(self.objects[dex].normaldata))
-        sys.stderr.write("\ncolordata: {}\n".format(self.objects[dex].colordata))
-        sys.stderr.write("\nmatrixdata: {}\n".format(self.objects[dex].matrixdata))
-        sys.stderr.write("\nnormalmatrixdata: {}\n".format(self.objects[dex].normalmatrixdata))
+        # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
+        #                  .format(dex, self.objects[dex].num_triangles,
+        #                          self.object_triangle_index[dex]))
+        # sys.stderr.write("\nvertexdata: {}\n".format(self.objects[dex].vertexdata))
+        # sys.stderr.write("\nnormaldata: {}\n".format(self.objects[dex].normaldata))
+        # sys.stderr.write("\ncolordata: {}\n".format(self.objects[dex].colordata))
+        # sys.stderr.write("\nmatrixdata: {}\n".format(self.objects[dex].matrixdata))
+        # sys.stderr.write("\nnormalmatrixdata: {}\n".format(self.objects[dex].normalmatrixdata))
         # sys.exit(20)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3,
-                        # 4*4*3*self.objects[dex].num_triangles, self.objects[dex].vertexdata)
-                        self.objects[dex].vertexdata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].vertexdata)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3,
-                        # 4*3*3*self.objects[dex].num_triangles, self.objects[dex].normaldata)
-                        self.objects[dex].normaldata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, self.objects[dex].normaldata)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3,
-                        # 4*16*3*self.objects[dex].num_triangles, self.objects[dex].matrixdata)
-                        self.objects[dex].matrixdata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, self.objects[dex].matrixdata)
         
         glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3,
-                        # 4*9*3*self.objects[dex].num_triangles, self.objects[dex].normalmatrixdata)
-                        self.objects[dex].normalmatrixdata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, self.objects[dex].normalmatrixdata)
                 
         glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3,
-                        # 4*4*3*self.objects[dex].num_triangles, self.objects[dex].colordata)
-                        self.objects[dex].colordata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].colordata)
         
 
 
@@ -294,8 +302,9 @@ class GLObjectCollection(Observer):
         
 
     def receive_message(self, message, subject):
-        # DEAL WITH MESSAGES FROM OBJECTS
-        pass
+        # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
+        if message == "update matrix":
+            self.update_object_matrix(subject)
         
 # ======================================================================
 #
@@ -870,7 +879,6 @@ class Object(Subject):
         self.normaldata = None
         self.matrixdata = None
         self.normalmatrixdata = None
-        self.update_model_matrix()
         
         if axis is not None:
             self.axis = numpy.array(axis)
@@ -1060,6 +1068,9 @@ class Object(Subject):
         for i in range(0, 3*self.num_triangles):
             self.normalmatrixdata[i, :, :] = invmat
 
+        for listener in self.listeners:
+            listener.receive_message("update matrix", self)
+
     @property
     def visible(self):
         return self._visible
@@ -1184,6 +1195,10 @@ class Box(Object):
         self.num_triangles = 12
         self.vertexdata = Box._box_vertices
         self.normaldata = Box._box_normals
+
+        self.length = length
+        self.width = width
+        self.height = height
         
         self.finish_init()
 
@@ -1597,20 +1612,20 @@ class Box(Object):
 def main():
     sys.stderr.write("Making boxes.\n")
 
-    box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
-    box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
+    # box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
+    # box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
     
-    # boxes = []
-    # phases = []
-    # n = 20
-    # for i in range(n):
-    #     for j in range (n):
-    #         x = i*4./n - 2.
-    #         y = j*4./n - 2.
-    #         phases.append(random.random()*2.*math.pi)
-    #         col = ( random.random(), random.random(), random.random() )
-    #         boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
-    #                           length=1.5, width=0.05,height=0.05))
+    boxes = []
+    phases = []
+    n = 10
+    for i in range(n):
+        for j in range (n):
+            x = i*4./n - 2.
+            y = j*4./n - 2.
+            phases.append(random.random()*2.*math.pi)
+            col = ( random.random(), random.random(), random.random() )
+            boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
+                              length=1.5, width=0.05, height=0.05))
         
     # sys.stderr.write("Making Ball.\n")
     # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
@@ -1629,13 +1644,13 @@ def main():
     GLUTContext._default_context.gl_version_info()
 
     while True:
-        # phi += dphi
-        # if phi > 2.*math.pi:
-        #     phi -= 2.*math.pi
-        # for i in range(len(boxes)):
-        #     boxes[i].axis = numpy.array( [math.sin(theta)*math.cos(phi+phases[i]),
-        #                                   math.sin(theta)*math.sin(phi+phases[i]),
-        #                                   math.cos(theta)] )
+        phi += dphi
+        if phi > 2.*math.pi:
+            phi -= 2.*math.pi
+        for i in range(len(boxes)):
+            boxes[i].axis = numpy.array( [math.sin(theta)*math.cos(phi+phases[i]),
+                                          math.sin(theta)*math.sin(phi+phases[i]),
+                                          math.cos(theta)] )
         # # ball.x = 2.*math.cos(phi)
         # # if math.sin(phi)>0.:
         # #     ball.rotate(dphi)

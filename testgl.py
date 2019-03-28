@@ -322,10 +322,10 @@ glEnableVertexAttribArray(2)
 glEnableVertexAttribArray(3)
 glEnableVertexAttribArray(4)
 glEnableVertexAttribArray(5)
-glVertexAttribDivisor(2, 1)        # Need this to keep the thing from jumping over four matrices
-glVertexAttribDivisor(3, 1)        #  instead of just one for each vertex
-glVertexAttribDivisor(4, 1)
-glVertexAttribDivisor(5, 1)
+# glVertexAttribDivisor(2, 1)        # Need this to keep the thing from jumping over four matrices
+# glVertexAttribDivisor(3, 1)        #  instead of just one for each vertex
+# glVertexAttribDivisor(4, 1)
+# glVertexAttribDivisor(5, 1)
 
 err = glGetError()
 if err != GL_NO_ERROR:
@@ -339,9 +339,9 @@ glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
 glEnableVertexAttribArray(6)
 glEnableVertexAttribArray(7)
 glEnableVertexAttribArray(8)
-glVertexAttribDivisor(6, 1)
-glVertexAttribDivisor(7, 1)
-glVertexAttribDivisor(8, 1)
+# glVertexAttribDivisor(6, 1)
+# glVertexAttribDivisor(7, 1)
+# glVertexAttribDivisor(8, 1)
 
 err = glGetError()
 if err != GL_NO_ERROR:

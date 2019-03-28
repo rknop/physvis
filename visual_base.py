@@ -1059,14 +1059,16 @@ class Object(Subject):
         # I wonder if there's a numpy way to do this that omits the for loop....
         if (self.matrixdata is None) or (self.matrixdata.size != 3*16*self.num_triangles):
             self.matrixdata = numpy.empty( (3*self.num_triangles, 4, 4), dtype=numpy.float32 )
-        for i in range(0, 3*self.num_triangles):
-            self.matrixdata[i, :, :] = self.model_matrix
+        self.matrixdata[:, :, :] = self.model_matrix[numpy.newaxis, :, :]
+        # for i in range(0, 3*self.num_triangles):
+        #     self.matrixdata[i, :, :] = self.model_matrix
 
         invmat = numpy.linalg.inv(mat[0:3, 0:3]).T
         if (self.normalmatrixdata is None) or (self.normalmatrixdata.size != 3*9*self.num_triangles):
             self.normalmatrixdata = numpy.empty( (3*self.num_triangles, 3, 3), dtype=numpy.float32 )
-        for i in range(0, 3*self.num_triangles):
-            self.normalmatrixdata[i, :, :] = invmat
+        self.normalmatrixdata[:, :, :] = invmat[numpy.newaxis, :, :]
+        # for i in range(0, 3*self.num_triangles):
+        #     self.normalmatrixdata[i, :, :] = invmat
 
         for listener in self.listeners:
             listener.receive_message("update matrix", self)
@@ -1617,7 +1619,7 @@ def main():
     
     boxes = []
     phases = []
-    n = 10
+    n = 5
     for i in range(n):
         for j in range (n):
             x = i*4./n - 2.

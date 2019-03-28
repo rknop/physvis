@@ -280,9 +280,9 @@ glUniformMatrix3fv(loc, 1, GL_FALSE, invmat3)
 sys.stderr.write("\nmat:\n{}\n".format(mat))
 sys.stderr.write("\nivmat3:\n{}\n".format(invmat3))
 
-matbox = numpy.empty( (box_num_triangles, 4, 4), dtype=numpy.float32)
-invmat3box = numpy.empty( (box_num_triangles, 3, 3), dtype=numpy.float32 )
-for i in range(box_num_triangles):
+matbox = numpy.empty( (3*box_num_triangles, 4, 4), dtype=numpy.float32)
+invmat3box = numpy.empty( (3*box_num_triangles, 3, 3), dtype=numpy.float32 )
+for i in range(3*box_num_triangles):
     matbox[i, :, :] = mat
     invmat3box[i, :, :] = invmat3
 

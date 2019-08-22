@@ -66,9 +66,10 @@ class color(object):
 
 class Subject(object):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__()
         self._id = uuid.uuid4()
         self.listeners = []
+        # ROB!  Print warnings about unknown arguments
 
     def __del__(self):
         for listener in self.listeners:
@@ -87,7 +88,8 @@ class Subject(object):
 
 class Observer(object):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__()
+        # ROB!  Print errors about unknown arguments
 
     def receive_message(self, message, subject):
         pass
@@ -264,6 +266,28 @@ class GLObjectCollection(Observer):
         glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
 
 
+    # Updates positions of verticies and directions of normals.
+    # Can NOT change the number of vertices
+    def update_object_vertices(self, obj):
+        found = False
+        # sys.stderr.write("Going to try to update object vertex data for {}\n".format(obj._id))
+        for i in range(len(self.objects)):
+            if self.objects[i]._id == obj._id:
+                found = True
+                break
+
+        if not found:
+            # sys.stderr.write("...not found\n")
+            return
+
+        self.context.run_glcode(lambda : self.do_update_object_vertex(i, obj))
+
+    def do_update_object_vertex(self, dex, obj):
+        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, obj.vertexdata)
+        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, obj.normaldata)
+    
     def push_all_object_info(self, dex):
 
         # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
@@ -315,6 +339,8 @@ class GLObjectCollection(Observer):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
         if message == "update matrix":
             self.update_object_matrix(subject)
+        if message == "update vertices":
+            self.update_object_vertices(subject)
 
 # ======================================================================
 #
@@ -954,7 +980,6 @@ class Object(Subject):
             sys.exit(20)
         self._scale = numpy.array(value)
         self.update_model_matrix()
-
     @property
     def sx(self):
         return self._scale[0]
@@ -1702,6 +1727,160 @@ class Cone(Object):
 
 # ======================================================================
 
+class Arrow(Object):
+    def __init__(self, shaftwidth=None, headwidth=None, headlength=None, fixedwidth=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        length = self.sx
+        if shaftwidth is None:
+            shaftwidth = 0.1 * length
+        if headwidth is None:
+            headwidth = 2 * shaftwidth
+        if headlength is None:
+            headlength = 3 * shaftwidth
+
+        if not fixedwidth:
+            headlength /= shaftwidth
+            headwidth /= shaftwidth
+            shaftwidth /= length
+
+        self.fixedwidth = fixedwidth
+        self.shaftwidth = shaftwidth
+        self.headwidth = headwidth
+        self.headlength = headlength
+
+        self.make_arrow()
+
+        sys.stderr.write("ARROW VERTICES:\n")
+        for i in range(len(self.vertexdata) // 4):
+            sys.stderr.write("{:.2f}, {:.2f}, {:.2f}, {:.2f}\n".format( self.vertexdata[4*i],
+                                                                        self.vertexdata[4*i+1],
+                                                                        self.vertexdata[4*i+2],
+                                                                        self.vertexdata[4*i+3]))
+        sys.stderr.write("ARROW NORMALS:\n")
+        for i in range(len(self.vertexdata) // 4):
+            sys.stderr.write("{:.2f}, {:.2f}, {:.2f}\n".format( self.normaldata[3*i],
+                                                                self.normaldata[3*i+1],
+                                                                self.normaldata[3*i+2]))
+
+        
+        self.finish_init()
+
+    def make_arrow(self):
+        # 16 triangles:
+        #   2 for the base
+        #   2 for each side (8 total)
+        #   2 for the bottom of the head
+        #   4 for the head
+        self.num_triangles = 16
+        self.vertexdata = numpy.empty(4 * 16 * 3, dtype=numpy.float32)
+        self.normaldata = numpy.empty(3 * 16 * 3, dtype=numpy.float32)
+
+        length = self.sx
+        # Base
+        if self.fixedwidth:
+            shaftw = self.shaftwidth
+            headw = self.headwidth
+            headl = self.headlength
+        else:
+            shaftw = self.shaftwidth * length
+            headw = self.headwidth * shaftw
+            headl = self.headlength * shaftw
+
+        shaftl = length - headl
+            
+        # Base
+        self.vertexdata[0:3*2*4] = [0., -shaftw/2., shaftw/2., 1.,
+                                    0., shaftw/2., -shaftw/2., 1.,
+                                    0., shaftw/2., shaftw/2., 1.,
+                                    
+                                    0., -shaftw/2., shaftw/2., 1.,
+                                    0., -shaftw/2., -shaftw/2., 1.,
+                                    0., shaftw/2., -shaftw/2., 1.]
+        self.normaldata[0:6*3] = [-1., 0., 0., -1., 0., 0., -1., 0., 0.,
+                                  -1., 0., 0., -1., 0., 0., -1., 0., 0.]
+
+        # Sides
+        firstcorner = numpy.array([ [1, -1],  [1, 1],  [-1, 1], [-1, -1] ], dtype=numpy.int32)
+        secondcorner = numpy.array([ [-1, -1], [1, -1], [1, 1],  [-1, 1] ], dtype=numpy.int32)
+        normalvals = numpy.array([ [0., -1.], [1., 0.], [0., 1.], [-1., 0.] ],dtype=numpy.float32)
+        off = 2
+        for j in range(4):
+            self.vertexdata[4 * (3 * (off + 2*j)) + 0 : 4 * (3 * (off + 2*j)) + 4] = [0.,
+                                                                                      firstcorner[j, 0]*shaftw/2,
+                                                                                      firstcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            self.vertexdata[4 * (3 * (off + 2*j)) + 4 : 4 * (3 * (off + 2*j)) + 8] = [0.,
+                                                                                      secondcorner[j, 0]*shaftw/2,
+                                                                                      secondcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            self.vertexdata[4 * (3 * (off + 2*j)) + 8 : 4 * (3 * (off + 2*j)) +12] = [shaftl,
+                                                                                      secondcorner[j, 0]*shaftw/2,
+                                                                                      secondcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            self.vertexdata[4 * (3 * (off + 2*j)) +12 : 4 * (3 * (off + 2*j)) +16] = [shaftl,
+                                                                                      secondcorner[j, 0]*shaftw/2,
+                                                                                      secondcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            self.vertexdata[4 * (3 * (off + 2*j)) +16 : 4 * (3 * (off + 2*j)) +20] = [shaftl,
+                                                                                      firstcorner[j, 0]*shaftw/2,
+                                                                                      firstcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            self.vertexdata[4 * (3 * (off + 2*j)) +20 : 4 * (3 * (off + 2*j)) +24] = [0.,
+                                                                                      firstcorner[j, 0]*shaftw/2,
+                                                                                      firstcorner[j, 1]*shaftw/2,
+                                                                                      1.]
+            for k in range(6):
+                self.normaldata[3 * (3 * (off + 2*j) + k) + 0 :
+                                3 * (3 * (off + 2*j) + k) + 3] = [0., normalvals[j,0], normalvals[j, 1]]
+            
+            # NORMALS
+
+        # Base of head
+        off = 10
+        self.vertexdata[ 4 * (3*(off + 0)) : 4 * (3*(off + 2))] = [shaftl, -headw/2., headw/2., 1.,
+                                                                   shaftl, headw/2., -headw/2., 1.,
+                                                                   shaftl, headw/2., headw/2., 1.,
+                                                                   
+                                                                   shaftl, -headw/2., headw/2., 1.,
+                                                                   shaftl, -headw/2., -headw/2., 1.,
+                                                                   shaftl, headw/2., -headw/2., 1.]
+        self.normaldata[ 3 * (3*(off + 0)) : 3 * (3*(off + 2))] = [-1., 0., 0., -1., 0., 0., -1., 0., 0.,
+                                                                   -1., 0., 0., -1., 0., 0., -1., 0., 0.]
+        
+
+        # Head
+        off = 12
+        yzlen = headl / math.sqrt(headl*headl + (headw/2.)*(headw/2.))
+        xlen = math.sqrt(1. - yzlen*yzlen)
+        for j in range(4):
+            self.vertexdata[ 4 * (3*(off+j)) :
+                             4 * (3*(off+j + 1)) ] = [shaftl, firstcorner[j, 0]*headw/2, firstcorner[j, 1]*headw/2, 1.,
+                                                      shaftl, secondcorner[j, 0]*headw/2, secondcorner[j, 1]*headw/2, 1.,
+                                                      length, 0., 0., 1.]
+            self.normaldata[ 3 * (3*(off+j)) :
+                             3 * (3*(off +j + 1)) ] = [xlen, normalvals[j, 0]*yzlen, normalvals[j, 1]*yzlen,
+                                                       xlen, normalvals[j, 0]*yzlen, normalvals[j, 1]*yzlen,
+                                                       1., 0., 0]
+
+    @Object.axis.setter
+    def axis(self, value):
+        Object.axis.fset(self, value)
+        if self.fixedwidth:
+            self.make_arrow()
+            for listener in self.listeners:
+                listener.receive_message("update vertices", self)
+        else:
+            # I'm not completely happy about this, because the call to
+            # fset(self, axis) and also setting scale means that
+            # update_model_matrix gets called twice; we really should
+            # have been able to skip the first one.  Add a parameter to
+            # the Object.axis setter?  Seems janky
+            length = math.sqrt(value[0]*value[0] + value[1]*value[1] + value[2]*value[2])
+            self.scale = [length, length, length]
+                
+# ======================================================================
+
 def main():
     # Big array of elongated boxes
     # sys.stderr.write("Making 100 elongated boxes.\n")
@@ -1725,7 +1904,7 @@ def main():
     peg.axis = (0.5, 0.5, 0.5)
     blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
     blob.axis = (-0.5, -0.5, 0.5)
-    cone = Cone(position=(0., 0., 0.5), radius=0.25, color=color.yellow, axis=(0., 1., 0.))
+    arrow = Arrow(position=(0., 0., 0.5), color=color.yellow, fixedwidth=True)
     
     sys.stderr.write("Making Ball.\n")
     # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
@@ -1768,6 +1947,9 @@ def main():
                                                                     )
                                               )[0:3]
 
+        arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),
+                      math.sin(phi) * (1. + 0.5*math.cos(phi)), 0.]
+        
         rate(fps)
 
 

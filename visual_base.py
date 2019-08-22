@@ -1489,6 +1489,39 @@ class Sphere(Icosahedron):
     def __init__(self, subdivisions=2, *args, **kwargs):
         super().__init__(subdivisions=subdivisions, *args, **kwargs)
 
+
+class Ellipsoid(Icosahedron):
+    def __init__(self, subdivisions=2, length=1., width=1., height=1., *args, **kwargs):
+        super().__init__(subdivisions=subdivisions, *args, **kwargs)
+
+        self.length = length
+        self.width = width
+        self.height = height
+        
+    @property
+    def length(self):
+        return self.sx/2.
+
+    @length.setter
+    def length(self, value):
+        self.sx = value/2.
+
+    @property
+    def width(self):
+        return self.sz/2.
+
+    @width.setter
+    def width(self, value):
+        self.sz = value/2.
+
+    @property
+    def height(self):
+        return self.sy/2.
+
+    @height.setter
+    def height(self, value):
+        self.sy = value/2.
+
 # # ======================================================================
 
 class Cylinder(Object):
@@ -1590,6 +1623,85 @@ class Cylinder(Object):
 
 # ======================================================================
 
+class Cone(Object):
+
+    @staticmethod
+    def make_cone_vertices():
+        with GLUTContext._threadlock:
+            if not hasattr(Cone, "_vertices"):
+                num_edge_points = 16
+
+                # Number of trianges = 2 * num_edge_points
+                # one set for the base
+                # one set for the edges
+                #
+                # Base is at origin, tip is at 1,0,0
+
+                vertices = numpy.empty( 4 * 3*2*num_edge_points, dtype=numpy.float32)
+                normals = numpy.empty( 3 * 3*4*num_edge_points, dtype=numpy.float32)
+
+                # Make an array of phis to make sure identical floats show up
+                #   where they're supposed to
+                phis = numpy.arange(num_edge_points+1) * 2*math.pi / num_edge_points
+                phis[num_edge_points] = 0.
+                dphi = math.pi / num_edge_points
+
+                # Endcap
+                for i in range(num_edge_points):
+                    vertices[4 * (3*i+0) : 4 * (3*i+0) + 4] = [0., 0., 0., 1.]
+                    vertices[4 * (3*i+1) : 4 * (3*i+1) + 4] = [0., math.cos(phis[i]), math.sin(phis[i]), 1.]
+                    vertices[4 * (3*i+2) : 4 * (3*i+2) + 4] = [0., math.cos(phis[i+1]), math.sin(phis[i+1]), 1.]
+                    normals[3 * (3*i+0) : 3 * (3*i+0) + 3] = [-1., 0., 0.]
+                    normals[3 * (3*i+1) : 3 * (3*i+1) + 3] = [-1., 0., 0.]
+                    normals[3 * (3*i+2) : 3 * (3*i+2) + 3] = [-1., 0., 0.]
+
+                # Edges
+                off = 3*num_edge_points
+                sqrt2 = math.sqrt(2.)
+                for i in range(num_edge_points):
+                    vertices[4 * (off + 3*i + 0) : 4 * (off + 3*i + 0) + 4] = [0., math.cos(phis[i]),
+                                                                               math.sin(phis[i]), 1.]
+                    vertices[4 * (off + 3*i + 1) : 4 * (off + 3*i + 1) + 4] = [0., math.cos(phis[i+1]),
+                                                                               math.sin(phis[i+1]), 1.]
+                    vertices[4 * (off + 3*i + 2) : 4 * (off + 3*i + 2) + 4] = [1., 0., 0., 1.]
+
+                    
+                    normals[3 * (off + 3*i + 0) : 3 * (off + 3*i + 0) + 3] = [1./sqrt2, math.cos(phis[i])/sqrt2,
+                                                                              math.sin(phis[i])/sqrt2]
+                    normals[3 * (off + 3*i + 1) : 3 * (off + 3*i + 1) + 3] = [1./sqrt2, math.cos(phis[i+1])/sqrt2,
+                                                                              math.sin(phis[i+1])/sqrt2]
+                    normals[3 * (off + 3*i + 2) : 3 * (off + 3*i + 2) + 3] = [1., 0., 0.]
+
+                Cone._vertices = vertices
+                Cone._normals = normals
+
+
+    def __init__(self, radius=1., *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        Cone.make_cone_vertices()
+
+        self.vertexdata = Cone._vertices
+        self.normaldata = Cone._normals
+        self.num_triangles = len(self.vertexdata) // 12
+
+        self.radius = radius
+
+        sys.stderr.write("Made cone with radius {} and {} triangles.\n".format(radius, self.num_triangles))
+        
+        self.finish_init()
+
+    @property
+    def radius(self):
+        return self._radius
+
+    @radius.setter
+    def radius(self, value):
+        self._radius = value
+        self.scale = [self._scale[0], value, value]
+
+# ======================================================================
+
 def main():
     # Big array of elongated boxes
     # sys.stderr.write("Making 100 elongated boxes.\n")
@@ -1609,12 +1721,16 @@ def main():
 
     box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
     box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
-    peg = Cylinder(position=(0., 0., 0.), radius=0.375, color=color.orange)
+    peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange)
+    peg.axis = (0.5, 0.5, 0.5)
+    blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
+    blob.axis = (-0.5, -0.5, 0.5)
+    cone = Cone(position=(0., 0., 0.5), radius=0.25, color=color.yellow, axis=(0., 1., 0.))
     
     sys.stderr.write("Making Ball.\n")
     # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
     ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
-
+    
     # rod = Cylinder(position = (0., 0., 0.), color=color.orange,
     #                radius=0.125, axis=(0., 0., 1.))
 

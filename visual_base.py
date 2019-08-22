@@ -1830,8 +1830,6 @@ class Arrow(Object):
                 self.normaldata[3 * (3 * (off + 2*j) + k) + 0 :
                                 3 * (3 * (off + 2*j) + k) + 3] = [0., normalvals[j,0], normalvals[j, 1]]
             
-            # NORMALS
-
         # Base of head
         off = 10
         self.vertexdata[ 4 * (3*(off + 0)) : 4 * (3*(off + 2))] = [shaftl, -headw/2., headw/2., 1.,
@@ -1891,7 +1889,7 @@ def main():
     #         boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
     #                           length=1.5, width=0.05, height=0.05))
 
-    sys.stderr.write("Making boxes and peg.\n")
+    sys.stderr.write("Making boxes and peg and other things.\n")
 
     box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
     box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
@@ -1906,9 +1904,6 @@ def main():
     ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
     # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
     
-    # rod = Cylinder(position = (0., 0., 0.), color=color.orange,
-    #                radius=0.125, axis=(0., 0., 1.))
-
     theta = math.pi/4.
     phi = 0.
     fps = 30

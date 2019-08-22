@@ -3,6 +3,7 @@
 
 # NOTE!  I just rudely GLEnable(GL_EXT_separate_shader_objects) below
 #  without testing that it's there.  I should do better.
+# (Actually, I think that's commented out now.)
 
 import sys
 import math
@@ -229,9 +230,9 @@ class GLObjectCollection(Observer):
 
         self.object_triangle_index.append(self.curnumtris)
         self.objects.append(obj)
-        sys.stderr.write("Up to {} objects.\n".format(len(self.objects)))
         obj.add_listener(self)
         self.curnumtris += obj.num_triangles
+        sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
         # I will admit to not fully understanding how lambdas work
         # I originally had lambda : self.push_all_object_info(len(self.objects)-1); however
@@ -1107,8 +1108,7 @@ class Object(Subject):
         # for i in range(0, 3*self.num_triangles):
         #     self.normalmatrixdata[i, :, :] = invmat
 
-        for listener in self.listeners:
-            listener.receive_message("update matrix", self)
+        self.broadcast("update matrix")
 
     @property
     def visible(self):
@@ -1499,7 +1499,7 @@ class Icosahedron(Object):
 
         self.finish_init()
 
-        sys.stderr.write("Created icosahedron with {} triangles.\n".format(self.num_triangles))
+        # sys.stderr.write("Created icosahedron with {} triangles.\n".format(self.num_triangles))
 
     @property
     def radius(self):
@@ -1633,7 +1633,7 @@ class Cylinder(Object):
 
         self.radius = radius
 
-        sys.stderr.write("Made cylinder with radius {} and {} triangles.\n".format(radius, self.num_triangles))
+        # sys.stderr.write("Made cylinder with radius {} and {} triangles.\n".format(radius, self.num_triangles))
         
         self.finish_init()
 
@@ -1751,19 +1751,6 @@ class Arrow(Object):
 
         self.make_arrow()
 
-        sys.stderr.write("ARROW VERTICES:\n")
-        for i in range(len(self.vertexdata) // 4):
-            sys.stderr.write("{:.2f}, {:.2f}, {:.2f}, {:.2f}\n".format( self.vertexdata[4*i],
-                                                                        self.vertexdata[4*i+1],
-                                                                        self.vertexdata[4*i+2],
-                                                                        self.vertexdata[4*i+3]))
-        sys.stderr.write("ARROW NORMALS:\n")
-        for i in range(len(self.vertexdata) // 4):
-            sys.stderr.write("{:.2f}, {:.2f}, {:.2f}\n".format( self.normaldata[3*i],
-                                                                self.normaldata[3*i+1],
-                                                                self.normaldata[3*i+2]))
-
-        
         self.finish_init()
 
     def make_arrow(self):
@@ -1787,8 +1774,17 @@ class Arrow(Object):
             headw = self.headwidth * shaftw
             headl = self.headlength * shaftw
 
-        shaftl = length - headl
+        # The length will get scaled by sx, so I have to renormalize
+        # here.  (This is kind of messy, with sx having a special
+        # meaning.  Side effect of inheritance, I guess.)
             
+        headl /= length
+        if (headl > 0.5): headl = 0.5
+        shaftl = 1. - headl
+            
+        # sys.stderr.write("length={:.3f}, shaftl={:.3f}, shaftw={:.3f}, headw={:.3f}, headl={:.3f}\n"
+        #                  .format(length, shaftl, shaftw, headw, headl))
+
         # Base
         self.vertexdata[0:3*2*4] = [0., -shaftw/2., shaftw/2., 1.,
                                     0., shaftw/2., -shaftw/2., 1.,
@@ -1857,7 +1853,7 @@ class Arrow(Object):
             self.vertexdata[ 4 * (3*(off+j)) :
                              4 * (3*(off+j + 1)) ] = [shaftl, firstcorner[j, 0]*headw/2, firstcorner[j, 1]*headw/2, 1.,
                                                       shaftl, secondcorner[j, 0]*headw/2, secondcorner[j, 1]*headw/2, 1.,
-                                                      length, 0., 0., 1.]
+                                                      1., 0., 0., 1.]
             self.normaldata[ 3 * (3*(off+j)) :
                              3 * (3*(off +j + 1)) ] = [xlen, normalvals[j, 0]*yzlen, normalvals[j, 1]*yzlen,
                                                        xlen, normalvals[j, 0]*yzlen, normalvals[j, 1]*yzlen,
@@ -1868,8 +1864,7 @@ class Arrow(Object):
         Object.axis.fset(self, value)
         if self.fixedwidth:
             self.make_arrow()
-            for listener in self.listeners:
-                listener.receive_message("update vertices", self)
+            self.broadcast("update vertices")
         else:
             # I'm not completely happy about this, because the call to
             # fset(self, axis) and also setting scale means that
@@ -1904,11 +1899,12 @@ def main():
     peg.axis = (0.5, 0.5, 0.5)
     blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
     blob.axis = (-0.5, -0.5, 0.5)
-    arrow = Arrow(position=(0., 0., 0.5), color=color.yellow, fixedwidth=True)
+    arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
+                  color=color.yellow, fixedwidth=True)
     
     sys.stderr.write("Making Ball.\n")
-    # ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
-    ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
+    ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
+    # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
     
     # rod = Cylinder(position = (0., 0., 0.), color=color.orange,
     #                radius=0.125, axis=(0., 0., 1.))

@@ -865,10 +865,11 @@ void main(void)
 
 class Object(Subject):
     def __init__(self, context=None, position=None, axis=None, up=None, scale=None,
-                 color=None, opacity=None,
+                 color=None, opacity=None, make_trail=False, interval=10, retain=50,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self._make_trail = False
         self.num_triangles = 0
         self._visible = True
 
@@ -903,7 +904,7 @@ class Object(Subject):
             self._color = numpy.array( [1., 1., 1., opacity], dtype=numpy.float32 )
         else:
             self._color = numpy.empty(4)
-            self._color[0:3] = numpy.array(color)
+            self._color[0:3] = numpy.array(color)[0:3]
             if opacity is None:
                 self._color[3] = 1.
             else:
@@ -926,6 +927,11 @@ class Object(Subject):
         if up is not None:
             self.up = numpy.array(up)
 
+        self._interval = interval
+        self._nexttrail = interval
+        self._retain = retain
+        self.make_trail = make_trail
+
     def finish_init(self):
         self.update_colordata()
         self.update_model_matrix()
@@ -942,6 +948,7 @@ class Object(Subject):
             sys.exit(20)
         self._position = numpy.array(value)
         self.update_model_matrix()
+        self.update_trail()
 
     @property
     def x(self):
@@ -951,6 +958,7 @@ class Object(Subject):
     def x(self, value):
         self._position[0] = value
         self.update_model_matrix()
+        self.update_trail()
 
     @property
     def y(self):
@@ -960,6 +968,7 @@ class Object(Subject):
     def y(self, value):
         self._position[1] = value
         self.update_model_matrix()
+        self.update_trail()
 
     @property
     def z(self):
@@ -969,6 +978,7 @@ class Object(Subject):
     def z(self, value):
         self._position[2] = value
         self.update_model_matrix()
+        self.update_trail()
 
     @property
     def scale(self):
@@ -1148,6 +1158,59 @@ class Object(Subject):
         self._color[3] = alpha
         self.update_colordata()
 
+    @property
+    def make_trail(self):
+        return self._make_trail
+
+    @make_trail.setter
+    def make_trail(self, val):
+        if not val:
+            if self._make_trail:
+                self.kill_trail()
+                self._make_trail = False
+        if val:
+            if not self._make_trail:
+                self.initialize_trail()
+                self._make_trail = True
+
+    @property
+    def interval(self):
+        return self._interval
+
+    @interval.setter
+    def interval(self, val):
+        self._interval = val
+        if self._nexttrail > self._interval:
+            self._nexttrail = self._interval
+
+    @property
+    def retain(self):
+        return self._retain
+
+    @retain.setter
+    def retain(self, val):
+        if val != self._retain:
+            self._retain = val
+            if self._make_trail:
+                self.initialize_trail()
+                
+    def kill_trail(self):
+        self._trail = None
+
+    def initialize_trail(self):
+        self.kill_trail()
+        sys.stderr.write("Initializing trail at position {}.\n".format(self._position))
+        self._trail = Curve(color=self._color, maxpoints=self._retain, points=[ self._position ], num_edge_points=6)
+        self._nexttrail = self._interval
+
+    def update_trail(self):
+        if not self._make_trail: return
+        self._nexttrail -= 1
+        if self._nexttrail <= 0:
+            self._nexttrail = self._interval
+            self._trail.add_point(self._position)
+
+                
     def __del__(self):
         raise Exception("Rob, you really need to think about object deletion.")
         self.visible = False
@@ -1552,11 +1615,15 @@ class Ellipsoid(Icosahedron):
 class Cylinder(Object):
 
     @staticmethod
-    def make_cylinder_vertices():
+    def make_cylinder_vertices(num_edge_points=16):
         with GLUTContext._threadlock:
             if not hasattr(Cylinder, "_vertices"):
-                num_edge_points = 16
+                Cylinder._vertices = {}
+                Cylinder._normals = {}
 
+        with GLUTContext._threadlock:
+            if not num_edge_points in Cylinder._vertices:
+                
                 # Number of triangles = 4 * num_edge_points
                 #   one set of num_edge_points for each cap
                 #   two sets of num_edge_points for the two triangles on the sides
@@ -1581,9 +1648,9 @@ class Cylinder(Object):
                     normals[3 * (3*i+0) : 3 * (3*i+0) + 3] = [1., 0., 0.]
                     normals[3 * (3*i+1) : 3 * (3*i+1) + 3] = [1., 0., 0.]
                     normals[3 * (3*i+2) : 3 * (3*i+2) + 3] = [1., 0., 0.]
-                    vertices[4 * (off+(3*i+0)) : 4 * (off+(3*i+0)) + 4] = [-1., 0., 0., 1]
-                    vertices[4 * (off+(3*i+1)) : 4 * (off+(3*i+1)) + 4] = [-1., math.cos(phis[i]), math.sin(phis[i]), 1.]
-                    vertices[4 * (off+(3*i+2)) : 4 * (off+(3*i+2)) + 4] = [-1., math.cos(phis[i+1]),
+                    vertices[4 * (off+(3*i+0)) : 4 * (off+(3*i+0)) + 4] = [0., 0., 0., 1]
+                    vertices[4 * (off+(3*i+1)) : 4 * (off+(3*i+1)) + 4] = [0., math.cos(phis[i]), math.sin(phis[i]), 1.]
+                    vertices[4 * (off+(3*i+2)) : 4 * (off+(3*i+2)) + 4] = [0., math.cos(phis[i+1]),
                                                                            math.sin(phis[i+1]), 1.]
                     normals[3 * (off+3*i+0) : 3 * (off+3*i+0) + 3] = [-1., 0., 0.]
                     normals[3 * (off+3*i+1) : 3 * (off+3*i+1) + 3] = [-1., 0., 0.]
@@ -1600,16 +1667,16 @@ class Cylinder(Object):
                                                                                math.sin(phis[i+1]), 1.]
                     normals[3 * (off + 6*i + 1) : 3 * (off + 6*i + 1) + 3] = [0., math.cos(phis[i+1]),
                                                                               math.sin(phis[i+1])]
-                    vertices[4 * (off + 6*i + 2) : 4 * (off + 6*i + 2) + 4] = [-1., math.cos(phis[i+1]),
+                    vertices[4 * (off + 6*i + 2) : 4 * (off + 6*i + 2) + 4] = [0., math.cos(phis[i+1]),
                                                                                math.sin(phis[i+1]), 1.]
                     normals[3 * (off + 6*i + 2) : 3 * (off + 6*i + 2) + 3] = [0., math.cos(phis[i+1]),
                                                                               math.sin(phis[i+1])]
 
-                    vertices[4 * (off + 6*i + 3) : 4 * (off + 6*i + 3) + 4] = [-1., math.cos(phis[i+1]),
+                    vertices[4 * (off + 6*i + 3) : 4 * (off + 6*i + 3) + 4] = [0., math.cos(phis[i+1]),
                                                                                math.sin(phis[i+1]), 1.]
                     normals[3 * (off + 6*i + 3) : 3 * (off + 6*i + 3) + 3] = [0., math.cos(phis[i+1]),
                                                                               math.sin(phis[i+1])]
-                    vertices[4 * (off + 6*i + 4) : 4 * (off + 6*i + 4) + 4] = [-1., math.cos(phis[i]),
+                    vertices[4 * (off + 6*i + 4) : 4 * (off + 6*i + 4) + 4] = [0., math.cos(phis[i]),
                                                                                math.sin(phis[i]), 1.]
                     normals[3 * (off + 6*i + 4) : 3 * (off + 6*i + 4) + 3] = [0., math.cos(phis[i]),
                                                                               math.sin(phis[i])]
@@ -1618,18 +1685,18 @@ class Cylinder(Object):
                     normals[3 * (off + 6*i + 5) : 3 * (off + 6*i + 5) + 3] = [0., math.cos(phis[i]),
                                                                               math.sin(phis[i])]
                     
-                Cylinder._vertices = vertices
-                Cylinder._normals = normals
+                Cylinder._vertices[num_edge_points] = vertices
+                Cylinder._normals[num_edge_points] = normals
 
 
-    def __init__(self, radius=1., *args, **kwargs):
+    def __init__(self, radius=1., num_edge_points=16, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        Cylinder.make_cylinder_vertices()
+        Cylinder.make_cylinder_vertices(num_edge_points)
 
-        self.vertexdata = Cylinder._vertices
-        self.normaldata = Cylinder._normals
-        self.num_triangles = len(Cylinder._vertices) // 12
+        self.vertexdata = Cylinder._vertices[num_edge_points]
+        self.normaldata = Cylinder._normals[num_edge_points]
+        self.num_triangles = len(Cylinder._vertices[num_edge_points]) // 12
 
         self.radius = radius
 
@@ -1873,6 +1940,74 @@ class Arrow(Object):
             self.scale = [length, length, length]
                 
 # ======================================================================
+# A Curve is not a big-O Object, even though some of the interface is the same
+
+class Curve(object):
+    def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
+        self._position = numpy.array( [0., 0., 0.] )
+        if points is not None:
+            self._position = points[0]
+        points = numpy.array(points)
+        if len(points) > maxpoints: maxpoints = len(points)
+        self.radius = radius
+        self.color = color
+        self.num_edge_points = num_edge_points
+
+        self.pointbuffer = numpy.empty( [maxpoints, 3], dtype=numpy.float32 )
+        self.cylbuffer = [None] * maxpoints
+
+        for i in range(len(points)):
+            self.pointbuffer[i, :] = points[i, :]
+            if i < len(points)-1:
+                axis = points[i+1] - points[i]
+                self.cylbuffer[i] = Cylinder(position=points[i], axis=axis, color=self.color,
+                                             radius=radius, num_edge_points=self.num_edge_points, *kargs, **kwargs)
+
+        self.maxpoints = maxpoints
+        self.nextpoint = len(points)
+        if self.nextpoint > self.maxpoints:
+            self.nextpoint = 0
+        
+    def add_point(self, point, *args, **kwargs):
+        self.pointbuffer[self.nextpoint, :] = point[:]
+        lastpoint = self.nextpoint - 1
+        if lastpoint < 0 : lastpoint = self.maxpoints-1
+
+        axis = self.pointbuffer[self.nextpoint, :] - self.pointbuffer[lastpoint, :]
+
+        if self.cylbuffer[lastpoint] is not None:
+            self.cylbuffer[lastpoint].position = self.pointbuffer[lastpoint]
+            self.cylbuffer[lastpoint].axis = axis
+        else:
+            self.cylbuffer[lastpoint] = Cylinder(position=self.pointbuffer[lastpoint, :], axis=axis,
+                                                 radius=self.radius, num_edge_points=self.num_edge_points,
+                                                 color=self.color,
+                                                 *args, **kwargs)
+
+        self.nextpoint += 1
+        if self.nextpoint >= self.maxpoints: self.nextpoint = 0
+
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, value):
+        if len(value != 3):
+            sys.stderr.write("ERROR, position must have 3 elements.")
+            sys.exit(20)
+        offset = numpy.array(position) - self._position
+        self._position = numpy.array(position)
+        # This is going to muck about with some uninitialized data, but it doesn't matter.
+        self.pointbuffer += offset
+        for i in range(self.maxpoints):
+            if self.cylbuffer[i] is not None:
+                self.cylbuffer[i].position = self.pointbuffer[i]
+
+    
+        
+            
+# ======================================================================
 
 def main():
     # Big array of elongated boxes
@@ -1893,8 +2028,13 @@ def main():
 
     box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
     box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
-    peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange)
+
+    # box2trail = Curve(points = [ [ 0.5, 0.5, 0.] ], color=(1., 0.5, 0.5))
+
+    peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
     peg.axis = (0.5, 0.5, 0.5)
+    peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
+                    axis=(-0.5, 0.5, 0.5))
     blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
     blob.axis = (-0.5, -0.5, 0.5)
     arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
@@ -1906,17 +2046,22 @@ def main():
     
     theta = math.pi/4.
     phi = 0.
+    phi2 = 0.
     fps = 30
     dphi = 2*math.pi/(4.*fps)
 
     # GLUTContext._default_context.gl_version_info()
 
+    first = True
     while True:
 
         # Animated angle
         phi += dphi
         if phi > 2.*math.pi:
             phi -= 2.*math.pi
+        phi2 += dphi/3.7284317438
+        if phi2 > 2.*math.pi:
+            phi2 -= 2.*math.pi
 
         # Rotate all the elongated boxes
         # for i in range(len(boxes)):
@@ -1933,10 +2078,18 @@ def main():
             ball.rotate(-dphi)
 
         box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
-                                              quarternion_multiply( [ 0, 1.5*math.sin(phi), 1.5*math.cos(phi) ],
+                                              quarternion_multiply( [ 2.*math.sin(phi2),
+                                                                      1.5*math.sin(phi), 1.5*math.cos(phi) ],
                                                                     [0., 0., math.cos(math.pi/6), math.sin(math.pi/6)]
                                                                     )
                                               )[0:3]
+        if first:
+            box2.interval = 5
+            box2.retain = 50
+            box2.make_trail = True
+            first = False
+    
+        # box2trail.add_point(box2.position)
 
         arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),
                       math.sin(phi) * (1. + 0.5*math.cos(phi)), 0.]

@@ -36,19 +36,36 @@ def rate(fps):
 
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
 #
-# My quarternions are [ sin(θ/2)*x̂, sin(θ/2)*ŷ, sin(θ/2)*ẑ, cos(θ/2) ]
-def quarternion_multiply(p, q):
+# My quaternions are [ sin(θ/2)*ux, sin(θ/2)*uy, sin(θ/2)*uz, cos(θ/2) ]
+#  Representing a rotation of θ about a unit vector (ux, uy,u z)
+#
+# To rotate a vector v by quaterion q, do qvq¯¹, where q¯¹ can be
+#  simply composed by flipping the sign of the first 3 elements of
+#  q and dividing by q·q (see quaternion_rotate)
+#
+# If p and q are both quaternions, then their product
+#  represents rotation q followed by rotation p
+#
+# NOTE!  You MUST pass p and q as numpy arrays, or things might be sad
+
+def quaternion_multiply(p, q):
     if len(p) == 3:
-        px, py, pz = numpy.array(p)
+        px, py, pz = p
         pr = 0.
     else:
-        px, py, pz, pr = numpy.array(p)
-    qx, qy, qz, qr = numpy.array(q)
+        px, py, pz, pr = p
+    qx, qy, qz, qr = q
     return numpy.array( [ pr*qx + px*qr + py*qz - pz*qy,
                           pr*qy - px*qz + py*qr + pz*qx,
                           pr*qz + px*qy - py*qx + pz*qr,
                           pr*qr - px*qx - py*qy - pz*qz ] , dtype=numpy.float32 )
 
+# Rotate vector p by quaternion q
+def quaternion_rotate(p, q):
+    qinv = q.copy()
+    qinv[0:3] *= -1.
+    qinv /= numpy.square(q).sum()
+    return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
 
 # ======================================================================
 
@@ -261,11 +278,12 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_matrix(i, obj))
 
     def do_update_object_matrix(self, dex, obj):
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
-
+        with GLUTContext._threadlock:
+            glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
+            glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
+            glutPostRedisplay()
 
     # Updates positions of verticies and directions of normals.
     # Can NOT change the number of vertices
@@ -284,11 +302,13 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_vertex(i, obj))
 
     def do_update_object_vertex(self, dex, obj):
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, obj.vertexdata)
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, obj.normaldata)
-    
+        with GLUTContext._threadlock:
+            glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, obj.vertexdata)
+            glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, obj.normaldata)
+            glutPostRedisplay()
+            
     def push_all_object_info(self, dex):
 
         # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
@@ -316,6 +336,7 @@ class GLObjectCollection(Observer):
         glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
         glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].colordata)
 
+        glutPostRedisplay()
 
 
     # Never call this directly!  It should only be called from within the
@@ -363,6 +384,8 @@ class GLUTContext(Observer):
     _class_init_1 = False
     _class_init_2 = False
 
+    _instance = None       # Is GLUTContext a singleton?  Geez, dunno.
+    
     # ======================================================================
     # Class methods
 
@@ -392,6 +415,7 @@ class GLUTContext(Observer):
     @staticmethod
     def class_init_2(instance):
         sys.stderr.write("Starting class_init_2\n")
+        GLUTContext._instance = instance
         with GLUTContext._threadlock:
             if not GLUTContext._class_init_1:
                 raise Exception("class_init_2() called with _class_init_1 False")
@@ -434,16 +458,16 @@ class GLUTContext(Observer):
 
     @staticmethod
     def idle():
-        try:
-            while not GLUTContext.things_to_run.empty():
-                func = GLUTContext.things_to_run.get()
-                func()
-        except queue.Empty:
-            pass
+        with GLUTContext._threadlock:
+            try:
+                while not GLUTContext.things_to_run.empty():
+                    func = GLUTContext.things_to_run.get()
+                    func()
+            except queue.Empty:
+                pass
 
-        for func in GLUTContext.idle_funcs:
-            func()
-        glutPostRedisplay()
+            for func in GLUTContext.idle_funcs:
+                func()
 
     # It seems to be unhappy if you call this outside
     #  of a proper OpenGL Context.  Instead call
@@ -838,7 +862,8 @@ void main(void)
         glUseProgram(self.progid)
         projection_location = glGetUniformLocation(self.progid, "projection")
         glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
-
+        glutPostRedisplay()
+        
     def set_camera_posrot(self, x, y, z, theta, phi):
         theta -= math.pi/2.
         if (theta >  math.pi/2): theta =  math.pi/2.
@@ -857,13 +882,13 @@ void main(void)
         glUseProgram(self.progid)
         view_location = glGetUniformLocation(self.progid, "view")
         glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
-
+        glutPostRedisplay()
 
 # ======================================================================
 # ======================================================================
 # ======================================================================
 
-class Object(Subject):
+class GrObject(Subject):
     def __init__(self, context=None, position=None, axis=None, up=None, scale=None,
                  color=None, opacity=None, make_trail=False, interval=10, retain=50,
                  *args, **kwargs):
@@ -873,7 +898,7 @@ class Object(Subject):
         self.num_triangles = 0
         self._visible = True
 
-        # sys.stderr.write("Starting Object.__init__")
+        # sys.stderr.write("Starting GrObject.__init__")
 
         if context is None:
             if not hasattr(GLUTContext, "_default_context") or GLUTContext._default_context is None:
@@ -884,7 +909,7 @@ class Object(Subject):
 
         self.draw_as_lines = False
 
-        self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quarternion
+        self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quaternion
 
         if position is None:
             self._position = numpy.array([0., 0., 0.])
@@ -1020,12 +1045,12 @@ class Object(Subject):
 
     @property
     def axis(self):
-        v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
-        q = self._rotation
-        qinv = q.copy()
-        qinv[0:3] *= -1.
-        qinv /= (q*q).sum()
-        return quarternion_multiply(q, quarternion_multiply(v, qinv))[0:3]
+        return quaternion_rotate([self._scale[0], 0., 0.], self._rotation)
+        # v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
+        # qinv = q.copy()
+        # qinv[0:3] *= -1.
+        # qinv /= (q*q).sum()
+        # return quaternion_multiply(q, quaternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
@@ -1037,7 +1062,7 @@ class Object(Subject):
         phi = -math.atan2(value[2], value[0])
         q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
         q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
-        self._rotation = quarternion_multiply(q2, q1)
+        self._rotation = quaternion_multiply(q2, q1)
         self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
         self.update_model_matrix()
 
@@ -1061,7 +1086,7 @@ class Object(Subject):
     @rotation.setter
     def rotation(self, value):
         if len(value) != 4:
-            sys.sderr.write("rotation is a quarternion, needs 4 values\n")
+            sys.sderr.write("rotation is a quaternion, needs 4 values\n")
             sys.exit(20)
         self._rotation = numpy.array(value)
         self.update_model_matrix()
@@ -1074,7 +1099,7 @@ class Object(Subject):
         s = math.sin(angle/2.)
         c = math.cos(angle/2.)
         q = numpy.array( [axis[0]*s, axis[1]*s, axis[2]*s, c] )
-        self.rotation = quarternion_multiply(q, self.rotation)
+        self.rotation = quaternion_multiply(q, self.rotation)
 
     def update_colordata(self):
         if (self.colordata is None) or (self.colordata.size != 3*4*self.num_triangles):
@@ -1221,7 +1246,7 @@ class Object(Subject):
 
 # ======================================================================
 
-class Box(Object):
+class Box(GrObject):
 
     @staticmethod
     def make_box_buffers(context):
@@ -1339,7 +1364,7 @@ class Box(Object):
 # each object.  (Slow.)  Now that I dump all triangles into one giant
 # VAO, I don't use indexed buffers.
 
-class Icosahedron(Object):
+class Icosahedron(GrObject):
 
     @staticmethod
     def make_icosahedron_vertices(subdivisions=0):
@@ -1612,7 +1637,7 @@ class Ellipsoid(Icosahedron):
 
 # # ======================================================================
 
-class Cylinder(Object):
+class Cylinder(GrObject):
 
     @staticmethod
     def make_cylinder_vertices(num_edge_points=16):
@@ -1715,7 +1740,7 @@ class Cylinder(Object):
 
 # ======================================================================
 
-class Cone(Object):
+class Cone(GrObject):
 
     @staticmethod
     def make_cone_vertices():
@@ -1794,7 +1819,7 @@ class Cone(Object):
 
 # ======================================================================
 
-class Arrow(Object):
+class Arrow(GrObject):
     def __init__(self, shaftwidth=None, headwidth=None, headlength=None, fixedwidth=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -1924,9 +1949,9 @@ class Arrow(Object):
                                                        xlen, normalvals[j, 0]*yzlen, normalvals[j, 1]*yzlen,
                                                        1., 0., 0]
 
-    @Object.axis.setter
+    @GrObject.axis.setter
     def axis(self, value):
-        Object.axis.fset(self, value)
+        GrObject.axis.fset(self, value)
         if self.fixedwidth:
             self.make_arrow()
             self.broadcast("update vertices")
@@ -1935,12 +1960,372 @@ class Arrow(Object):
             # fset(self, axis) and also setting scale means that
             # update_model_matrix gets called twice; we really should
             # have been able to skip the first one.  Add a parameter to
-            # the Object.axis setter?  Seems janky
+            # the GrObject.axis setter?  Seems janky
             length = math.sqrt(value[0]*value[0] + value[1]*value[1] + value[2]*value[2])
             self.scale = [length, length, length]
                 
 # ======================================================================
-# A Curve is not a big-O Object, even though some of the interface is the same
+# Helix needs to have a normalized axis.  _length has the length
+# I (still undone) gotta override axis setter to make sure this really works
+#
+# Note!  Don't make getters and setters for properties that could change the number
+# of triangles.  The underlying GrObject code assumes that once you've initialized,
+# the number of triangles stays fixed.
+
+class Helix(GrObject):
+    def __init__(self, radius=1., coils=5., length=1., thickness=None,
+                 num_edge_points=6, num_circ_points=16,
+                 *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._length = length
+        self._radius = radius
+        if thickness is None:
+            self._thickness = 0.05 * self._radius
+        else:
+            self._thickness = thickness
+        self._coils = coils
+        self._num_circ_points = int(num_circ_points)
+        self._num_edge_points = int(num_edge_points)
+
+        self._ncenters = int(math.floor(coils * num_circ_points+0.5)) + 1
+
+        self.create_vertex_data()
+
+        origaxis = self.axis
+        self.axis = origaxis  # This will normalize it back to 1
+        
+        self.finish_init()
+
+    def create_vertex_data(self):
+        self.create_vertex_data_new()
+        
+    def create_vertex_data_new(self):
+        # There are 2*num_edge_points triangles per center point (except for the last)
+        # (I'm leaving the endcaps open)
+
+        self.num_triangles = 2 * self._num_edge_points * (self._ncenters - 1)
+        
+        vertexdata = numpy.empty( 4 * 3 * self.num_triangles, dtype=numpy.float32 )
+        normaldata = numpy.empty( 3 * 3 * self.num_triangles, dtype=numpy.float32 )
+
+        # psis are angles around the long local axis of the spring (for making the cross-section)
+        psis = numpy.empty(self._num_edge_points, dtype=numpy.float32)
+        psis[0:self._num_edge_points] = numpy.arange(self._num_edge_points) * 2.*math.pi / self._num_edge_points
+        sinpsi = numpy.sin(psis, dtype=numpy.float32)
+        cospsi = numpy.cos(psis, dtype=numpy.float32)
+
+        # dphi is step around the circle from one point along the spring
+        # to the next phi starts at 0 and increments by dphi for each
+        # point along the spring the spring's axis is x; the points are
+        # at x, z=r*cos(phi), y=r*sin(phi), where x starts at 0 for
+        # point #0 and increments by dx (reaching length by point
+        # #ncenters)
+        dphi = 2.*math.pi / self._num_circ_points
+        qdphi = numpy.array( [ -math.sin(dphi/2.), 0., 0., math.cos(dphi/2.) ] , dtype=numpy.float32)
+        qinvdphi = qdphi.copy()
+        qinvdphi[0:3] *= -1.
+        qinvdphi /= numpy.square(qinvdphi).sum()
+        
+        # theta is the inclination of the spring
+        dyz = 2 * self._radius * math.sin(dphi/2.)
+        dx = self._length / (self._ncenters - 1.)
+        l = math.sqrt(dyz*dyz + dx*dx)
+        costheta = dx/l
+        sintheta = dyz/l
+        costheta_2 = math.sqrt((1.+costheta)/2.)
+        sintheta_2 = math.sqrt((1.-costheta)/2.)
+        
+        
+        # Make a base circle of points for the first point on the spring
+        # Each subsequent point will be rotated by dphi around x, and
+        # moved appropriately.  Start with a circle in the x-z plane,
+        # and then rotate by tilt about -z (q is the quaternion of that
+        # rotation).   nextcircle is the next one along
+        #
+        # (I use quaternion_multiply rather than quaterion_rotate here
+        # to avoid recalculating qinv multiple times.)
+        circle = numpy.empty( [self._num_edge_points, 4], dtype=numpy.float32 )
+        circle[:, 0] = cospsi
+        circle[:, 1] = 0.
+        circle[:, 2] = sinpsi
+        circle[:, 3] = 0.
+
+        q = numpy.array( [0., 0., -sintheta_2, costheta_2] , dtype=numpy.float32 )
+        qinv = q.copy()
+        qinv[0:3] *= -1.
+        qinv /= numpy.square(q).sum()
+
+        for i in range(self._num_edge_points):
+            circle[i] = quaternion_multiply(q, quaternion_multiply(circle[i], qinv))
+
+        nextcircle = circle.copy()
+        for i in range(self._num_edge_points):
+            nextcircle[i] = quaternion_multiply(qdphi, quaternion_multiply(nextcircle[i], qinvdphi))
+            
+        # Build the first set of 2*num_edge_points triangles
+
+        n1 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        n2 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        n3 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        n4 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        p1 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        p2 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        p3 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+        p4 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
+
+        n1 = circle
+        n3 = nextcircle
+        n2[:-1] = circle[1:]
+        n2[-1] = circle[0]
+        n4[:-1] = nextcircle[1:]
+        n4[-1] = nextcircle[0]
+        p1 = numpy.array( [ 0., 0., self._radius, 1.] , dtype=numpy.float32) + self._thickness * n1
+        p2 = numpy.array( [ 0., 0., self._radius, 1.] , dtype=numpy.float32) + self._thickness * n2
+        p3 = numpy.array( [dx, self._radius*numpy.sin(dphi),
+                               self._radius*numpy.cos(dphi), 1.] , dtype=numpy.float32) + self._thickness * n3
+        p4 = numpy.array( [dx, self._radius*numpy.sin(dphi),
+                               self._radius*numpy.cos(dphi), 1.] , dtype=numpy.float32) + self._thickness * n4
+        for i in range(self._num_edge_points):
+            vertexdata[4 * 3*0 + 0 : 4 * 3*0 +  4] = p1[i]
+            vertexdata[4 * 3*0 + 4 : 4 * 3*0 +  8] = p2[i]
+            vertexdata[4 * 3*0 + 8 : 4 * 3*0 + 12] = p4[i]
+            vertexdata[4 * 3*1 + 0 : 4 * 3*1 +  4] = p1[i]
+            vertexdata[4 * 3*1 + 4 : 4 * 3*1 +  8] = p4[i]
+            vertexdata[4 * 3*1 + 8 : 4 * 3*1 + 12] = p3[i]
+
+            normaldata[3 * 3*0 + 0 : 3 * 3*0 +  3] = n1[i, 0:3]
+            normaldata[3 * 3*0 + 3 : 3 * 3*0 +  6] = n2[i, 0:3]
+            normaldata[3 * 3*0 + 6 : 3 * 3*0 +  9] = n4[i, 0:3]
+            normaldata[3 * 3*1 + 0 : 3 * 3*1 +  3] = n1[i, 0:3]
+            normaldata[3 * 3*1 + 3 : 3 * 3*1 +  6] = n4[i, 0:3]
+            normaldata[3 * 3*1 + 6 : 3 * 3*1 +  9] = n3[i, 0:3]
+
+        # Build the rest
+        # I could still make this more efficient by building just
+        # one circle, and then offsetting subsequent circles by x
+        off = self._num_edge_points * 6
+        for j in range(1, self._ncenters-1):
+            # I should just point these at p1 and p2 (etc.) to save array creation time
+            newn3 = n1 # numpy.empty( [self._num_edge_points, 4] )
+            newn4 = n2 # numpy.empty( [self._num_edge_points, 4] )
+            newp3 = p1 # numpy.empty( [self._num_edge_points, 4] )
+            newp4 = p2 # numpy.empty( [self._num_edge_points, 4] )
+            for i in range(self._num_edge_points):
+                newn3[i] = quaternion_multiply(qdphi, quaternion_multiply(n3[i], qinvdphi))
+                newn4[i] = quaternion_multiply(qdphi, quaternion_multiply(n4[i], qinvdphi))
+                newp3[i] = quaternion_multiply(qdphi, quaternion_multiply(p3[i], qinvdphi))
+                newp4[i] = quaternion_multiply(qdphi, quaternion_multiply(p4[i], qinvdphi))
+                newp3[i, 0] += dx
+                newp4[i, 0] += dx
+            p1 = p3
+            p2 = p4
+            p3 = newp3
+            p4 = newp4
+            n1 = n3
+            n2 = n4
+            n3 = newn3
+            n4 = newn4
+            for i in range(self._num_edge_points):
+                vertexdata[4 * (off + 3*0) + 0 : 4 * (off + 3*0) +  4] = p1[i]
+                vertexdata[4 * (off + 3*0) + 4 : 4 * (off + 3*0) +  8] = p2[i]
+                vertexdata[4 * (off + 3*0) + 8 : 4 * (off + 3*0) + 12] = p4[i]
+                vertexdata[4 * (off + 3*1) + 0 : 4 * (off + 3*1) +  4] = p1[i]
+                vertexdata[4 * (off + 3*1) + 4 : 4 * (off + 3*1) +  8] = p4[i]
+                vertexdata[4 * (off + 3*1) + 8 : 4 * (off + 3*1) + 12] = p3[i]
+
+                normaldata[3 * (off + 3*0) + 0 : 3 * (off + 3*0) +  3] = n1[i, 0:3]
+                normaldata[3 * (off + 3*0) + 3 : 3 * (off + 3*0) +  6] = n2[i, 0:3]
+                normaldata[3 * (off + 3*0) + 6 : 3 * (off + 3*0) +  9] = n4[i, 0:3]
+                normaldata[3 * (off + 3*1) + 0 : 3 * (off + 3*1) +  3] = n1[i, 0:3]
+                normaldata[3 * (off + 3*1) + 3 : 3 * (off + 3*1) +  6] = n4[i, 0:3]
+                normaldata[3 * (off + 3*1) + 6 : 3 * (off + 3*1) +  9] = n3[i, 0:3]
+
+                off += 6
+
+        sys.stderr.write("Last off = {} ; self.num_triangles = {}\n".format(off, self.num_triangles))
+        
+        with GLUTContext._threadlock:
+            self.vertexdata = vertexdata
+            self.normaldata = normaldata
+                                        
+        
+        
+    # This is a very expensive function, and for a spring
+    #  it could be called a lot.  Optimize!
+    # (I bet I could build a helix with really clever OpenGL instancing....)
+    #
+    # What I should probably do is create one circle's worth of normals,
+    #  and then just use them repeatedly.  The only issue is when the number
+    #  of coils isn't an integral number of helix segments.  (E.g., if
+    #  num_circ_points = 5, and coils = 3.5, then the end of the coil is in between
+    #  a couple of circles.)
+    def create_vertex_data_old(self):
+        # There are 2*num_edge_points triangles per center point (except for the last)
+        # (I'm leaving the endcaps open)
+
+        self.num_triangles = 2 * self._num_edge_points * (self._ncenters - 1)
+        
+        vertexdata = numpy.empty( 4 * 3 * self.num_triangles, dtype=numpy.float32 )
+        normaldata = numpy.empty( 3 * 3 * self.num_triangles, dtype=numpy.float32 )
+
+        # psis are angles around the long local axis of the spring (for making the cross-section)
+        psis = numpy.empty(self._num_edge_points+1)
+        psis[0:self._num_edge_points] = numpy.arange(self._num_edge_points) * 2.*math.pi / self._num_edge_points
+        psis[self._num_edge_points] = 0.
+        sinpsi = numpy.sin(psis)
+        cospsi = numpy.cos(psis)
+        
+        # phi tells us where we are along the spring
+        dphi = 2*math.pi * self._coils / (self._ncenters - 1)
+        phi = 0.
+        nextphi = dphi
+
+        x = 0.
+        y = 0.
+        z = self._radius
+        rhat = numpy.array( [0., 0., 1.] )
+
+        nextx = self._length / float(self._ncenters - 1)
+        nextz = math.cos(nextphi) * self._radius
+        nexty = math.sin(nextphi) * self._radius
+        lvec = numpy.array( [nextx - x, nexty - y, nextz - z] )
+        lhat = lvec / math.sqrt(numpy.square(lvec).sum())
+        yhat = numpy.array( [ rhat[1] * lhat[2] - rhat[2] * lhat[1],
+                              rhat[2] * lhat[0] - rhat[0] * lhat[2],
+                              rhat[0] * lhat[1] - rhat[1] * lhat[0] ] )
+        yhat /= math.sqrt(numpy.square(yhat).sum())
+        
+        off = 0
+        for i in range(1, self._ncenters):
+            lastphi = phi
+            phi = nextphi
+            nextphi = (i+1) * dphi
+            lastx = x
+            lasty = y
+            lastz = z
+            x = nextx
+            y = nexty
+            z = nextz
+            lastrhat = rhat
+            lastlhat = lhat
+            lastyhat = yhat
+
+            rhat = numpy.array( [0., math.sin(phi), math.cos(phi)] )
+            
+            # This isn't quite right... I orient the thing perpendicular
+            #  to the next cylinder in the chain, but really it should
+            #  be the average of previous and next
+
+            if i < self._ncenters-1 :
+                nextx = (i+1) * self._length / float(self._ncenters - 1)
+                nextz = math.cos(nextphi) * self._radius
+                nexty = math.sin(nextphi) * self._radius
+                lvec = numpy.array( [nextx - x, nexty - y, nextz - z] )
+                lhat = lvec / math.sqrt(numpy.square(lvec).sum())
+                yhat = numpy.array( [ rhat[1] * lhat[2] - rhat[2] * lhat[1],
+                                      rhat[2] * lhat[0] - rhat[0] * lhat[2],
+                                      rhat[0] * lhat[1] - rhat[1] * lhat[0] ] )
+            else:
+                yhat = numpy.array( [ rhat[1] * lastlhat[2] - rhat[2] * lastlhat[1],
+                                      rhat[2] * lastlhat[0] - rhat[0] * lastlhat[2],
+                                      rhat[0] * lastlhat[1] - rhat[1] * lastlhat[0] ] )
+
+            yhat /= math.sqrt(numpy.square(yhat).sum())
+
+            # sys.stderr.write("*** rhat = {}\n    lhat = {}\n    yhat = {}\n"
+            #                  .format(rhat, lhat, yhat))
+                
+            for ipsi in range(self._num_edge_points):
+                cp0 = cospsi[ipsi]
+                sp0 = sinpsi[ipsi]
+                cp1 = cospsi[ipsi+1]
+                sp1 = sinpsi[ipsi+1]
+
+                n1 = numpy.array( [sp0 * lastrhat[0] + cp0 * lastyhat[0],
+                                   sp0 * lastrhat[1] + cp0 * lastyhat[1],
+                                   sp0 * lastrhat[2] + cp0 * lastyhat[2], 0. ] )
+                n2 = numpy.array( [sp1 * lastrhat[0] + cp1 * lastyhat[0],
+                                   sp1 * lastrhat[1] + cp1 * lastyhat[1],
+                                   sp1 * lastrhat[2] + cp1 * lastyhat[2], 0. ] )
+                n3 = numpy.array( [sp0 * rhat[0] + cp0 * yhat[0],
+                                   sp0 * rhat[1] + cp0 * yhat[1],
+                                   sp0 * rhat[2] + cp0 * yhat[2], 0. ] )
+                n4 = numpy.array( [sp1 * rhat[0] + cp1 * yhat[0],
+                                   sp1 * rhat[1] + cp1 * yhat[1],
+                                   sp1 * rhat[2] + cp1 * yhat[2], 0. ] )
+                
+                p1 = numpy.array( [lastx, lasty, lastz, 1.] ) + self._thickness * n1
+                p2 = numpy.array( [lastx, lasty, lastz, 1.] ) + self._thickness * n2
+                p3 = numpy.array( [x, y, z, 1.] ) + self._thickness * n3
+                p4 = numpy.array( [x, y, z, 1.] ) + self._thickness * n4
+
+                # I'm trying to make these right-handed, but I don't think it matters.
+                # Plus, I may have thought about it wrong
+                vertexdata[4 * (off + 3*0 + 0) : 4 * (off + 3*0 + 0) + 4] = p1
+                vertexdata[4 * (off + 3*0 + 1) : 4 * (off + 3*0 + 1) + 4] = p2
+                vertexdata[4 * (off + 3*0 + 2) : 4 * (off + 3*0 + 2) + 4] = p4
+                vertexdata[4 * (off + 3*1 + 0) : 4 * (off + 3*1 + 0) + 4] = p1
+                vertexdata[4 * (off + 3*1 + 1) : 4 * (off + 3*1 + 1) + 4] = p4
+                vertexdata[4 * (off + 3*1 + 2) : 4 * (off + 3*1 + 2) + 4] = p3
+
+                normaldata[3 * (off + 3*0 + 0) : 3 * (off + 3*0 + 0) + 3] = n1[0:3]
+                normaldata[3 * (off + 3*0 + 1) : 3 * (off + 3*0 + 1) + 3] = n2[0:3]
+                normaldata[3 * (off + 3*0 + 2) : 3 * (off + 3*0 + 2) + 3] = n4[0:3]
+                normaldata[3 * (off + 3*1 + 0) : 3 * (off + 3*1 + 0) + 3] = n1[0:3]
+                normaldata[3 * (off + 3*1 + 1) : 3 * (off + 3*1 + 1) + 3] = n4[0:3]
+                normaldata[3 * (off + 3*1 + 2) : 3 * (off + 3*1 + 2) + 3] = n3[0:3]
+
+                off += 6
+
+        with GLUTContext._threadlock:
+            self.vertexdata = vertexdata
+            self.normaldata = normaldata
+
+    @property
+    def axis(self):
+        return GrObject.axis.fget(self)
+
+    @axis.setter
+    def axis(self, value):
+        value = numpy.array(value)
+        length = math.sqrt(numpy.square(value).sum())
+        GrObject.axis.fset(self, value/length)
+        if length != self._length:
+            self.length = length
+
+    @property
+    def length(self):
+        return self._length
+
+    @length.setter
+    def length(self, value):
+        self._length = value
+        self.create_vertex_data()
+        self.broadcast("update vertices")
+
+    @property
+    def radius(self):
+        return self._radius
+
+    @radius.setter
+    def radius(self, value):
+        self._radius = value
+        self.create_vertex_data()
+        self.broadcast("update vertices")
+
+    @property
+    def thickness(self):
+        return self._thickness
+
+    @thickness.setter
+    def thickness(self, value):
+        self._thickness = value
+        self.create_vertex_data()
+        self.broadcast("update vertices")
+        
+# ======================================================================
+# A Curve is not a GrObject, even though some of the interface is the same
 
 class Curve(object):
     def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
@@ -2025,24 +2410,40 @@ def main():
     #                           length=1.5, width=0.05, height=0.05))
 
     sys.stderr.write("Making boxes and peg and other things.\n")
+    dobox1 = True
+    dobox2 = True
+    doball = True
+    dopeg = True
+    dopeg2 = True
+    doblob = True
+    doarrow = True
+    dohelix = True
 
-    box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
-    box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
-
-    # box2trail = Curve(points = [ [ 0.5, 0.5, 0.] ], color=(1., 0.5, 0.5))
-
-    peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
-    peg.axis = (0.5, 0.5, 0.5)
-    peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
-                    axis=(-0.5, 0.5, 0.5))
-    blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
-    blob.axis = (-0.5, -0.5, 0.5)
-    arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
-                  color=color.yellow, fixedwidth=True)
+    # Make objects
     
-    sys.stderr.write("Making Ball.\n")
-    ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
-    # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
+    if dobox1: box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
+    if dobox2: box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
+
+    if dopeg:
+        peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
+        peg.axis = (0.5, 0.5, 0.5)
+    if dopeg2: peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
+                               axis=(-0.5, 0.5, 0.5))
+    if doblob:
+        blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
+        blob.axis = (-0.5, -0.5, 0.5)
+    if doarrow: arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
+                              color=color.yellow, fixedwidth=True)
+    
+    if doball:
+        ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
+        # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
+    
+
+    if dohelix:
+        helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=3., coils=10, num_circ_points=12)
+        
+    # Updates
     
     theta = math.pi/4.
     phi = 0.
@@ -2070,30 +2471,41 @@ def main():
         #                                  math.cos(theta)] )
 
 
-        # Move arond ball and box2
-        ball.x = 2.*math.cos(phi)
-        if math.sin(phi)>0.:
-            ball.rotate(dphi)
-        else:
-            ball.rotate(-dphi)
+        if doball:
+            ball.x = 2.*math.cos(phi)
+            if math.sin(phi)>0.:
+                ball.rotate(dphi)
+            else:
+                ball.rotate(-dphi)
 
-        box2.position = quarternion_multiply( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)],
-                                              quarternion_multiply( [ 2.*math.sin(phi2),
-                                                                      1.5*math.sin(phi), 1.5*math.cos(phi) ],
-                                                                    [0., 0., math.cos(math.pi/6), math.sin(math.pi/6)]
-                                                                    )
-                                              )[0:3]
-        if first:
-            box2.interval = 5
-            box2.retain = 50
-            box2.make_trail = True
-            first = False
+        if dobox2:
+            q = numpy.array( [0., 0., -math.sin(math.pi/6.), math.cos(math.pi/6.)] )
+            box2.position = quaternion_rotate(numpy.array( [ 2.*math.sin(phi2),
+                                                             1.5*math.sin(phi),
+                                                             1.5*math.cos(phi) ] ),
+                                                           q )
+            # box2.position = quaternion_multiply( numpy.array( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)] ),
+            #                                       quaternion_multiply( numpy.array( [ 2.*math.sin(phi2),
+            #                                                                           1.5*math.sin(phi),
+            #                                                                           1.5*math.cos(phi) ] ),
+            #                                                             numpy.array( [0., 0., math.cos(math.pi/6),
+            #                                                                             math.sin(math.pi/6)] )
+            #                                                          ) )[0:3]
+            
+            if first:
+                box2.interval = 5
+                box2.retain = 50
+                box2.make_trail = True
+                first = False
     
-        # box2trail.add_point(box2.position)
-
-        arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),
-                      math.sin(phi) * (1. + 0.5*math.cos(phi)), 0.]
+        if doarrow:
+            arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),
+                          math.sin(phi) * (1. + 0.5*math.cos(phi)), 0.]
         
+        if dohelix:
+            helix.length = 3. + math.cos(phi)
+            
+
         rate(fps)
 
 

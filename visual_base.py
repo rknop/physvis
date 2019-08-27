@@ -127,8 +127,9 @@ class Observer(object):
 #  color     (4 floats per vertex)
 #
 # I'm gonna have to remind myself why location and color need 4, not 3,
-# floats.  (Alpha?  It's not implemented, but maybe that's what I was
-# thinking.)
+# floats.  (For location, it's so that the transformation matrices can
+# be 4×4 to allow offsets as well as rotations and scales.)  (For color,
+# alpha?  It's not implemented, but maybe that's what I was thinking.)
 #
 # That works out to 432 bytes per triangle.
 #
@@ -154,10 +155,12 @@ class GLObjectCollection(Observer):
 
     def __init__(self, context, shader, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.maxnumtris = 20000
+        self.maxnumobjs = 512       # Must match the array length in the shader!!!!
+        self.maxnumtris = 32768
 
         self.curnumtris = 0      # These three must be kept consistent.
         self.objects = []
+        self.object_index = []
         self.object_triangle_index = []
 
         self.draw_as_lines = False
@@ -181,20 +184,27 @@ class GLObjectCollection(Observer):
         # 4 bytes per float * 3 floats per vertex * 3 vertices per triangle
         glBufferData(GL_ARRAY_BUFFER, 4 * 3 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
 
+        self.objindexbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        # 4 bytes per int * 1 int per vertex * 3 vertices per triangle
+        glBufferData(GL_ARRAY_BUFFER, 4 * 1 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
+        
         self.modelmatrixbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        # 4 bytes per float * 16 floats per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 16 * 3 * self.maxnumtris, None, GL_DYNAMIC_DRAW)
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        # 4 bytes per float * 16 floats per object
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         self.modelnormalmatrixbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        # 4 bytes per float * 9 floats per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 9 * 3 * self.maxnumtris, None, GL_DYNAMIC_DRAW)
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        # 4 bytes per float * 9 floats per object
+        #  BUT!  Because of std140 layout, there's actually 12 floats per object,
+        #    as the alignment of each row of the matrix is like a vec4 rather than a vec3
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         self.colorbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
-        # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 3 * self.maxnumtris, None, GL_DYNAMIC_DRAW)
+        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+        # 4 bytes per float * 4 floats per object
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         self.VAO = glGenVertexArrays(1)
         glBindVertexArray(self.VAO)
@@ -207,33 +217,57 @@ class GLObjectCollection(Observer):
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
         glEnableVertexAttribArray(1)
 
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        glVertexAttribIPointer(2, 1, GL_INT, 0, None)
+        glEnableVertexAttribArray(2)
+
+        # I don't 100% understand binding uniform buffers yet, I hope I'm doing it right.
+        
+        # glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
+        sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(dex, self.shader.progid))
+        glUniformBlockBinding(self.shader.progid, dex, 0);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
+
+        # glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
+        sys.stderr.write("ModelNormalMatrix block index: {}\n".format(dex))
+        glUniformBlockBinding(self.shader.progid, dex, 1);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
+
+        # glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+        dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
+        sys.stderr.write("Colors block index: {}\n".format(dex))
+        glUniformBlockBinding(self.shader.progid, dex, 2);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 2, self.colorbuffer)
+        
         # Model Matrix uses 4 attributes
         # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
         # and http://sol.gfxile.net/instancing.html
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(0))
-        glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*1))
-        glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*2))
-        glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*3))
-        glEnableVertexAttribArray(2)
-        glEnableVertexAttribArray(3)
-        glEnableVertexAttribArray(4)
-        glEnableVertexAttribArray(5)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
+        # glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(0))
+        # glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*1))
+        # glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*2))
+        # glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*3))
+        # glEnableVertexAttribArray(2)
+        # glEnableVertexAttribArray(3)
+        # glEnableVertexAttribArray(4)
+        # glEnableVertexAttribArray(5)
 
         # Model normal matrix uses 3 attributes
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(0))
-        glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*1))
-        glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
-        glEnableVertexAttribArray(6)
-        glEnableVertexAttribArray(7)
-        glEnableVertexAttribArray(8)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
+        # glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(0))
+        # glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*1))
+        # glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
+        # glEnableVertexAttribArray(6)
+        # glEnableVertexAttribArray(7)
+        # glEnableVertexAttribArray(8)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
-        glVertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(9)
+        # glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
+        # glVertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 0, None)
+        # glEnableVertexAttribArray(9)
 
         self.is_initialized = True
 
@@ -243,10 +277,13 @@ class GLObjectCollection(Observer):
             if cur._id == obj._id:
                 return
 
+        if len(self.objects) >= self.maxnumobjs:
+            raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
         if self.curnumtris + obj.num_triangles > self.maxnumtris:
             raise Exception("Error, I can currently only handle {} triangles.".format(self.maxnumtris))
 
         self.object_triangle_index.append(self.curnumtris)
+        self.object_index.append(len(self.objects))
         self.objects.append(obj)
         obj.add_listener(self)
         self.curnumtris += obj.num_triangles
@@ -280,11 +317,16 @@ class GLObjectCollection(Observer):
 
     def do_update_object_matrix(self, dex, obj):
         with GLUTContext._threadlock:
-            glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
-            glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
+            # glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
+            # glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
+            glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
+            # glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
+            # glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
+            glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, obj.inverse_model_matrix.flatten())
             glutPostRedisplay()
+        
 
     # Updates positions of verticies and directions of normals.
     # Can NOT change the number of vertices
@@ -322,20 +364,34 @@ class GLObjectCollection(Observer):
         # sys.stderr.write("\nnormalmatrixdata: {}\n".format(self.objects[dex].normalmatrixdata))
         # sys.exit(20)
 
+        # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
         glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].vertexdata)
 
+        # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
         glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
         glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, self.objects[dex].normaldata)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, self.objects[dex].matrixdata)
+        objindexcopies = numpy.empty(self.objects[dex].num_triangles*3, dtype=numpy.int32)
+        objindexcopies[:] = self.object_index[dex]
+        # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
+        # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*1*3, objindexcopies)
+        
+        # sys.stderr.write("Pushing model_matrix for obj {} which has index {} and byte position {}\n"
+        #                  .format(dex, self.object_index[dex], self.object_index[dex]*4*16))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, self.objects[dex].model_matrix.flatten())
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, self.objects[dex].normalmatrixdata)
+        # sys.stderr.write("Pushing inverse_model_Matrix for obj {}\n".format(dex))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, self.objects[dex].inverse_model_matrix.flatten())
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].colordata)
+        # ROB!  Make this not use the _ variable
+        # sys.stderr.write("Pushing _color for obj {}\n".format(dex))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*4, self.objects[dex]._color)
 
         glutPostRedisplay()
 
@@ -358,7 +414,7 @@ class GLObjectCollection(Observer):
             # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
             glDrawArrays(GL_TRIANGLES, 0, self.curnumtris*3)
 
-
+    # Need to add ability to update color
     def receive_message(self, message, subject):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
         if message == "update matrix":
@@ -740,21 +796,32 @@ class BasicShader(Shader):
 uniform mat4 view;
 uniform mat4 projection;
 
+layout (std140) uniform ModelMatrix
+{
+   mat4 model_matrix[512];
+};
+
+layout (std140) uniform ModelNormalMatrix
+{
+   mat3 model_normal_matrix[512];
+};
+
+layout (std140) uniform Colors
+{
+   vec4 color[512];
+};
+
 layout(location=0) in vec4 in_Position;
 layout(location=1) in vec3 in_Normal;
-layout(location=2) in mat4 model;
-layout(location=6) in mat3 model_normal;
-layout(location=9) in vec4 color;
+layout(location=2) in int in_Index;
 out vec3 aNormal;
 out vec4 aColor;
 
 void main(void)
 {
-  gl_Position =  projection * view * model * in_Position;
-  aNormal = model_normal * in_Normal;
-  // gl_Position = projection * view * in_Position;
-  // aNormal = in_Normal;
-  aColor = color;
+  gl_Position =  projection * view * model_matrix[in_Index] * in_Position;
+  aNormal = model_normal_matrix[in_Index] * in_Normal;
+  aColor = color[in_Index];
 }"""
 
         fragment_shader = """
@@ -777,7 +844,6 @@ void main(void)
   vec3 diff2 = max(dot(norm, light2dir), 0.) * light2color;
   vec3 col = (ambientcolor + diff1 + diff2) * vec3(aColor);
   out_Color = vec4(col, aColor[3]);
-  // out_Color = vec4(1.0, 0.5, 0.5, 1.0);
 }"""
 
         sys.stderr.write("\nAbout to compile shaders....\n")
@@ -930,7 +996,7 @@ class GrObject(Subject):
         elif color is None:
             self._color = numpy.array( [1., 1., 1., opacity], dtype=numpy.float32 )
         else:
-            self._color = numpy.empty(4)
+            self._color = numpy.empty(4, dtype=numpy.float32)
             self._color[0:3] = numpy.array(color)[0:3]
             if opacity is None:
                 self._color[3] = 1.
@@ -943,6 +1009,10 @@ class GrObject(Subject):
                                            [ 0., 1., 0., 0. ],
                                            [ 0., 0., 1., 0. ],
                                            [ 0., 0., 0., 1. ] ], dtype=numpy.float32)
+        self.inverse_model_matrix = numpy.array( [ [ 1., 0., 0., 0.],
+                                                   [ 0., 1., 0., 0.],
+                                                   [ 0., 0., 1., 0.] ], dtype=numpy.float32)
+
         self.vertexdata = None
         self.normaldata = None
         self.matrixdata = None
@@ -1127,21 +1197,21 @@ class GrObject(Subject):
         translation = numpy.identity(4, dtype=numpy.float32)
         translation[3, 0:3] = self._position
         mat *= translation
-        self.model_matrix = mat
+        self.model_matrix[:] = mat
+        self.inverse_model_matrix[0:3, 0:3] = numpy.linalg.inv(mat[0:3, 0:3]).T
         # sys.stderr.write("model matrix: {}\n".format(self.model_matrix))
         # sys.stderr.write("scale: {}\n".format(self._scale))
 
         # Flatulent many copies so that there is one matrix for each vertex of each triangle.
-        if (self.matrixdata is None) or (self.matrixdata.size != 3*16*self.num_triangles):
-            self.matrixdata = numpy.empty( (3*self.num_triangles, 4, 4), dtype=numpy.float32 )
-        self.matrixdata[:, :, :] = self.model_matrix[numpy.newaxis, :, :]
+        # if (self.matrixdata is None) or (self.matrixdata.size != 3*16*self.num_triangles):
+        #     self.matrixdata = numpy.empty( (3*self.num_triangles, 4, 4), dtype=numpy.float32 )
+        # self.matrixdata[:, :, :] = self.model_matrix[numpy.newaxis, :, :]
         # for i in range(0, 3*self.num_triangles):
         #     self.matrixdata[i, :, :] = self.model_matrix
 
-        invmat = numpy.linalg.inv(mat[0:3, 0:3]).T
-        if (self.normalmatrixdata is None) or (self.normalmatrixdata.size != 3*9*self.num_triangles):
-            self.normalmatrixdata = numpy.empty( (3*self.num_triangles, 3, 3), dtype=numpy.float32 )
-        self.normalmatrixdata[:, :, :] = invmat[numpy.newaxis, :, :]
+        # if (self.normalmatrixdata is None) or (self.normalmatrixdata.size != 3*9*self.num_triangles):
+        #     self.normalmatrixdata = numpy.empty( (3*self.num_triangles, 3, 3), dtype=numpy.float32 )
+        # self.normalmatrixdata[:, :, :] = invmat[numpy.newaxis, :, :]
         # for i in range(0, 3*self.num_triangles):
         #     self.normalmatrixdata[i, :, :] = invmat
 
@@ -2412,26 +2482,38 @@ def main():
 
     # Make objects
     
-    if dobox1: box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
-    if dobox2: box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
+    if dobox1:
+        sys.stderr.write("Making box1.\n")
+        box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
+    if dobox2:
+        sys.stderr.write("Making box2.\n")
+        box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
 
     if dopeg:
+        sys.stderr.write("Making peg.\n")
         peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
         peg.axis = (0.5, 0.5, 0.5)
-    if dopeg2: peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
-                               axis=(-0.5, 0.5, 0.5))
+    if dopeg2:
+        sys.stderr.write("Making peg2.\n")
+        peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
+                        axis=(-0.5, 0.5, 0.5))
     if doblob:
+        sys.stderr.write("Making blob.\n")
         blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
         blob.axis = (-0.5, -0.5, 0.5)
-    if doarrow: arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
-                              color=color.yellow, fixedwidth=True)
+    if doarrow:
+        sys.stderr.write("Making arrow.\n")
+        arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
+                      color=color.yellow, fixedwidth=True)
     
     if doball:
+        sys.stderr.write("Making ball.\n")
         ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
         # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
     
 
     if dohelix:
+        sys.stderr.write("Making helix.\n")
         helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
                       num_circ_points=8, num_edge_points=5)
         

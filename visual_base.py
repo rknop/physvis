@@ -122,43 +122,42 @@ class Observer(object):
 # Shaders take as input for each vertex of each triangle
 #  location  (4 floats per vertex)
 #  normal    (3 floats per vertex)
-#  model matrix  (16 floats per vertex)
-#  model normal matrix (something like an inverse)  (9 floats per vertex)
+#  index     (1 index per vertex)
+#
+# The object collection points to a set of 3 VBOs with this information
+# for each vertex of each object.  There's a single VBO so that the
+# whole damn thing can be drawn in one call to OpenGL for efficiency
+# purposes.  This means that I've got to do all sorts of memory
+# management manually in order to keep track of which data goes with
+# which object.  (I could reduce the amount of data per object by using
+# EBOs, but that would also make the data management more complicated.)
+#
+# Shaders also have a few arrays of uniforms, one element of the array
+# for each object; the input "index" is points into this arary.
+#
+#  model matrix  (16 floats per object)
+#  model normal matrix (something like an inverse)  (12* floats per object)
 #  color     (4 floats per vertex)
+#
+#  * really, it's a mat3, so you'd think 9 floats per object.  However,
+#  The OpenGL std140 layout means that things are aligned on vec4
+#  bounadries, so there's an extra "junk" float at the end of each
+#  row of the matrix.
 #
 # I'm gonna have to remind myself why location and color need 4, not 3,
 # floats.  (For location, it's so that the transformation matrices can
 # be 4×4 to allow offsets as well as rotations and scales.)  (For color,
 # alpha?  It's not implemented, but maybe that's what I was thinking.)
 #
-# That works out to 432 bytes per triangle.
-#
-# The object collection points to a set of 5 VBOs with each of this
-# information for each vertex of each object.  There's a single VBO so
-# that the whole damn thing can be drawn in one call to OpenGL for
-# efficiency purposes.  This means that I've got to do all sorts of
-# memory management manually in order to keep track of which data goes
-# with which object.  It also means there will be LOTS of redundant
-# data.  (For instance, an icosahedron has 20 triangles in it, which
-# means 60 vertices, which means 60 copies of the same 4x4 model
-# matrix...!
-#
-# I think could make this somewhat better by using EBOs (once I fully
-# grok how those really work).  That way, when *eveyrthing* was the same
-# for a vertex (e.g. then there are only 12 vertices for the
-# icosahedron), we could share it.  It still means a copy of the
-# transformation matrices for each vertex.
-#
-# The data management becomes much more complicated, of course.
 
 class GLObjectCollection(Observer):
 
     def __init__(self, context, shader, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.maxnumobjs = 512       # Must match the array length in the shader!!!!
+        self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
         self.maxnumtris = 32768
 
-        self.curnumtris = 0      # These three must be kept consistent.
+        self.curnumtris = 0      # These four must be kept consistent.
         self.objects = []
         self.object_index = []
         self.object_triangle_index = []
@@ -221,53 +220,26 @@ class GLObjectCollection(Observer):
         glVertexAttribIPointer(2, 1, GL_INT, 0, None)
         glEnableVertexAttribArray(2)
 
-        # I don't 100% understand binding uniform buffers yet, I hope I'm doing it right.
-        
-        # glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
         sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(dex, self.shader.progid))
         glUniformBlockBinding(self.shader.progid, dex, 0);
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
 
-        # glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
         dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
         sys.stderr.write("ModelNormalMatrix block index: {}\n".format(dex))
         glUniformBlockBinding(self.shader.progid, dex, 1);
         glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
 
-        # glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
         dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
         sys.stderr.write("Colors block index: {}\n".format(dex))
         glUniformBlockBinding(self.shader.progid, dex, 2);
         glBindBufferBase(GL_UNIFORM_BUFFER, 2, self.colorbuffer)
         
-        # Model Matrix uses 4 attributes
+        # In the past, I was passing a model matrix for each
+        # and every vertex.  That was profligate.  I'm leaving this
+        # comment here, though, as it's got a pointer to docs how I made that work.
         # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
         # and http://sol.gfxile.net/instancing.html
-
-        # glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-        # glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(0))
-        # glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*1))
-        # glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*2))
-        # glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 4*4*4, ctypes.c_void_p(4*4*3))
-        # glEnableVertexAttribArray(2)
-        # glEnableVertexAttribArray(3)
-        # glEnableVertexAttribArray(4)
-        # glEnableVertexAttribArray(5)
-
-        # Model normal matrix uses 3 attributes
-
-        # glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-        # glVertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(0))
-        # glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*1))
-        # glVertexAttribPointer(8, 3, GL_FLOAT, GL_FALSE, 4*3*3, ctypes.c_void_p(4*3*2))
-        # glEnableVertexAttribArray(6)
-        # glEnableVertexAttribArray(7)
-        # glEnableVertexAttribArray(8)
-
-        # glBindBuffer(GL_ARRAY_BUFFER, self.colorbuffer)
-        # glVertexAttribPointer(9, 4, GL_FLOAT, GL_FALSE, 0, None)
-        # glEnableVertexAttribArray(9)
 
         self.is_initialized = True
 
@@ -317,12 +289,8 @@ class GLObjectCollection(Observer):
 
     def do_update_object_matrix(self, dex, obj):
         with GLUTContext._threadlock:
-            # glBindBuffer(GL_ARRAY_BUFFER, self.modelmatrixbuffer)
-            # glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*16*3, obj.matrixdata)
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
             glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
-            # glBindBuffer(GL_ARRAY_BUFFER, self.modelnormalmatrixbuffer)
-            # glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*9*3, obj.normalmatrixdata)
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
             glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, obj.inverse_model_matrix.flatten())
             glutPostRedisplay()
@@ -1199,21 +1167,6 @@ class GrObject(Subject):
         mat *= translation
         self.model_matrix[:] = mat
         self.inverse_model_matrix[0:3, 0:3] = numpy.linalg.inv(mat[0:3, 0:3]).T
-        # sys.stderr.write("model matrix: {}\n".format(self.model_matrix))
-        # sys.stderr.write("scale: {}\n".format(self._scale))
-
-        # Flatulent many copies so that there is one matrix for each vertex of each triangle.
-        # if (self.matrixdata is None) or (self.matrixdata.size != 3*16*self.num_triangles):
-        #     self.matrixdata = numpy.empty( (3*self.num_triangles, 4, 4), dtype=numpy.float32 )
-        # self.matrixdata[:, :, :] = self.model_matrix[numpy.newaxis, :, :]
-        # for i in range(0, 3*self.num_triangles):
-        #     self.matrixdata[i, :, :] = self.model_matrix
-
-        # if (self.normalmatrixdata is None) or (self.normalmatrixdata.size != 3*9*self.num_triangles):
-        #     self.normalmatrixdata = numpy.empty( (3*self.num_triangles, 3, 3), dtype=numpy.float32 )
-        # self.normalmatrixdata[:, :, :] = invmat[numpy.newaxis, :, :]
-        # for i in range(0, 3*self.num_triangles):
-        #     self.normalmatrixdata[i, :, :] = invmat
 
         self.broadcast("update matrix")
 

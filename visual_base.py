@@ -1,10 +1,6 @@
 #/usr/bin/python3
 # -*- coding: utf-8 -*-
 
-# NOTE!  I just rudely GLEnable(GL_EXT_separate_shader_objects) below
-#  without testing that it's there.  I should do better.
-# (Actually, I think that's commented out now.)
-
 import sys
 import math
 import time
@@ -13,6 +9,7 @@ import threading
 import random
 import uuid
 import ctypes
+import itertools
 
 import numpy
 import numpy.linalg
@@ -21,6 +18,9 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 ### from OpenGL.GL.ARB.separate_shader_objects import *
+
+_OBJ_TYPE_SIMPLE = 1
+_OBJ_TYPE_CURVE = 2
 
 time_of_last_rate_call = None
 def rate(fps):
@@ -92,7 +92,7 @@ class Subject(object):
 
     def __del__(self):
         for listener in self.listeners:
-            listener("destruct", self)
+            listener.receive_message("destruct", self)
 
     def broadcast(self, message):
         for listener in self.listeners:
@@ -118,6 +118,123 @@ class Observer(object):
 #
 # One object collection encapsulates a set of objects that can
 #  all be drawn with the same shader.
+
+
+class GLObjectCollection(Observer):
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
+        self.objects = []
+        self.object_index = []
+
+        self.context = context
+
+    def initglstuff(self):
+        self.modelmatrixbuffer = glGenBuffers(1)
+        sys.stderr.write("self.modelmatrixbuffer = {}\n".format(self.modelmatrixbuffer))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        # 4 bytes per float * 16 floats per object
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+
+        self.modelnormalmatrixbuffer = glGenBuffers(1)
+        sys.stderr.write("self.modelnormalmatrixbuffer = {}\n".format(self.modelnormalmatrixbuffer))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        # 4 bytes per float * 9 floats per object
+        #  BUT!  Because of std140 layout, there's actually 12 floats per object,
+        #    as the alignment of each row of the matrix is like a vec4 rather than a vec3
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+
+        self.colorbuffer = glGenBuffers(1)
+        sys.stderr.write("self.colorbuffer = {}\n".format(self.colorbuffer))
+        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+        # 4 bytes per float * 4 floats per object
+        glBufferData(GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+
+        dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
+        sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
+        glUniformBlockBinding(self.shader.progid, dex, 0);
+
+        dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
+        sys.stderr.write("ModelNormalMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
+        glUniformBlockBinding(self.shader.progid, dex, 1);
+
+        dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
+        sys.stderr.write("Colors block index (progid={}): {}\n".format(self.shader.progid, dex))
+        glUniformBlockBinding(self.shader.progid, dex, 2);
+
+        self.bind_uniform_buffers()
+        
+        # In the past, I was passing a model matrix for each
+        # and every vertex.  That was profligate.  I'm leaving this
+        # comment here, though, as it's got a pointer to docs how I made that work.
+        # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
+        # and http://sol.gfxile.net/instancing.html
+
+    def bind_uniform_buffers(self):
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
+        glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
+        glBindBufferBase(GL_UNIFORM_BUFFER, 2, self.colorbuffer)
+        
+        
+    def update_object_matrix(self, obj):
+        found = False
+        # sys.stderr.write("Going to try to update object matrix for {}\n".format(obj._id))
+        for i in range(len(self.objects)):
+            if self.objects[i]._id == obj._id:
+                found = True
+                break
+
+        if not found:
+            sys.stderr.write("...object not found whose matrix was to be updated!!\n")
+            return
+
+        # sys.stderr.write("...found at {}!\n".format(i))
+        # sys.stderr.write("\nmatrixdata:\n{}\n".format(obj.model_matrix))
+        # sys.stderr.write("\nnormalmatrixdata:\n{}\n".format(obj.inverse_model_matrix))
+
+        self.context.run_glcode(lambda : self.do_update_object_matrix(i, obj))
+
+    def do_update_object_matrix(self, dex, obj):
+        with GLUTContext._threadlock:
+            # sys.stderr.write("Updating an object matrix.\n")
+            glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
+            glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, obj.inverse_model_matrix.flatten())
+            glutPostRedisplay()
+
+    def update_object_color(self, obj):
+        found = False
+        for i in range(len(self.objects)):
+            if self.objects[i]._id == obj._id:
+                found = True
+                break
+
+        if not found:
+            return
+
+        self.context.run_glcode(lambda : self.do_update_object_color(i, obj))
+
+    def do_update_object_color(self, dex, obj):
+        with GLUTContext._threadlock:
+            # sys.stderr.write("Updating an object color.\n")
+            glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*4, obj._color)
+            glutPostRedisplay()
+            
+    def receive_message(self, message, subject):
+        # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
+        if message == "update color":
+            self.update_object_color(subject)
+        if message == "update matrix":
+            self.update_object_matrix(subject)
+        if message == "update vertices":
+            self.update_object_vertices(subject)
+
+# ======================================================================
+# SimpleObjectCollection
+#
+# This is for objects that don't require a geometry shader (so no curves).
 #
 # Shaders take as input for each vertex of each triangle
 #  location  (4 floats per vertex)
@@ -150,21 +267,17 @@ class Observer(object):
 # alpha?  It's not implemented, but maybe that's what I was thinking.)
 #
 
-class GLObjectCollection(Observer):
+class SimpleObjectCollection(GLObjectCollection):
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(context, *args, **kwargs)
+        self.shader = Shader.get("Basic Shader", context)
 
-    def __init__(self, context, shader, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
         self.maxnumtris = 32768
 
-        self.curnumtris = 0      # These four must be kept consistent.
-        self.objects = []
-        self.object_index = []
+        self.curnumtris = 0
         self.object_triangle_index = []
 
         self.draw_as_lines = False
-        self.shader = shader
-        self.context = context
 
         self.is_initialized = False
         context.run_glcode(lambda : self.initglstuff())
@@ -173,6 +286,8 @@ class GLObjectCollection(Observer):
             time.sleep(0.1)
 
     def initglstuff(self):
+        super().initglstuff()
+        
         self.vertexbuffer = glGenBuffers(1)
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
         # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle
@@ -188,24 +303,12 @@ class GLObjectCollection(Observer):
         # 4 bytes per int * 1 int per vertex * 3 vertices per triangle
         glBufferData(GL_ARRAY_BUFFER, 4 * 1 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
         
-        self.modelmatrixbuffer = glGenBuffers(1)
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-        # 4 bytes per float * 16 floats per object
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
-
-        self.modelnormalmatrixbuffer = glGenBuffers(1)
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-        # 4 bytes per float * 9 floats per object
-        #  BUT!  Because of std140 layout, there's actually 12 floats per object,
-        #    as the alignment of each row of the matrix is like a vec4 rather than a vec3
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
-
-        self.colorbuffer = glGenBuffers(1)
-        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
-        # 4 bytes per float * 4 floats per object
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
-
         self.VAO = glGenVertexArrays(1)
+
+        self.bind_vertex_attribs()
+        self.is_initialized = True
+
+    def bind_vertex_attribs(self):
         glBindVertexArray(self.VAO)
 
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
@@ -219,29 +322,6 @@ class GLObjectCollection(Observer):
         glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
         glVertexAttribIPointer(2, 1, GL_INT, 0, None)
         glEnableVertexAttribArray(2)
-
-        dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
-        sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(dex, self.shader.progid))
-        glUniformBlockBinding(self.shader.progid, dex, 0);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
-
-        dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
-        sys.stderr.write("ModelNormalMatrix block index: {}\n".format(dex))
-        glUniformBlockBinding(self.shader.progid, dex, 1);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
-
-        dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
-        sys.stderr.write("Colors block index: {}\n".format(dex))
-        glUniformBlockBinding(self.shader.progid, dex, 2);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 2, self.colorbuffer)
-        
-        # In the past, I was passing a model matrix for each
-        # and every vertex.  That was profligate.  I'm leaving this
-        # comment here, though, as it's got a pointer to docs how I made that work.
-        # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
-        # and http://sol.gfxile.net/instancing.html
-
-        self.is_initialized = True
 
     def add_object(self, obj):
         # Make sure not to double-add
@@ -268,32 +348,7 @@ class GLObjectCollection(Observer):
 
         n = len(self.objects) - 1 
         self.context.run_glcode(lambda : self.push_all_object_info(n))
-
-    def update_object_matrix(self, obj):
-        found = False
-        # sys.stderr.write("Going to try to update object matrix for {}\n".format(obj._id))
-        for i in range(len(self.objects)):
-            if self.objects[i]._id == obj._id:
-                found = True
-                break
-
-        if not found:
-            # sys.stderr.write("...not found\n")
-            return
-
-        # sys.stderr.write("...found at {}!\n".format(i))
-        # sys.stderr.write("\nmatrixdata:\n{}\n".format(obj.matrixdata))
-        # sys.stderr.write("\nnormalmatrixdata:\n{}\n".format(obj.normalmatrixdata))
-
-        self.context.run_glcode(lambda : self.do_update_object_matrix(i, obj))
-
-    def do_update_object_matrix(self, dex, obj):
-        with GLUTContext._threadlock:
-            glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
-            glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, obj.inverse_model_matrix.flatten())
-            glutPostRedisplay()
+        sys.stderr.write("Object added to a SimpleObjectCollection.\n")
         
 
     # Updates positions of verticies and directions of normals.
@@ -319,12 +374,13 @@ class GLObjectCollection(Observer):
             glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
             glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, obj.normaldata)
             glutPostRedisplay()
-            
+
+
     def push_all_object_info(self, dex):
 
-        # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-        #                  .format(dex, self.objects[dex].num_triangles,
-        #                          self.object_triangle_index[dex]))
+        sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
+                         .format(dex, self.objects[dex].num_triangles,
+                                 self.object_triangle_index[dex]))
         # sys.stderr.write("\nvertexdata: {}\n".format(self.objects[dex].vertexdata))
         # sys.stderr.write("\nnormaldata: {}\n".format(self.objects[dex].normaldata))
         # sys.stderr.write("\ncolordata: {}\n".format(self.objects[dex].colordata))
@@ -347,28 +403,19 @@ class GLObjectCollection(Observer):
         glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
         glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*1*3, objindexcopies)
         
-        # sys.stderr.write("Pushing model_matrix for obj {} which has index {} and byte position {}\n"
-        #                  .format(dex, self.object_index[dex], self.object_index[dex]*4*16))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, self.objects[dex].model_matrix.flatten())
+        self.do_update_object_matrix(dex, self.objects[dex])
+        self.do_update_object_color(dex, self.objects[dex])
 
-        # sys.stderr.write("Pushing inverse_model_Matrix for obj {}\n".format(dex))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, self.objects[dex].inverse_model_matrix.flatten())
-
-        # ROB!  Make this not use the _ variable
-        # sys.stderr.write("Pushing _color for obj {}\n".format(dex))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
-        glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*4, self.objects[dex]._color)
-
-        glutPostRedisplay()
-
+        glutPostRedisplay()    # Redundant... it just happened in the last two function calls
 
     # Never call this directly!  It should only be called from within the
     #   draw method of a GLUTContext
     def draw(self):
         with GLUTContext._threadlock:
+            # sys.stderr.write("Drawing Simple Object Collection with shader progid {}\n".format(self.shader.progid))
             glUseProgram(self.shader.progid)
+            self.bind_uniform_buffers()
+            self.bind_vertex_attribs()
             self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
                                         self.context._clipnear, self.context._clipfar)
             self.shader.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
@@ -382,14 +429,156 @@ class GLObjectCollection(Observer):
             # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
             glDrawArrays(GL_TRIANGLES, 0, self.curnumtris*3)
 
-    # Need to add ability to update color
-    def receive_message(self, message, subject):
-        # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
-        if message == "update matrix":
-            self.update_object_matrix(subject)
-        if message == "update vertices":
-            self.update_object_vertices(subject)
 
+# ======================================================================
+# CurveCollection
+
+class CurveCollection(GLObjectCollection):
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(context, *args, **kwargs)
+        self.shader = Shader.get("Curve Tube Shader", context)
+        self.maxnumlines=16384
+
+        self.curnumlines = 0
+        self.object_line_index = []
+
+        self.draw_as_lines = False
+        
+        self.is_initialized = False
+        context.run_glcode(lambda : self.initglstuff())
+
+        while not self.is_initialized:
+            time.sleep(0.1)
+
+    def initglstuff(self):
+        super().initglstuff()
+
+        self.linebuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
+        # 4 bytes per float * 4 floats per vertex * 2 vertices per line
+        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+
+        self.transversebuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
+        # Same length
+        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+
+        self.objindexbuffer = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        # 4 bytes per int * 1 int per vertex * 2 vertices per line
+        glBufferData(GL_ARRAY_BUFFER, 4 * 1 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+        
+        self.VAO = glGenVertexArrays(1)
+
+        self.bind_vertex_attribs()
+        self.is_initialized = True
+
+    def bind_vertex_attribs(self):
+        glBindVertexArray(self.VAO)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
+        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(0)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
+        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, None)
+        glEnableVertexAttribArray(1)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        glVertexAttribIPointer(2, 1, GL_INT, 0, None)
+        glEnableVertexAttribArray(2)
+
+    def add_object(self, obj):
+        for cur in self.objects:
+            if cur._id == obj._id:
+                return
+
+        if len(self.objects) >= self.maxnumobjs:
+            raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
+        if self.curnumlines + (obj.points.shape[0]-1)*2 > self.maxnumlines:
+            raise Exception("Error, I can currently only handle {} lines.".format(self.maxnumlines))
+
+        self.object_line_index.append(self.curnumlines)
+        self.object_index.append(len(self.objects))
+        self.objects.append(obj)
+        obj.add_listener(self)
+        self.curnumlines += 2*(obj.points.shape[0]-1)
+        sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
+
+        n = len(self.objects) - 1
+        self.context.run_glcode(lambda : self.push_all_object_info(n))
+        
+    def update_object_vertices(self, obj):
+        found = False
+        for i in range(len(self.objects)):
+            if self.objects[i]._id == obj._id:
+                found = True
+                break
+
+        if not found:
+            return
+
+        self.context.run_glcode(lambda : self.do_update_object_points(i, obj))
+
+    def do_update_object_points(self, dex, obj):
+        with GLUTContext._threadlock:
+            if obj.points.shape[0] == 0:
+                return
+            linespoints = numpy.empty( [ (obj.points.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
+            transpoints = numpy.empty( [ (obj.trans.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
+            linespoints[:, 3] = 1.
+            transpoints[:, 3] = 0.
+            linespoints[0, 0:3] = obj.points[0, :]
+            transpoints[0, 0:3] = obj.trans[0, :]
+            for i in range(1, obj.points.shape[0]-1):
+                linespoints[2*i - 1, 0:3] = obj.points[i, :]
+                transpoints[2*i - 1, 0:3] = obj.trans[i, :]
+                linespoints[2*i, 0:3] = obj.points[i, :]
+                transpoints[2*i, 0:3] = obj.trans[i, :]
+            linespoints[-1, 0:3] = obj.points[-1, :]
+            transpoints[-1, 0:3] = obj.trans[-1, :]
+
+            glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*4*2, linespoints)
+            glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*4*2, transpoints)
+            glutPostRedisplay()
+        
+    def push_all_object_info(self, dex):
+        self.do_update_object_points(dex, self.objects[dex])
+
+        objindexcopies = numpy.empty(2*(self.objects[dex].points.shape[0]-1), dtype=numpy.int32)
+        objindexcopies[:] = self.object_index[dex]
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*1*2, objindexcopies)
+        
+        self.do_update_object_matrix(dex, self.objects[dex])
+        self.do_update_object_color(dex, self.objects[dex])
+            
+    # Never call this directly!  It should only be called from within the
+    #   draw method of a GLUTContext
+    #
+    # (This has a lot of redundant code with the same method in SimpleObjectCollection.)
+    def draw(self):
+        with GLUTContext._threadlock:
+            # sys.stderr.write("Drawing Curve Tube Collection with shader progid {}\n".format(self.shader.progid))
+            glUseProgram(self.shader.progid)
+            self.bind_uniform_buffers()
+            self.bind_vertex_attribs()
+            self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
+                                        self.context._clipnear, self.context._clipfar)
+            self.shader.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
+                                          self.context._camtheta, self.context._camphi)
+
+            if self.draw_as_lines:
+                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            else:
+                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+            glBindVertexArray(self.VAO)
+            # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
+            glDrawArrays(GL_LINES, 0, self.curnumlines*2)
+        pass
+        
 # ======================================================================
 #
 # AK.  It's been a while, and I didn't comment.
@@ -539,7 +728,8 @@ class GLUTContext(Observer):
         self._origphi = 0.
         self._origcamz = 0.
 
-        self.object_collections = []
+        self.simple_object_collections = []
+        self.curve_collections = []
 
         GLUTContext.class_init_2(self)
 
@@ -548,7 +738,8 @@ class GLUTContext(Observer):
         while not self.window_is_initialized:
             time.sleep(0.1)
 
-        self.object_collections.append(GLObjectCollection(self, Shader.get("Basic Shader", self)))
+        self.simple_object_collections.append(SimpleObjectCollection(self))
+        self.curve_collections.append(CurveCollection(self))
 
         sys.stderr.write("Exiting __init__\n")
 
@@ -560,7 +751,7 @@ class GLUTContext(Observer):
         glutDisplayFunc(lambda : self.draw())
         glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
         # Right now, the timer just prints FPS
-        # glutTimerFunc(0, lambda val : self.timer(val), 0)
+        glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
         self.window_is_initialized = True
         sys.stderr.write("Exiting gl_init\n")
@@ -659,14 +850,16 @@ class GLUTContext(Observer):
 
     def resize2d_gl(self):
         glViewport(0, 0, self.width, self.height)
-        for collection in self.object_collections:
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
             collection.shader.set_perspective(self._fov, self.width/self.height,
                                               self._clipnear, self._clipfar)
 
     def update_cam_posrot_gl(self):
         # sys.stderr.write("Moving camera to [{:.2f}, {:.2f}, {:.2f}], setting rotation to [{:.3f}, {:.3f}]\n"
         #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
-        for collection in self.object_collections:
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
             collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
 
     def draw(self):
@@ -674,7 +867,8 @@ class GLUTContext(Observer):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_DEPTH_TEST)
 
-        for collection in self.object_collections:
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
             collection.draw()
 
             err = glGetError()
@@ -689,7 +883,10 @@ class GLUTContext(Observer):
 
     def add_object(self, obj):
         # Try to figure out which collection this goes into for real
-        self.object_collections[0].add_object(obj)
+        if obj._object_type == _OBJ_TYPE_SIMPLE:
+            self.simple_object_collections[0].add_object(obj)
+        elif obj._object_type == _OBJ_TYPE_CURVE:
+            self.curve_collections[0].add_object(obj)
 
     def remove_object(self, obj):
         raise Exception("GAH!  Removing objects isn't implemented.")
@@ -697,26 +894,82 @@ class GLUTContext(Observer):
 # ======================================================================
 # ======================================================================
 # ======================================================================
+# Shader objects.  There probably needs to be a separate Shader subclass
+# for each GLObjectCollection subclass.
 
 class Shader(object):
     _basic_shader = {}
+    _curvetube_shader = {}
 
     @staticmethod
     def get(name, context):
         if name == "Basic Shader":
             with GLUTContext._threadlock:
+                sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._basic_shader) or
                      (Shader._basic_shader[context] == None) ):
-                    sys.stderr.write("Asking for a BasicShader\n")
+                    sys.stderr.write("Creating a new BasicShader\n")
                     Shader._basic_shader[context] = BasicShader(context)
             return Shader._basic_shader[context]
+
+        elif name == "Curve Tube Shader":
+            with GLUTContext._threadlock:
+                sys.stderr.write("Asking for a BasicShader\n")
+                if ( (not context in Shader._curvetube_shader) or
+                     (Shader._curvetube_shader[context] == None) ):
+                    sys.stderr.write("Creating a new CurveTubeShader\n");
+                    Shader._curvetube_shader[context] = CurveTubeShader(context)
+            return Shader._curvetube_shader[context]
 
         else:
             raise Exception("Unknown shader \"{}\"".format(name))
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, context, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # ROB!  Warn about unknown arguments
+        self.context = context
+        self._name = None
+        self._shaders_destroyed = False
+        self.vtxshdrid = None
+        self.geomshdrid = None
+        self.fragshdrid = None
         self.progid = None
+
+    # This makes me feel very queasy.  A wait for another thread in
+    #   a __del__ is probably just asking for circular references
+    #   to trip you up.  *But*, I gotta run all my GL code in
+    #   a single thread.  So... hurm.
+    def __del__(self):
+        sys.stderr.write("Shader __del__\n")
+        GLUTContext.run_glcode(lambda : self.destroy_shaders())
+        while not self._shaders_destroyed:
+            time.sleep(0.1)
+        sys.stderr.write("...BasicShader __del__ completed\n")
+
+    def destroy_shaders(self):
+        sys.stderr.write("Shader destroy_shaders\n")
+        err = glGetError()
+
+        glUseProgram(0)
+
+        glDetachShader(self.progid, self.vtxshdrid)
+        glDetachShader(self.progid, self.fragshdrid)
+        if self.geomshdrid is not None:
+            glDetachShader(self.progid, self.geomshdrid)
+        
+        glDeleteShader(self.fragshdrid)
+        glDeleteShader(self.vtxshdrid)
+        if self.geomshdrid is not None:
+            glDetachShader(self.progid, self.geomshdrid)
+        
+        glDeleteProgram(self.progid)
+
+        err = glGetError()
+        if err != GL_NO_ERROR:
+            sys.stderr.write("Error {} destroying shaders: {}\n".format(err, gluErrorString(err)))
+            sys.exit(-1)
+
+        self._shaders_destroyed = True
 
     def get_shader(self):
         return self.progid
@@ -740,19 +993,62 @@ class Shader(object):
                              [0, 0, -1, 0]], dtype=numpy.float32).T
 
 
+    def init_lights_and_camera(self):
+        sys.stderr.write("Shader: init_lights_and_camera\n")
+        loc = glGetUniformLocation(self.progid, "ambientcolor")
+        glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
+        loc = glGetUniformLocation(self.progid, "light1color")
+        glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
+        loc = glGetUniformLocation(self.progid, "light1dir")
+        glUniform3fv(loc, 1, numpy.array([0.22, 0.44, 0.88]))
+        loc = glGetUniformLocation(self.progid, "light2color")
+        glUniform3fv(loc, 1, numpy.array([0.3, 0.3, 0.3]))
+        loc = glGetUniformLocation(self.progid, "light2dir")
+        glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
+
+        self.set_perspective(self.context._fov, self.context.width/self.context.height,
+                             self.context._clipnear, self.context._clipfar)
+        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
+                               self.context._camtheta, self.context._camphi)
+
+    def set_perspective(self, fov, aspect, near, far):
+        # sys.stderr.write("Shader: set_perspective\n")
+        matrix = self.perspective_matrix(fov, aspect, near,far)
+        # sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
+        glUseProgram(self.progid)
+        projection_location = glGetUniformLocation(self.progid, "projection")
+        glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
+        glutPostRedisplay()
+        
+    def set_camera_posrot(self, x, y, z, theta, phi):
+        # sys.stderr.write("Shader: set_camera_posrot\n")
+        theta -= math.pi/2.
+        if (theta >  math.pi/2): theta =  math.pi/2.
+        if (theta < -math.pi/2): theta = -math.pi/2.
+        if (phi > 2.*math.pi): phi -= 2.*math.pi
+        if (phi < 0.): phi += 2.*math.pi
+        ct = math.cos(theta)
+        st = math.sin(theta)
+        cp = math.cos(phi)
+        sp = math.sin(phi)
+        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  , -x ],
+                               [ -sp*st  ,  ct   , cp*st , -y ],
+                               [ -sp*ct  , -st   , cp*ct , -z ],
+                               [    0.   ,   0.  ,   0.  ,  1.]], dtype=numpy.float32)
+        # sys.stderr.write("View matrix:\n{}\n".format(matrix.T))
+        glUseProgram(self.progid)
+        view_location = glGetUniformLocation(self.progid, "view")
+        glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
+        glutPostRedisplay()
+
+# ======================================================================
+ # This shader goes with _OBJ_TYPE_SIMPLE and SimpleObjectCollection
 
 class BasicShader(Shader):
     def __init__(self, context, *args, **kwargs):
         sys.stderr.write("Initializing a Basic Shader...\n")
-        super().__init__(*args, **kwargs)
-        self.context = context
+        super().__init__(context, *args, **kwargs)
         self._name = "Basic Shader"
-        self._shaders_destroyed = False
-
-        self.vtxshdrid = None
-        self.fragshdrid = None
-        self.progid = None
-
         GLUTContext.run_glcode(lambda : self.create_shaders())
 
     def create_shaders(self):
@@ -827,7 +1123,7 @@ void main(void)
         glCompileShader(self.fragshdrid)
 
         sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
-
+        
         self.progid = glCreateProgram()
         glAttachShader(self.progid, self.vtxshdrid)
         glAttachShader(self.progid, self.fragshdrid)
@@ -839,87 +1135,275 @@ void main(void)
 
         glUseProgram(self.progid)
 
+        sys.stderr.write("Basic Shader created with progid {}\n".format(self.progid))
+        
         err = glGetError()
         if err != GL_NO_ERROR:
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
-        loc = glGetUniformLocation(self.progid, "ambientcolor")
-        glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
-        loc = glGetUniformLocation(self.progid, "light1color")
-        glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
-        loc = glGetUniformLocation(self.progid, "light1dir")
-        glUniform3fv(loc, 1, numpy.array([0.22, 0.44, 0.88]))
-        loc = glGetUniformLocation(self.progid, "light2color")
-        glUniform3fv(loc, 1, numpy.array([0.3, 0.3, 0.3]))
-        loc = glGetUniformLocation(self.progid, "light2dir")
-        glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
+        self.init_lights_and_camera()
+            
 
-        self.set_perspective(self.context._fov, self.context.width/self.context.height,
-                             self.context._clipnear, self.context._clipfar)
-        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
-                               self.context._camtheta, self.context._camphi)
+# ======================================================================
+# This goes with _OBJ_TYPE_CURVE and CurveCollection
 
-    # This makes me feel very queasy.  A wait for another thread in
-    #   a __del__ is probably just asking for circular references
-    #   to trip you up.  *But*, I gotta run all my GL code in
-    #   a single thread.  So... hurm.
-    def __del__(self):
-        sys.stderr.write("BasicShader __del__\n")
-        GLUTContext.run_glcode(lambda : self.destroy_shaders())
-        while not self._shaders_destroyed:
-            time.sleep(0.1)
-        sys.stderr.write("...BasicShader __del__ completed\n")
+class CurveTubeShader(Shader):
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(context, *args, **kwargs)
+        sys.stderr.write("Initializing a CurveTubeShader")
+        self._name = "Curve Tube Shader"
 
-    def destroy_shaders(self):
-        sys.stderr.write("BasicShader destroy_shaders\n")
+        GLUTContext.run_glcode(lambda : self.create_shaders())
+
+    def create_shaders(self):
         err = glGetError()
+      
+        vertex_shader = """
+#version 330
 
-        glUseProgram(0)
+uniform mat4 view;
+uniform mat4 projection;
 
-        glDetachShader(self.progid, self.vtxshdrid)
-        glDetachShader(self.progid, self.fragshdrid)
+layout (std140) uniform ModelMatrix
+{
+   mat4 model_matrix[512];
+};
 
-        glDeleteShader(self.fragshdrid)
-        glDeleteShader(self.vtxshdrid)
+layout (std140) uniform ModelNormalMatrix
+{
+   mat3 model_normal_matrix[512];
+};
 
-        glDeleteProgram(self.progid)
+layout (std140) uniform Colors
+{
+   vec4 color[512];
+};
+
+layout(location=0) in vec4 in_Position;
+layout(location=1) in vec3 in_Transverse;
+layout(location=2) in int in_Index;
+out vec3 aTransverse;
+out vec4 aColor;
+
+void main(void)
+{
+  gl_Position =  model_matrix[in_Index] * in_Position;
+  // aTransverse = model_normal_matrix[in_Index] * in_Transverse;
+  vec4 tmp = vec4(in_Transverse, 0);
+  tmp = model_matrix[in_Index] * tmp;
+  aTransverse = tmp.xyz;
+  aColor = color[in_Index];
+}"""
+
+        skeleton_geometry_shader = """
+#version 330
+layout(lines) in;
+in vec3 aTransverse[];
+in vec4 aColor[];
+
+layout(line_strip, max_vertices = 4) out;
+out vec3 aNormal;
+out vec4 bColor;
+
+void main(void)
+{
+    gl_Position = gl_in[0].gl_Position + vec4(aTransverse[0], 0);
+    aNormal = vec3(1, 0, 0);
+    bColor = aColor[0];
+    EmitVertex();
+
+    gl_Position = gl_in[0].gl_Position;
+    aNormal = vec3(1, 0, 0);
+    bColor = aColor[0];
+    EmitVertex();
+
+    gl_Position = gl_in[1].gl_Position;
+    aNormal = vec3(1, 0, 0);
+    bColor = aColor[1];
+    EmitVertex();
+
+    gl_Position = gl_in[1].gl_Position + vec4(aTransverse[1], 0);
+    aNormal = vec3(1, 0, 0);
+    bColor = aColor[1];
+    EmitVertex();
+
+    EndPrimitive();
+}
+"""
+
+        geometry_shader = """
+#version 330
+
+const float PI = 3.14159265359;
+
+uniform mat4 view;
+uniform mat4 projection;
+
+layout(lines) in;
+in vec3 aTransverse[];
+in vec4 aColor[];
+
+layout(triangle_strip, max_vertices = 18) out;
+out vec3 aNormal;
+out vec4 bColor;
+
+void main(void)
+{
+    vec4 bottompoints[8];
+    vec3 bottomnormal[8];
+    vec4 toppoints[8];
+    vec3 topnormal[8];
+    vec3 perp;
+    vec3 axishat;
+    vec3 transhat;
+    vec4 q;
+    vec4 qinv;
+    vec4 tmp;
+    float phi;
+
+    axishat = vec3(gl_in[1].gl_Position - gl_in[0].gl_Position);
+    axishat /= length(axishat);
+
+    transhat = aTransverse[0] / length(aTransverse[0]);
+    perp = axishat - transhat * dot(axishat, transhat);
+    perp /= length(perp);
+
+    for (int i = 0 ; i < 8 ; ++i)
+    {
+        phi = 2.*PI * i / 8.;
+        q  = vec4( perp * sin(phi/2.), cos(phi/2.) );
+        qinv = vec4( -q.xyz, q.w );
+
+        tmp = vec4(  aTransverse[0].x * qinv.w + aTransverse[0].y * qinv.z - aTransverse[0].z * qinv.y,
+                    -aTransverse[0].x * qinv.z + aTransverse[0].y * qinv.w + aTransverse[0].z * qinv.x,
+                     aTransverse[0].x * qinv.y - aTransverse[0].y * qinv.x + aTransverse[0].z * qinv.w,
+                    -aTransverse[0].x * qinv.x - aTransverse[0].y * qinv.y - aTransverse[0].z * qinv.z );
+        
+        tmp = vec4( q.w * tmp.x + q.x * tmp.w + q.y * tmp.z - q.z * tmp.y,
+                    q.w * tmp.y - q.x * tmp.z + q.y * tmp.w + q.z * tmp.x,
+                    q.w * tmp.z + q.x * tmp.y - q.y * tmp.x + q.z * tmp.w,
+                    q.w * tmp.w - q.x * tmp.x - q.y * tmp.y - q.z * tmp.z );
+
+        bottompoints[i] = gl_in[0].gl_Position + tmp;
+        bottomnormal[i] = tmp.xyz / length(tmp.xyz);
+    }
+
+    transhat = aTransverse[1] / length(aTransverse[1]);
+    perp = axishat - transhat * dot(axishat, transhat);
+    perp /= length(perp);
+
+    for (int i = 0 ; i < 8 ; ++i)
+    {
+        phi = 2.*PI * i / 8.;
+        q  = vec4( perp * sin(phi/2.), cos(phi/2.) );
+        qinv = vec4( -q.xyz, q.w );
+
+        tmp = vec4(  aTransverse[1].x * qinv.w + aTransverse[1].y * qinv.z - aTransverse[1].z * qinv.y,
+                    -aTransverse[1].x * qinv.z + aTransverse[1].y * qinv.w + aTransverse[1].z * qinv.x,
+                     aTransverse[1].x * qinv.y - aTransverse[1].y * qinv.x + aTransverse[1].z * qinv.w,
+                    -aTransverse[1].x * qinv.x - aTransverse[1].y * qinv.y - aTransverse[1].z * qinv.z );
+        
+        tmp = vec4( q.w * tmp.x + q.x * tmp.w + q.y * tmp.z - q.z * tmp.y,
+                    q.w * tmp.y - q.x * tmp.z + q.y * tmp.w + q.z * tmp.x,
+                    q.w * tmp.z + q.x * tmp.y - q.y * tmp.x + q.z * tmp.w,
+                    q.w * tmp.w - q.x * tmp.x - q.y * tmp.y - q.z * tmp.z );
+
+        toppoints[i] = gl_in[1].gl_Position + tmp;
+        topnormal[i] = tmp.xyz / length(tmp.xyz);
+    }
+
+    gl_Position = projection * view * toppoints[7];
+    bColor = aColor[1];
+    aNormal = topnormal[7];
+    EmitVertex();
+
+    for (int i = 0 ; i < 8 ; ++i)
+    {
+        gl_Position = projection * view * toppoints[i];
+        bColor = aColor[1];
+        aNormal = topnormal[i];
+        EmitVertex();
+        gl_Position = projection * view * bottompoints[i];
+        bColor = aColor[0];
+        aNormal = bottomnormal[i];
+        EmitVertex();
+    }
+
+    gl_Position = projection * view * bottompoints[0];
+    bColor = aColor[0];
+    aNormal = bottomnormal[0];
+    EmitVertex();
+
+    EndPrimitive();
+}
+"""
+   
+        fragment_shader = """
+#version 330
+
+uniform vec3 ambientcolor;
+uniform vec3 light1color;
+uniform vec3 light1dir;
+uniform vec3 light2color;
+uniform vec3 light2dir;
+
+in vec3 aNormal;
+in vec4 bColor;
+out vec4 out_Color;
+
+void main(void)
+{
+  vec3 norm = normalize(aNormal);
+  vec3 diff1 = max(dot(norm, light1dir), 0.) * light1color;
+  vec3 diff2 = max(dot(norm, light2dir), 0.) * light2color;
+  vec3 col = (ambientcolor + diff1 + diff2) * vec3(bColor);
+  out_Color = vec4(col, bColor[3]);
+}"""
+
+        sys.stderr.write("\nAbout to compile vertex shader....\n")
+        self.vtxshdrid = glCreateShader(GL_VERTEX_SHADER)
+        glShaderSource(self.vtxshdrid, vertex_shader)
+        glCompileShader(self.vtxshdrid)
+        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+
+        sys.stderr.write("\nAbout to compile geometry shader....\n")
+        self.geomshdrid = glCreateShader(GL_GEOMETRY_SHADER)
+        glShaderSource(self.geomshdrid, geometry_shader)
+        # glShaderSource(self.geomshdrid, skeleton_geometry_shader)
+        glCompileShader(self.geomshdrid)
+        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.geomshdrid)))
+
+        sys.stderr.write("\nAbout to compile fragment shader....\n")
+        self.fragshdrid = glCreateShader(GL_FRAGMENT_SHADER)
+        glShaderSource(self.fragshdrid, fragment_shader)
+        glCompileShader(self.fragshdrid)
+        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+
+        sys.stderr.write("About to create shader program...\n")
+        self.progid = glCreateProgram()
+        glAttachShader(self.progid, self.vtxshdrid)
+        glAttachShader(self.progid, self.geomshdrid)
+        glAttachShader(self.progid, self.fragshdrid)
+        glLinkProgram(self.progid)
+        sys.stderr.write("Shader program linked.\n")
+
+        if glGetProgramiv(self.progid, GL_LINK_STATUS) != GL_TRUE:
+            sys.stderr.write("{}\n".format(glGetProgramInfoLog(self.progid)))
+            sys.exit(-1)
+
+        glUseProgram(self.progid)
+
+        sys.stderr.write("Curve Tube Shader created with progid {}\n".format(self.progid))
 
         err = glGetError()
         if err != GL_NO_ERROR:
-            sys.stderr.write("Error {} destroying shaders: {}\n".format(err, gluErrorString(err)))
+            sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
-        self._shaders_destroyed = True
+        self.init_lights_and_camera()
 
-    def set_perspective(self, fov, aspect, near, far):
-        matrix = self.perspective_matrix(fov, aspect, near,far)
-        # sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
-        glUseProgram(self.progid)
-        projection_location = glGetUniformLocation(self.progid, "projection")
-        glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
-        glutPostRedisplay()
         
-    def set_camera_posrot(self, x, y, z, theta, phi):
-        theta -= math.pi/2.
-        if (theta >  math.pi/2): theta =  math.pi/2.
-        if (theta < -math.pi/2): theta = -math.pi/2.
-        if (phi > 2.*math.pi): phi -= 2.*math.pi
-        if (phi < 0.): phi += 2.*math.pi
-        ct = math.cos(theta)
-        st = math.sin(theta)
-        cp = math.cos(phi)
-        sp = math.sin(phi)
-        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  , -x ],
-                               [ -sp*st  ,  ct   , cp*st , -y ],
-                               [ -sp*ct  , -st   , cp*ct , -z ],
-                               [    0.   ,   0.  ,   0.  ,  1.]], dtype=numpy.float32)
-        # sys.stderr.write("View matrix:\n{}\n".format(matrix.T))
-        glUseProgram(self.progid)
-        view_location = glGetUniformLocation(self.progid, "view")
-        glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
-        glutPostRedisplay()
-
 # ======================================================================
 # ======================================================================
 # ======================================================================
@@ -930,6 +1414,7 @@ class GrObject(Subject):
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self._object_type = _OBJ_TYPE_SIMPLE
         self._make_trail = False
         self.num_triangles = 0
         self._visible = True
@@ -970,8 +1455,6 @@ class GrObject(Subject):
                 self._color[3] = 1.
             else:
                 self._color[3] = opacity
-        self.update_colordata()
-
 
         self.model_matrix = numpy.array( [ [ 1., 0., 0., 0. ],
                                            [ 0., 1., 0., 0. ],
@@ -998,7 +1481,6 @@ class GrObject(Subject):
         self.make_trail = make_trail
 
     def finish_init(self):
-        self.update_colordata()
         self.update_model_matrix()
         self.context.add_object(self)
 
@@ -1141,12 +1623,6 @@ class GrObject(Subject):
         q = numpy.array( [axis[0]*s, axis[1]*s, axis[2]*s, c] )
         self.rotation = quaternion_multiply(q, self.rotation)
 
-    def update_colordata(self):
-        if (self.colordata is None) or (self.colordata.size != 3*4*self.num_triangles):
-            self.colordata = numpy.empty(3*4*self.num_triangles, dtype=numpy.float32)
-        for i in range(3*self.num_triangles):
-            self.colordata[4*i:4*(i+1)] = self._color
-
     def update_model_matrix(self):
         q = self._rotation
         s = 1./( (q*q).sum() )
@@ -1197,7 +1673,7 @@ class GrObject(Subject):
             sys.stderr.write("ERROR!  Need all of r, g, and b for color.\n")
             sys.exit(20)
         self._color[0:3] = numpy.array(rgb)
-        self.update_colordata()
+        self.broadcast("update color")
 
     @property
     def opacity(self):
@@ -1207,6 +1683,7 @@ class GrObject(Subject):
     def opacity(self, alpha):
         self._color[3] = alpha
         self.update_colordata()
+        self.broadcast("update color")
 
     @property
     def make_trail(self):
@@ -1250,7 +1727,11 @@ class GrObject(Subject):
     def initialize_trail(self):
         self.kill_trail()
         sys.stderr.write("Initializing trail at position {}.\n".format(self._position))
-        self._trail = Curve(color=self._color, maxpoints=self._retain, points=[ self._position ], num_edge_points=6)
+        self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
+                                    points=[ self._position ], num_edge_points=6)
+        # points = numpy.empty( [ self._retain, 3 ] , dtype=numpy.float32 )
+        # points[:, :] = self._position[numpy.newaxis, :]
+        # self._trail = Curve(color=self._color, points=points, radius=0.05)
         self._nexttrail = self._interval
 
     def update_trail(self):
@@ -1259,6 +1740,7 @@ class GrObject(Subject):
         if self._nexttrail <= 0:
             self._nexttrail = self._interval
             self._trail.add_point(self._position)
+            # self._trail.push_point(self._position)
 
                 
     def __del__(self):
@@ -1997,7 +2479,7 @@ class Arrow(GrObject):
 # of triangles.  The underlying GrObject code assumes that once you've initialized,
 # the number of triangles stays fixed.
 
-class Helix(GrObject):
+class OldHelix(GrObject):
     def __init__(self, radius=1., coils=5., length=1., thickness=None,
                  num_edge_points=5, num_circ_points=8,
                  *args, **kwargs):
@@ -2339,9 +2821,171 @@ class Helix(GrObject):
         self.broadcast("update vertices")
         
 # ======================================================================
-# A Curve is not a GrObject, even though some of the interface is the same
+# This is a curve intended when you're going to update the points a lot.
+# The full triangles are actually caulcated in a geometry shader, which
+# will be a lot faster than calculating them in python...  but they get
+# redone every bloody frame.  This is reaosnable if the curve's points
+# are being updated a lot, as the calculations will have to be redone a
+# lot as is.  If the curve's points are hardly ever updated, then it's
+# much better to use another class that I haven't written yet....
+#
+# This is curve is "fixed length" in terms of number of points, not in
+# terms of any actual physical dimension.
 
-class Curve(object):
+class FixedLengthCurve(GrObject):
+    def __init__(self, radius=0.05, points=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._object_type = _OBJ_TYPE_CURVE
+        
+        self._radius = radius
+        if points is None:
+            sys.stderr.write("Created an empty curve, doing nothing.\n")
+            return
+
+        self._points = numpy.array(points, dtype=numpy.float32)
+        if len(points.shape) != 2 or points.shape[1] != 3:
+            raise Exception("Illegal points; must be n×3.")
+        self._transverse = []
+        
+        self.make_transverse()
+
+        self.finish_init()
+
+    # Adds a point to the end of the curve
+    #   and removes the first point.
+    def push_point(self, pos):
+        self._points[:-1, :] = self._points[1:, :]
+        # error check pos?
+        self._points[-1, :] = pos
+        self._transverse[:-1, :] = self._transverse[1:, :]
+        axishat = self._points[-1, :] - self._points[-2, :]
+        axishat /= numpy.sqrt(numpy.square(axishat).sum())
+        self._transverse[-1, :] = self._transverse[-2, :] - axishat * (self._transverse[-2, :] * axishat).sum()
+        self._transverse[-1, :] /= numpy.sqrt(numpy.square(self._transverse[-1, :]).sum())
+        self._transverse[-1, :] *= self._radius
+        self.broadcast("update vertices")
+        
+    @property
+    def points(self):
+        return self._points
+
+    @points.setter
+    def points(self, points):
+        if len(points.shape) != 2 or points.shape[1] != 3:
+            raise Exception("Illegal points; must be n×3.")
+        self._points = numpy.array(points, dtype=numpy.float32)
+        self.make_transverse()
+        self.broadcast("update vertices")
+
+    @property
+    def trans(self):
+        return self._transverse
+        
+    @property
+    def radius(self):
+        return self._radius
+
+    @radius.setter
+    def radius(self, rad):
+        if self._radius != rad:
+            self._radius = rad
+            self.make_transverse()
+            self.broadcast("update vertices")
+
+    def make_transverse(self):
+        self._transverse = numpy.empty( self._points.shape , dtype=numpy.float32)
+        axes = self._points[1:, :] - self.points[:-1, :]
+        axesmag = numpy.sqrt(numpy.square(axes).sum(axis=1))
+        # Note: this will div by 0 if any points are doubled
+        hatxes = axes / axesmag[:, numpy.newaxis]
+
+        if self._points.shape[0] > 2:
+            # All points but first and last
+
+            self._transverse[1:-1, :] = axes[:-1] - axes[1:]
+            
+            # First and last points : take the adjacent transverse, but then only
+            # the component perpendicular to the one axis it's sticking to
+
+            self._transverse[0, : ] = self._transverse[1, :] - hatxes[0] * (self._transverse[1, :] * hatxes[0]).sum()
+            self._transverse[-1, :] = self._transverse[-2, :] - hatxes[1] * (self._transverse[-2, :] *
+                                                                             hatxes[-1]).sum()
+        else:
+            # if axis isn't along z, cross z with it get transverse.  Otherwise, cross x with it
+            if hatxes[0, 2] < 0.9:
+                self._transverse[0:1, :] = numpy.array( [ -hatxes[0, 1], hatxes[0, 0], 0. ], dtype=numpy.float32 )
+            else:
+                self._transverse[0:1, :] = numpy.array( [ 0., -hatxes[0, 2], hatxes[0, 1] ], dtype=numpy.flat32 )
+                
+        transmag = numpy.sqrt(numpy.square(self._transverse).sum(axis=1))
+        self._transverse *= self._radius / transmag[:, numpy.newaxis]
+        
+# ======================================================================
+
+class Helix(FixedLengthCurve):
+    def __init__(self, radius=1., coils=5., length=1., thickness=None,
+                 num_circ_points=12, *args, **kwargs):
+
+        self._length = length
+        self._helixradius = radius
+        if thickness is None:
+            self._thickness = 0.05 * self._helixradius
+        else:
+            self._thickness = thickness
+        self._coils = coils
+        self._num_circ_points = int(num_circ_points)
+
+        self._ncenters = int(math.floor(coils * num_circ_points + 0.5)) + 1
+
+        self.calculate_helix_points()
+
+        super().__init__(radius=self._thickness, points=self._helix_points, *args, **kwargs)
+        
+    def calculate_helix_points(self):
+        dphi = 2.*math.pi / self._num_circ_points
+        dx = self._length / (self._ncenters - 1)
+
+        centcounter = numpy.arange(self._ncenters)
+        self._helix_points = numpy.empty( [ self._ncenters, 3], dtype=numpy.float32 )
+        self._helix_points[:, 0] = dx * centcounter
+        self._helix_points[:, 1] = self._helixradius * numpy.sin(dphi * centcounter)
+        self._helix_points[:, 2] = self._helixradius * numpy.cos(dphi * centcounter)
+        
+    @property
+    def length(self):
+        return self._length
+
+    @length.setter
+    def length(self, value):
+        self._length = value
+        self.calculate_helix_points()
+        self.points = self._helix_points
+
+    @property
+    def radius(self):
+        return self._helixradius
+
+    @radius.setter
+    def radius(self, value):
+        self._helixradius = value
+        self.calculate_helix_points()
+        self.points = self._helix_points
+
+    @property
+    def thickness(self):
+        return self._thickness
+    
+    @thickness.setter
+    def thickness(self, value):
+        self._thickness = value
+        # This is what I call "radius" in the FixedLengthCurve class
+        self.radius = self._thickness
+            
+# ======================================================================
+# A CylindarStack is not a GrObject, even though some of the interface is the same
+
+class CylindarStack(object):
     def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
         self._position = numpy.array( [0., 0., 0.] )
         if points is not None:
@@ -2432,12 +3076,13 @@ def main():
     doblob = True
     doarrow = True
     dohelix = True
+    docurve = True
 
     # Make objects
     
     if dobox1:
         sys.stderr.write("Making box1.\n")
-        box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=color.blue)
+        box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=[0.5, 0., 1.])
     if dobox2:
         sys.stderr.write("Making box2.\n")
         box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
@@ -2468,7 +3113,15 @@ def main():
     if dohelix:
         sys.stderr.write("Making helix.\n")
         helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
-                      num_circ_points=8, num_edge_points=5)
+                      num_circ_points=12)
+
+    if docurve:
+        sys.stderr.write("Making curve.\n")
+        points = numpy.empty( [100, 3] )
+        for i in range(100):
+            phi = 6*math.pi * i / 50.
+            points[i] = [0.375*math.cos(phi), 0.375*math.sin(phi), 1.5 * i*i / 5000. ]
+        curve = FixedLengthCurve(radius = 0.05, color = (0.75, 1.0, 0.), points = points)
         
     # Updates
     
@@ -2498,6 +3151,9 @@ def main():
         #                                  math.cos(theta)] )
 
 
+        if dobox1:
+            box1.color = [ 0.5, (1. + math.sin(phi))/2., (1. + math.cos(phi2))/2. ]
+
         if doball:
             ball.x = 2.*math.cos(phi)
             if math.sin(phi)>0.:
@@ -2509,7 +3165,7 @@ def main():
             q = numpy.array( [0., 0., -math.sin(math.pi/6.), math.cos(math.pi/6.)] )
             box2.position = quaternion_rotate(numpy.array( [ 2.*math.sin(phi2),
                                                              1.5*math.sin(phi),
-                                                             1.5*math.cos(phi) ] ),
+-                                                             1.5*math.cos(phi) ] ),
                                                            q )
             # box2.position = quaternion_multiply( numpy.array( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)] ),
             #                                       quaternion_multiply( numpy.array( [ 2.*math.sin(phi2),

@@ -6,6 +6,7 @@ import math
 import time
 import queue
 import threading
+# import multiprocessing
 import random
 import uuid
 import ctypes
@@ -36,8 +37,11 @@ def rate(fps):
         time.sleep(1./fps)
     else:
         sleeptime = _time_of_last_rate_call + 1./fps - time.perf_counter()
-        if sleeptime > 0:
+        # sys.stderr.write("Sleeping for {} seconds\n".format(sleeptime))
+        if sleeptime > 0.01:
             time.sleep(sleeptime)
+        else:
+            time.sleep(0.01)
     _time_of_last_rate_call = time.perf_counter()
 
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
@@ -202,7 +206,6 @@ class GLObjectCollection(Observer):
 
     def do_update_object_matrix(self, dex, obj):
         with GLUTContext._threadlock:
-            # sys.stderr.write("Updating an object matrix.\n")
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
             glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
@@ -434,6 +437,7 @@ class SimpleObjectCollection(GLObjectCollection):
             glBindVertexArray(self.VAO)
             # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
             glDrawArrays(GL_TRIANGLES, 0, self.curnumtris*3)
+            # sys.stderr.write("...done drawing triangles.")
 
 
 # ======================================================================
@@ -560,6 +564,8 @@ class CurveCollection(GLObjectCollection):
         
         self.do_update_object_matrix(dex, self.objects[dex])
         self.do_update_object_color(dex, self.objects[dex])
+
+        glutPostRedisplay()
             
     # Never call this directly!  It should only be called from within the
     #   draw method of a GLUTContext
@@ -583,7 +589,7 @@ class CurveCollection(GLObjectCollection):
             glBindVertexArray(self.VAO)
             # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
             glDrawArrays(GL_LINES, 0, self.curnumlines*2)
-        pass
+            # sys.stderr.write("...done drawing lines\n");
         
 # ======================================================================
 #
@@ -648,7 +654,8 @@ class GLUTContext(Observer):
             GLUTContext.things_to_run = queue.Queue()
 
             # sys.stderr.write("Starting GLUT thread...\n")
-            GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
+            # GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
+            GLUTContext.thread = threading.Thread(target=GLUTContext.thread_main, args=(instance,))
             GLUTContext.thread.daemon = True
             GLUTContext.thread.start()
             # sys.stderr.write("GLUTContext.thread.ident = {}\n".format(GLUTContext.thread.ident))
@@ -660,12 +667,13 @@ class GLUTContext(Observer):
     # There's a race condition here on idle_funcs and things_to_run
     @staticmethod
     def thread_main(instance):
-        # sys.stderr.write("Starting thread_main\n")
+        sys.stderr.write("Starting thread_main\n")
         glutInitWindowSize(instance.width, instance.height)
         glutInitWindowPosition(0, 0)
         instance.window = glutCreateWindow(instance.title)
         glutSetWindow(instance.window)
         glutIdleFunc(lambda: GLUTContext.idle())
+        sys.stderr.write("Going into GLUT main loop.\n")
         glutMainLoop()
 
     @staticmethod
@@ -904,18 +912,21 @@ class GLUTContext(Observer):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_DEPTH_TEST)
 
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
-            collection.draw()
+        with GLUTContext._threadlock:
+            # sys.stderr.write("About to draw collections\n")
+            for collection in itertools.chain( self.simple_object_collections,
+                                               self.curve_collections ):
+                
+                collection.draw()
 
-            err = glGetError()
-            if err != GL_NO_ERROR:
-                sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
-                sys.exit(-1)
+                err = glGetError()
+                if err != GL_NO_ERROR:
+                    sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
+                    sys.exit(-1)
 
-        glutSwapBuffers()
-        glutPostRedisplay()
-
+            glutSwapBuffers()
+            # sys.stderr.write("Done drawing collections.\n")
+            
         self.framecount += 1
 
     def add_object(self, obj):
@@ -2809,10 +2820,10 @@ def main():
         curve = FixedLengthCurve(radius = 0.05, color = (0.75, 1.0, 0.), points = points)
         
     if domanyelongatedboxes:
-        sys.stderr.write("Making 100 elongated boxes.\n")
+        n = 11
+        sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
         boxes = []
         phases = []
-        n = 10
         for i in range(n):
             for j in range (n):
                 x = i*4./n - 2.

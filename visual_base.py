@@ -20,12 +20,12 @@ from OpenGL.GLU import *
 
 _debug_shaders = False
 _print_fps = False
+_exit_whole_program = False
 
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
 _time_of_last_rate_call = None
-_exit_whole_program = False
 def rate(fps):
     global _time_of_last_rate_call
     global _exit_whole_program
@@ -875,7 +875,7 @@ class GLUTContext(Observer):
     def timer(self, val):
         global _print_fps
         if _print_fps:
-            sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
+            sys.stderr.write("Display fps: {}\n".format(self.framecount/2.))
         self.framecount = 0
         glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
@@ -2751,9 +2751,6 @@ class CylindarStack(object):
 # ======================================================================
 
 def main():
-    # Big array of elongated boxes
-
-    sys.stderr.write("Making boxes and peg and other things.\n")
     dobox1 = True
     dobox2 = True
     doball = True
@@ -2766,6 +2763,7 @@ def main():
     domanyelongatedboxes = True
 
     # Make objects
+    sys.stderr.write("Making boxes and peg and other things.\n")
     
     if dobox1:
         sys.stderr.write("Making box1.\n")
@@ -2831,10 +2829,15 @@ def main():
     phi = 0.
     phi2 = 0.
     fps = 30
+    global _print_fps
+    _print_fps = True
+    printfpsevery = 30
     dphi = 2*math.pi/(4.*fps)
 
     GLUTContext._default_context.gl_version_info()
 
+    lasttime = time.perf_counter()
+    nextprint = printfpsevery
     first = True
     while True:
 
@@ -2888,6 +2891,14 @@ def main():
                                              math.cos(theta)] )
 
         rate(fps)
+        nextprint -= 1
+        if nextprint <= 0 :
+            nextprint = printfpsevery
+            nexttime = time.perf_counter()
+            sys.stderr.write("Effective main() fps = {}\n".format(printfpsevery / (nexttime - lasttime)))
+            lasttime = nexttime
+                             
+        
 
 
 

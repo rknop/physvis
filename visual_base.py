@@ -803,7 +803,23 @@ class GLUTContext(Observer):
                 self._origcamz = self._camz
                 glutMotionFunc(lambda x, y : self.mmb_moved(x, y))
 
+        if button == GLUT_LEFT_BUTTON:
+            glutSetWindow(self.window)
+            
+            if state == GLUT_UP:
+                sys.stderr.write("LMB up\n")
+                glutMotionFunc(None)
 
+            if state == GLUT_DOWN:
+                sys.stderr.write("LMB down\n")
+                keys = glutGetModifiers()
+                if keys & GLUT_ACTIVE_SHIFT:
+                    self._mouseposx0 = x
+                    self._mouseposy0 = y
+                    self._origcamx = self._camx
+                    self._origcamy = self._camy
+                    glutMotionFunc(lambda x, y : self.lmb_moved(x, y))
+            
         if (state == GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
             glutSetWindow(self.window)
 
@@ -827,7 +843,13 @@ class GLUTContext(Observer):
         self._camz = self._origcamz * 10.**(dy/self.width)
         self.update_cam_posrot_gl()
 
-
+    def lmb_moved(self, x, y):
+        dx = x - self._mouseposx0
+        dy = y - self._mouseposy0
+        self._camx = self._origcamx - dx / 256.
+        self._camy = self._origcamy + dy / 256.
+        self.update_cam_posrot_gl()
+        
     def receive_message(self, message, subject):
         sys.stderr.write("OMG!  Got message {} from subject {}, should do something!\n"
                          .format(message, subject))
@@ -1031,14 +1053,21 @@ class Shader(object):
         st = math.sin(theta)
         cp = math.cos(phi)
         sp = math.sin(phi)
-        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  , -x ],
-                               [ -sp*st  ,  ct   , cp*st , -y ],
-                               [ -sp*ct  , -st   , cp*ct , -z ],
-                               [    0.   ,   0.  ,   0.  ,  1.]], dtype=numpy.float32)
-        # sys.stderr.write("View matrix:\n{}\n".format(matrix.T))
+        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  ,  0. ],
+                               [ -sp*st  ,  ct   , cp*st ,  0. ],
+                               [ -sp*ct  , -st   , cp*ct ,  -z ],
+                               [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
+        # sys.stderr.write("Viewrot matrix:\n{}\n".format(matrix.T))
         glUseProgram(self.progid)
-        view_location = glGetUniformLocation(self.progid, "view")
-        glUniformMatrix4fv(view_location, 1, GL_FALSE, matrix.T)
+        viewrot_location = glGetUniformLocation(self.progid, "viewrot")
+        glUniformMatrix4fv(viewrot_location, 1, GL_FALSE, matrix.T)
+        matrix = numpy.matrix([[    1.   ,   0.  ,   0.  , -x  ],
+                               [    0.   ,   1.  ,   0.  , -y  ],
+                               [    0.   ,   0.  ,   1.  ,  0.  ],
+                               [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
+        # sys.stderr.write("Viewshift matrix:\n{}\n".format(matrix.T))
+        viewshift_location = glGetUniformLocation(self.progid, "viewshift")
+        glUniformMatrix4fv(viewshift_location, 1, GL_FALSE, matrix.T)
         glutPostRedisplay()
 
 # ======================================================================
@@ -1057,7 +1086,8 @@ class BasicShader(Shader):
         vertex_shader = """
 #version 330
 
-uniform mat4 view;
+uniform mat4 viewshift;
+uniform mat4 viewrot;
 uniform mat4 projection;
 
 layout (std140) uniform ModelMatrix
@@ -1083,7 +1113,7 @@ out vec4 aColor;
 
 void main(void)
 {
-  gl_Position =  projection * view * model_matrix[in_Index] * in_Position;
+  gl_Position =  projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
 }"""
@@ -1162,7 +1192,8 @@ class CurveTubeShader(Shader):
         vertex_shader = """
 #version 330
 
-uniform mat4 view;
+uniform mat4 viewshift;
+uniform mat4 viewrot;
 uniform mat4 projection;
 
 layout (std140) uniform ModelMatrix
@@ -1237,7 +1268,8 @@ void main(void)
 
 const float PI = 3.14159265359;
 
-uniform mat4 view;
+uniform mat4 viewshift;
+uniform mat4 viewrot;
 uniform mat4 projection;
 
 layout(lines) in;
@@ -1313,24 +1345,24 @@ void main(void)
         topnormal[i] = tmp.xyz / length(tmp.xyz);
     }
 
-    gl_Position = projection * view * toppoints[7];
+    gl_Position = projection * viewrot * viewshift * toppoints[7];
     bColor = aColor[1];
     aNormal = topnormal[7];
     EmitVertex();
 
     for (int i = 0 ; i < 8 ; ++i)
     {
-        gl_Position = projection * view * toppoints[i];
+        gl_Position = projection * viewrot * viewshift * toppoints[i];
         bColor = aColor[1];
         aNormal = topnormal[i];
         EmitVertex();
-        gl_Position = projection * view * bottompoints[i];
+        gl_Position = projection * viewrot * viewshift * bottompoints[i];
         bColor = aColor[0];
         aNormal = bottomnormal[i];
         EmitVertex();
     }
 
-    gl_Position = projection * view * bottompoints[0];
+    gl_Position = projection * viewrot * viewshift * bottompoints[0];
     bColor = aColor[0];
     aNormal = bottomnormal[0];
     EmitVertex();

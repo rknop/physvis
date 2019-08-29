@@ -2889,8 +2889,8 @@ class FixedLengthCurve(GrObject):
     @radius.setter
     def radius(self, rad):
         if self._radius != rad:
+            self._transverse *= rad / self._radius
             self._radius = rad
-            self.make_transverse()
             self.broadcast("update vertices")
 
     def make_transverse(self):
@@ -3188,6 +3188,9 @@ def main():
         if dohelix:
             helix.length = 2. + math.cos(phi)
             # helix.axis = [2. + math.cos(phi)/2., 0., 0.]
+
+        if docurve:
+            curve.radius = 0.05 + 0.04*math.sin(phi)
             
 
         rate(fps)

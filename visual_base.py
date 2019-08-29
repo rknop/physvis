@@ -19,6 +19,7 @@ from OpenGL.GLUT import *
 from OpenGL.GLU import *
 
 _debug_shaders = False
+_print_fps = False
 
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
@@ -760,7 +761,7 @@ class GLUTContext(Observer):
         glutDisplayFunc(lambda : self.draw())
         glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
         # Right now, the timer just prints FPS
-        # glutTimerFunc(0, lambda val : self.timer(val), 0)
+        glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
         self.window_is_initialized = True
         # sys.stderr.write("Exiting gl_init\n")
@@ -872,7 +873,9 @@ class GLUTContext(Observer):
         #  * think about multiple windows
 
     def timer(self, val):
-        sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
+        global _print_fps
+        if _print_fps:
+            sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
         self.framecount = 0
         glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
@@ -2749,18 +2752,6 @@ class CylindarStack(object):
 
 def main():
     # Big array of elongated boxes
-    # sys.stderr.write("Making 100 elongated boxes.\n")
-    # boxes = []
-    # phases = []
-    # n = 10
-    # for i in range(n):
-    #     for j in range (n):
-    #         x = i*4./n - 2.
-    #         y = j*4./n - 2.
-    #         phases.append(random.random()*2.*math.pi)
-    #         col = ( random.random(), random.random(), random.random() )
-    #         boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
-    #                           length=1.5, width=0.05, height=0.05))
 
     sys.stderr.write("Making boxes and peg and other things.\n")
     dobox1 = True
@@ -2772,6 +2763,7 @@ def main():
     doarrow = True
     dohelix = True
     docurve = True
+    domanyelongatedboxes = True
 
     # Make objects
     
@@ -2818,6 +2810,21 @@ def main():
             points[i] = [0.375*math.cos(phi), 0.375*math.sin(phi), 1.5 * i*i / 5000. ]
         curve = FixedLengthCurve(radius = 0.05, color = (0.75, 1.0, 0.), points = points)
         
+    if domanyelongatedboxes:
+        sys.stderr.write("Making 100 elongated boxes.\n")
+        boxes = []
+        phases = []
+        n = 10
+        for i in range(n):
+            for j in range (n):
+                x = i*4./n - 2.
+                y = j*4./n - 2.
+                phases.append(random.random()*2.*math.pi)
+                col = ( random.random(), random.random(), random.random() )
+                boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
+                                  length=1.5, width=0.05, height=0.05))
+
+
     # Updates
     
     theta = math.pi/4.
@@ -2839,13 +2846,6 @@ def main():
         if phi2 > 2.*math.pi:
             phi2 -= 2.*math.pi
 
-        # Rotate all the elongated boxes
-        # for i in range(len(boxes)):
-        #     boxes[i].axis = numpy.array( [math.sin(theta)*math.cos(phi+phases[i]),
-        #                                  math.sin(theta)*math.sin(phi+phases[i]),
-        #                                  math.cos(theta)] )
-
-
         if dobox1:
             box1.color = [ 0.5, (1. + math.sin(phi))/2., (1. + math.cos(phi2))/2. ]
 
@@ -2862,13 +2862,6 @@ def main():
                                                              1.5*math.sin(phi),
 -                                                             1.5*math.cos(phi) ] ),
                                                            q )
-            # box2.position = quaternion_multiply( numpy.array( [0., 0., -math.cos(math.pi/6), math.sin(math.pi/6)] ),
-            #                                       quaternion_multiply( numpy.array( [ 2.*math.sin(phi2),
-            #                                                                           1.5*math.sin(phi),
-            #                                                                           1.5*math.cos(phi) ] ),
-            #                                                             numpy.array( [0., 0., math.cos(math.pi/6),
-            #                                                                             math.sin(math.pi/6)] )
-            #                                                          ) )[0:3]
             
             if first:
                 box2.interval = 5
@@ -2886,7 +2879,13 @@ def main():
 
         if docurve:
             curve.radius = 0.05 + 0.04*math.sin(phi)
-            
+
+        if domanyelongatedboxes:
+            # Rotate all the elongated boxes
+            for i in range(len(boxes)):
+                boxes[i].axis = numpy.array( [math.sin(theta)*math.cos(phi+phases[i]),
+                                             math.sin(theta)*math.sin(phi+phases[i]),
+                                             math.cos(theta)] )
 
         rate(fps)
 

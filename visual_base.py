@@ -22,17 +22,20 @@ from OpenGL.GLU import *
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
-time_of_last_rate_call = None
+_time_of_last_rate_call = None
+_exit_whole_program = False
 def rate(fps):
-    global time_of_last_rate_call
-    if time_of_last_rate_call is None:
+    global _time_of_last_rate_call
+    global _exit_whole_program
+    if _exit_whole_program:
+        sys.exit(0)
+    if _time_of_last_rate_call is None:
         time.sleep(1./fps)
     else:
-        sleeptime = time_of_last_rate_call + 1./fps - time.perf_counter()
+        sleeptime = _time_of_last_rate_call + 1./fps - time.perf_counter()
         if sleeptime > 0:
             time.sleep(sleeptime)
-
-    time_of_last_rate_call = time.perf_counter()
+    _time_of_last_rate_call = time.perf_counter()
 
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
 #
@@ -339,7 +342,7 @@ class SimpleObjectCollection(GLObjectCollection):
         self.objects.append(obj)
         obj.add_listener(self)
         self.curnumtris += obj.num_triangles
-        sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
+        # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
         # I will admit to not fully understanding how lambdas work
         # I originally had lambda : self.push_all_object_info(len(self.objects)-1); however
@@ -348,7 +351,7 @@ class SimpleObjectCollection(GLObjectCollection):
 
         n = len(self.objects) - 1 
         self.context.run_glcode(lambda : self.push_all_object_info(n))
-        sys.stderr.write("Object added to a SimpleObjectCollection.\n")
+        # sys.stderr.write("Object added to a SimpleObjectCollection.\n")
         
 
     # Updates positions of verticies and directions of normals.
@@ -378,9 +381,9 @@ class SimpleObjectCollection(GLObjectCollection):
 
     def push_all_object_info(self, dex):
 
-        sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-                         .format(dex, self.objects[dex].num_triangles,
-                                 self.object_triangle_index[dex]))
+        # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
+        #                  .format(dex, self.objects[dex].num_triangles,
+        #                          self.object_triangle_index[dex]))
         # sys.stderr.write("\nvertexdata: {}\n".format(self.objects[dex].vertexdata))
         # sys.stderr.write("\nnormaldata: {}\n".format(self.objects[dex].normaldata))
         # sys.stderr.write("\ncolordata: {}\n".format(self.objects[dex].colordata))
@@ -503,7 +506,7 @@ class CurveCollection(GLObjectCollection):
         self.objects.append(obj)
         obj.add_listener(self)
         self.curnumlines += 2*(obj.points.shape[0]-1)
-        sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
+        # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
 
         n = len(self.objects) - 1
         self.context.run_glcode(lambda : self.push_all_object_info(n))
@@ -643,7 +646,11 @@ class GLUTContext(Observer):
 
             sys.stderr.write("Starting GLUT thread...\n")
             GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
+            GLUTContext.thread.daemon = True
             GLUTContext.thread.start()
+            # sys.stderr.write("GLUTContext.thread.ident = {}\n".format(GLUTContext.thread.ident))
+            # sys.stderr.write("Current thread ident = {}\n".format(threading.get_ident()))
+            # sys.stderr.write("Main thread ident = {}\n".format(threading.main_thread().ident))
 
             GLUTContext._class_init_2 = True
 
@@ -793,11 +800,11 @@ class GLUTContext(Observer):
             glutSetWindow(self.window)
 
             if state == GLUT_UP:
-                sys.stderr.write("MMB up\n")
+                # sys.stderr.write("MMB up\n")
                 glutMotionFunc(None)
 
             elif state ==GLUT_DOWN:
-                sys.stderr.write("MMB down\n")
+                # sys.stderr.write("MMB down\n")
                 self._mousex0 = x
                 self._mousey0 = y
                 self._origcamz = self._camz
@@ -807,11 +814,11 @@ class GLUTContext(Observer):
             glutSetWindow(self.window)
             
             if state == GLUT_UP:
-                sys.stderr.write("LMB up\n")
+                # sys.stderr.write("LMB up\n")
                 glutMotionFunc(None)
 
             if state == GLUT_DOWN:
-                sys.stderr.write("LMB down\n")
+                # sys.stderr.write("LMB down\n")
                 keys = glutGetModifiers()
                 if keys & GLUT_ACTIVE_SHIFT:
                     self._mouseposx0 = x
@@ -855,9 +862,12 @@ class GLUTContext(Observer):
                          .format(message, subject))
 
     def cleanup(self):
-        sys.stderr.write("ROB!  You should actually write the cleanup method!!!!")
-        pass
-        # DO THINGS!!!!!!!!!!!!!!!!
+        global _exit_whole_program
+        # sys.stderr.write("cleanup called in thread {}\n".format(threading.get_ident()))
+        _exit_whole_program = True
+        # I should do better than this:
+        #  * actually clean up
+        #  * think about multiple windows
 
     def timer(self, val):
         sys.stderr.write("{} Frames per Second\n".format(self.framecount/2.))
@@ -3226,7 +3236,6 @@ def main():
             
 
         rate(fps)
-
 
 
 

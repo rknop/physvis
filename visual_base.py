@@ -17,7 +17,8 @@ import numpy.linalg
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
-### from OpenGL.GL.ARB.separate_shader_objects import *
+
+_debug_shaders = False
 
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
@@ -28,6 +29,7 @@ def rate(fps):
     global _time_of_last_rate_call
     global _exit_whole_program
     if _exit_whole_program:
+        # I wonder if I should do some cleanup?  Eh.  Whatever.
         sys.exit(0)
     if _time_of_last_rate_call is None:
         time.sleep(1./fps)
@@ -134,13 +136,13 @@ class GLObjectCollection(Observer):
 
     def initglstuff(self):
         self.modelmatrixbuffer = glGenBuffers(1)
-        sys.stderr.write("self.modelmatrixbuffer = {}\n".format(self.modelmatrixbuffer))
+        # sys.stderr.write("self.modelmatrixbuffer = {}\n".format(self.modelmatrixbuffer))
         glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         # 4 bytes per float * 16 floats per object
         glBufferData(GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         self.modelnormalmatrixbuffer = glGenBuffers(1)
-        sys.stderr.write("self.modelnormalmatrixbuffer = {}\n".format(self.modelnormalmatrixbuffer))
+        # sys.stderr.write("self.modelnormalmatrixbuffer = {}\n".format(self.modelnormalmatrixbuffer))
         glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
         # 4 bytes per float * 9 floats per object
         #  BUT!  Because of std140 layout, there's actually 12 floats per object,
@@ -148,21 +150,21 @@ class GLObjectCollection(Observer):
         glBufferData(GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         self.colorbuffer = glGenBuffers(1)
-        sys.stderr.write("self.colorbuffer = {}\n".format(self.colorbuffer))
+        # sys.stderr.write("self.colorbuffer = {}\n".format(self.colorbuffer))
         glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
         # 4 bytes per float * 4 floats per object
         glBufferData(GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
 
         dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
-        sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
+        # sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
         glUniformBlockBinding(self.shader.progid, dex, 0);
 
         dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
-        sys.stderr.write("ModelNormalMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
+        # sys.stderr.write("ModelNormalMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
         glUniformBlockBinding(self.shader.progid, dex, 1);
 
         dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
-        sys.stderr.write("Colors block index (progid={}): {}\n".format(self.shader.progid, dex))
+        # sys.stderr.write("Colors block index (progid={}): {}\n".format(self.shader.progid, dex))
         glUniformBlockBinding(self.shader.progid, dex, 2);
 
         self.bind_uniform_buffers()
@@ -609,7 +611,7 @@ class GLUTContext(Observer):
 
     @staticmethod
     def class_init(object):
-        sys.stderr.write("Starting class_init\n")
+        # sys.stderr.write("Starting class_init\n")
 
         with GLUTContext._threadlock:
             if GLUTContext._class_init_1:
@@ -632,7 +634,7 @@ class GLUTContext(Observer):
 
     @staticmethod
     def class_init_2(instance):
-        sys.stderr.write("Starting class_init_2\n")
+        # sys.stderr.write("Starting class_init_2\n")
         GLUTContext._instance = instance
         with GLUTContext._threadlock:
             if not GLUTContext._class_init_1:
@@ -644,7 +646,7 @@ class GLUTContext(Observer):
             GLUTContext.idle_funcs = []
             GLUTContext.things_to_run = queue.Queue()
 
-            sys.stderr.write("Starting GLUT thread...\n")
+            # sys.stderr.write("Starting GLUT thread...\n")
             GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
             GLUTContext.thread.daemon = True
             GLUTContext.thread.start()
@@ -657,7 +659,7 @@ class GLUTContext(Observer):
     # There's a race condition here on idle_funcs and things_to_run
     @staticmethod
     def thread_main(instance):
-        sys.stderr.write("Starting thread_main\n")
+        # sys.stderr.write("Starting thread_main\n")
         glutInitWindowSize(instance.width, instance.height)
         glutInitWindowPosition(0, 0)
         instance.window = glutCreateWindow(instance.title)
@@ -707,7 +709,7 @@ class GLUTContext(Observer):
 
     def __init__(self, width=500, height=400, title="GLUT", *args, **kwargs):
         super().__init__(*args, **kwargs)
-        sys.stderr.write("Starting __init__")
+        # sys.stderr.write("Starting __init__")
         GLUTContext.class_init(self)
 
         self.window_is_initialized = False
@@ -748,20 +750,20 @@ class GLUTContext(Observer):
         self.simple_object_collections.append(SimpleObjectCollection(self))
         self.curve_collections.append(CurveCollection(self))
 
-        sys.stderr.write("Exiting __init__\n")
+        # sys.stderr.write("Exiting __init__\n")
 
     def gl_init(self):
-        sys.stderr.write("Starting gl_init\n")
+        # sys.stderr.write("Starting gl_init\n")
         glutSetWindow(self.window)
         glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         glutReshapeFunc(lambda width, height : self.resize2d(width, height))
         glutDisplayFunc(lambda : self.draw())
         glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
         # Right now, the timer just prints FPS
-        glutTimerFunc(0, lambda val : self.timer(val), 0)
+        # glutTimerFunc(0, lambda val : self.timer(val), 0)
         glutCloseFunc(lambda : self.cleanup())
         self.window_is_initialized = True
-        sys.stderr.write("Exiting gl_init\n")
+        # sys.stderr.write("Exiting gl_init\n")
 
     def gl_version_info(self):
         GLUTContext.run_glcode(lambda : GLUTContext.do_gl_version_info())
@@ -937,19 +939,19 @@ class Shader(object):
     def get(name, context):
         if name == "Basic Shader":
             with GLUTContext._threadlock:
-                sys.stderr.write("Asking for a BasicShader\n")
+                # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._basic_shader) or
                      (Shader._basic_shader[context] == None) ):
-                    sys.stderr.write("Creating a new BasicShader\n")
+                    # sys.stderr.write("Creating a new BasicShader\n")
                     Shader._basic_shader[context] = BasicShader(context)
             return Shader._basic_shader[context]
 
         elif name == "Curve Tube Shader":
             with GLUTContext._threadlock:
-                sys.stderr.write("Asking for a BasicShader\n")
+                # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._curvetube_shader) or
                      (Shader._curvetube_shader[context] == None) ):
-                    sys.stderr.write("Creating a new CurveTubeShader\n");
+                    # sys.stderr.write("Creating a new CurveTubeShader\n");
                     Shader._curvetube_shader[context] = CurveTubeShader(context)
             return Shader._curvetube_shader[context]
 
@@ -1026,7 +1028,7 @@ class Shader(object):
 
 
     def init_lights_and_camera(self):
-        sys.stderr.write("Shader: init_lights_and_camera\n")
+        # sys.stderr.write("Shader: init_lights_and_camera\n")
         loc = glGetUniformLocation(self.progid, "ambientcolor")
         glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
         loc = glGetUniformLocation(self.progid, "light1color")
@@ -1085,7 +1087,7 @@ class Shader(object):
 
 class BasicShader(Shader):
     def __init__(self, context, *args, **kwargs):
-        sys.stderr.write("Initializing a Basic Shader...\n")
+        # sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(context, *args, **kwargs)
         self._name = "Basic Shader"
         GLUTContext.run_glcode(lambda : self.create_shaders())
@@ -1150,19 +1152,19 @@ void main(void)
   out_Color = vec4(col, aColor[3]);
 }"""
 
-        sys.stderr.write("\nAbout to compile shaders....\n")
+        if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
 
         self.vtxshdrid = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(self.vtxshdrid, vertex_shader)
         glCompileShader(self.vtxshdrid)
 
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
 
         self.fragshdrid = glCreateShader(GL_FRAGMENT_SHADER)
         glShaderSource(self.fragshdrid, fragment_shader)
         glCompileShader(self.fragshdrid)
 
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
         
         self.progid = glCreateProgram()
         glAttachShader(self.progid, self.vtxshdrid)
@@ -1175,7 +1177,7 @@ void main(void)
 
         glUseProgram(self.progid)
 
-        sys.stderr.write("Basic Shader created with progid {}\n".format(self.progid))
+        if _debug_shaders: sys.stderr.write("Basic Shader created with progid {}\n".format(self.progid))
         
         err = glGetError()
         if err != GL_NO_ERROR:
@@ -1191,7 +1193,7 @@ void main(void)
 class CurveTubeShader(Shader):
     def __init__(self, context, *args, **kwargs):
         super().__init__(context, *args, **kwargs)
-        sys.stderr.write("Initializing a CurveTubeShader")
+        # sys.stderr.write("Initializing a CurveTubeShader")
         self._name = "Curve Tube Shader"
 
         GLUTContext.run_glcode(lambda : self.create_shaders())
@@ -1403,32 +1405,32 @@ void main(void)
   out_Color = vec4(col, bColor[3]);
 }"""
 
-        sys.stderr.write("\nAbout to compile vertex shader....\n")
+        if _debug_shaders: sys.stderr.write("\nAbout to compile vertex shader....\n")
         self.vtxshdrid = glCreateShader(GL_VERTEX_SHADER)
         glShaderSource(self.vtxshdrid, vertex_shader)
         glCompileShader(self.vtxshdrid)
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
 
-        sys.stderr.write("\nAbout to compile geometry shader....\n")
+        if _debug_shaders: sys.stderr.write("\nAbout to compile geometry shader....\n")
         self.geomshdrid = glCreateShader(GL_GEOMETRY_SHADER)
         glShaderSource(self.geomshdrid, geometry_shader)
         # glShaderSource(self.geomshdrid, skeleton_geometry_shader)
         glCompileShader(self.geomshdrid)
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.geomshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.geomshdrid)))
 
-        sys.stderr.write("\nAbout to compile fragment shader....\n")
+        if _debug_shaders: sys.stderr.write("\nAbout to compile fragment shader....\n")
         self.fragshdrid = glCreateShader(GL_FRAGMENT_SHADER)
         glShaderSource(self.fragshdrid, fragment_shader)
         glCompileShader(self.fragshdrid)
-        sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
 
-        sys.stderr.write("About to create shader program...\n")
+        if _debug_shaders: sys.stderr.write("About to create shader program...\n")
         self.progid = glCreateProgram()
         glAttachShader(self.progid, self.vtxshdrid)
         glAttachShader(self.progid, self.geomshdrid)
         glAttachShader(self.progid, self.fragshdrid)
         glLinkProgram(self.progid)
-        sys.stderr.write("Shader program linked.\n")
+        if _debug_shaders: sys.stderr.write("Shader program linked.\n")
 
         if glGetProgramiv(self.progid, GL_LINK_STATUS) != GL_TRUE:
             sys.stderr.write("{}\n".format(glGetProgramInfoLog(self.progid)))
@@ -1436,7 +1438,7 @@ void main(void)
 
         glUseProgram(self.progid)
 
-        sys.stderr.write("Curve Tube Shader created with progid {}\n".format(self.progid))
+        if _debug_shaders: sys.stderr.write("Curve Tube Shader created with progid {}\n".format(self.progid))
 
         err = glGetError()
         if err != GL_NO_ERROR:
@@ -1694,7 +1696,7 @@ class GrObject(Subject):
 
     @visible.setter
     def visible(self, value):
-        sys.stderr.write("In visible setter\n")
+        # sys.stderr.write("In visible setter\n")
         value = bool(value)
         if value == self._visible: return
 
@@ -1768,7 +1770,7 @@ class GrObject(Subject):
 
     def initialize_trail(self):
         self.kill_trail()
-        sys.stderr.write("Initializing trail at position {}.\n".format(self._position))
+        # sys.stderr.write("Initializing trail at position {}.\n".format(self._position))
         self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
                                     points=[ self._position ], num_edge_points=6)
         # points = numpy.empty( [ self._retain, 3 ] , dtype=numpy.float32 )
@@ -1926,7 +1928,7 @@ class Icosahedron(GrObject):
 
             if Icosahedron._vertices[subdivisions] is None:
 
-                sys.stderr.write("Creating icosahedron vertex data for {} subdivisions\n".format(subdivisions))
+                # sys.stderr.write("Creating icosahedron vertex data for {} subdivisions\n".format(subdivisions))
 
                 vertices = numpy.zeros( 4*12, dtype=numpy.float32 )
                 edges = numpy.zeros( (30, 2), dtype=numpy.uint16 )
@@ -2036,8 +2038,8 @@ class Icosahedron(GrObject):
                         for k in range(3):
                             rendernormals[3*(3*i+2)+k] = normals[3*edges[faces[i, 1], 0] + k]
 
-                sys.stderr.write("{} triangles, {} vertices, {} vertices in array\n"
-                                 .format(faces.shape[0], len(vertices)//4, len(rendervertices)//4))
+                # sys.stderr.write("{} triangles, {} vertices, {} vertices in array\n"
+                #                  .format(faces.shape[0], len(vertices)//4, len(rendervertices)//4))
 
                 Icosahedron._vertices[subdivisions] = rendervertices
                 Icosahedron._normals[subdivisions] = rendernormals
@@ -2353,7 +2355,7 @@ class Cone(GrObject):
 
         self.radius = radius
 
-        sys.stderr.write("Made cone with radius {} and {} triangles.\n".format(radius, self.num_triangles))
+        # sys.stderr.write("Made cone with radius {} and {} triangles.\n".format(radius, self.num_triangles))
         
         self.finish_init()
 
@@ -2513,355 +2515,6 @@ class Arrow(GrObject):
             length = math.sqrt(value[0]*value[0] + value[1]*value[1] + value[2]*value[2])
             self.scale = [length, length, length]
                 
-# ======================================================================
-# length is the _base_ length of the spring.  The actual spring will be
-# scaled up and down according to axis and scale as usual.
-#
-# Note!  Don't make getters and setters for properties that could change the number
-# of triangles.  The underlying GrObject code assumes that once you've initialized,
-# the number of triangles stays fixed.
-
-class OldHelix(GrObject):
-    def __init__(self, radius=1., coils=5., length=1., thickness=None,
-                 num_edge_points=5, num_circ_points=8,
-                 *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._length = length
-        self._radius = radius
-        if thickness is None:
-            self._thickness = 0.05 * self._radius
-        else:
-            self._thickness = thickness
-        self._coils = coils
-        self._num_circ_points = int(num_circ_points)
-        self._num_edge_points = int(num_edge_points)
-
-        self._ncenters = int(math.floor(coils * num_circ_points+0.5)) + 1
-        self.num_triangles = 2 * self._num_edge_points * (self._ncenters - 1)
-
-        self.create_vertex_data()
-
-        self.finish_init()
-
-    def create_vertex_data(self):
-        self.create_vertex_data_old()
-        
-    # This one is slower.... blah
-    def create_vertex_data_new(self):
-        # There are 2*num_edge_points triangles per center point (except for the last)
-        # (I'm leaving the endcaps open)
-
-        if self.vertexdata is None:
-            self.vertexdata = numpy.empty( 4 * 3 * self.num_triangles, dtype=numpy.float32 )
-            self.normaldata = numpy.empty( 3 * 3 * self.num_triangles, dtype=numpy.float32 )
-        vertexdata = self.vertexdata
-        normaldata = self.normaldata
-
-        # psis are angles around the long local axis of the spring (for making the cross-section)
-        psis = numpy.empty(self._num_edge_points, dtype=numpy.float32)
-        psis[0:self._num_edge_points] = numpy.arange(self._num_edge_points) * 2.*math.pi / self._num_edge_points
-        sinpsi = numpy.sin(psis, dtype=numpy.float32)
-        cospsi = numpy.cos(psis, dtype=numpy.float32)
-
-        # dphi is step around the circle from one point along the spring
-        # to the next phi starts at 0 and increments by dphi for each
-        # point along the spring the spring's axis is x; the points are
-        # at x, z=r*cos(phi), y=r*sin(phi), where x starts at 0 for
-        # point #0 and increments by dx (reaching length by point
-        # #ncenters)
-        dphi = 2.*math.pi / self._num_circ_points
-        qdphi = numpy.array( [ -math.sin(dphi/2.), 0., 0., math.cos(dphi/2.) ] , dtype=numpy.float32)
-        qinvdphi = qdphi.copy()
-        qinvdphi[0:3] *= -1.
-        
-        # theta is the inclination of the spring
-        dyz = 2 * self._radius * math.sin(dphi/2.)
-        dx = self._length / (self._ncenters - 1.)
-        l = math.sqrt(dyz*dyz + dx*dx)
-        sintheta = dx/l
-        costheta = dyz/l
-        sintheta_2 = math.sqrt((1.-costheta)/2.)
-        costheta_2 = math.sqrt((1.+costheta)/2.)
-        
-        
-        # Make a base circle of points for the first point on the spring
-        # Each subsequent point will be rotated by dphi around x, and
-        # moved appropriately.  Start with a circle in the x-z plane,
-        # and then rotate by tilt about -z (q is the quaternion of that
-        # rotation).   nextcircle is the next one along
-        #
-        # (I use quaternion_multiply rather than quaterion_rotate here
-        # to avoid recalculating qinv multiple times.)
-        circle = numpy.empty( [self._num_edge_points, 4], dtype=numpy.float32 )
-        circle[:, 0] = cospsi
-        circle[:, 1] = 0.
-        circle[:, 2] = sinpsi
-        circle[:, 3] = 0.
-
-        q = numpy.array( [0., 0., -sintheta_2, costheta_2] , dtype=numpy.float32 )
-        qinv = q.copy()
-        qinv[0:3] *= -1.
-
-        for i in range(self._num_edge_points):
-            circle[i] = quaternion_multiply(q, quaternion_multiply(circle[i], qinv))
-
-        nextcircle = circle.copy()
-        for i in range(self._num_edge_points):
-            nextcircle[i] = quaternion_multiply(qdphi, quaternion_multiply(nextcircle[i], qinvdphi))
-            
-        # Build the first set of 2*num_edge_points triangles
-
-        n1 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        n2 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        n3 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        n4 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        p1 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        p2 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        p3 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-        p4 = numpy.empty( [self._num_edge_points, 4] , dtype=numpy.float32)
-
-        n1[:] = circle
-        n3[:] = nextcircle
-        n2[:-1] = circle[1:]
-        n2[-1] = circle[0]
-        n4[:-1] = nextcircle[1:]
-        n4[-1] = nextcircle[0]
-        p1[:] = numpy.array( [ 0., 0., self._radius, 1.] , dtype=numpy.float32) + self._thickness * n1
-        p2[:] = numpy.array( [ 0., 0., self._radius, 1.] , dtype=numpy.float32) + self._thickness * n2
-        p3[:] = numpy.array( [dx, self._radius*numpy.sin(dphi),
-                              self._radius*numpy.cos(dphi), 1.] , dtype=numpy.float32) + self._thickness * n3
-        p4[:] = numpy.array( [dx, self._radius*numpy.sin(dphi),
-                              self._radius*numpy.cos(dphi), 1.] , dtype=numpy.float32) + self._thickness * n4
-        off = 0
-        for i in range(self._num_edge_points):
-            vertexdata[4 * (off + 3*0) + 0 : 4 * (off + 3*0) +  4] = p1[i]
-            vertexdata[4 * (off + 3*0) + 4 : 4 * (off + 3*0) +  8] = p2[i]
-            vertexdata[4 * (off + 3*0) + 8 : 4 * (off + 3*0) + 12] = p4[i]
-            vertexdata[4 * (off + 3*1) + 0 : 4 * (off + 3*1) +  4] = p1[i]
-            vertexdata[4 * (off + 3*1) + 4 : 4 * (off + 3*1) +  8] = p4[i]
-            vertexdata[4 * (off + 3*1) + 8 : 4 * (off + 3*1) + 12] = p3[i]
-
-            normaldata[3 * (off + 3*0) + 0 : 3 * (off + 3*0) +  3] = n1[i, 0:3]
-            normaldata[3 * (off + 3*0) + 3 : 3 * (off + 3*0) +  6] = n2[i, 0:3]
-            normaldata[3 * (off + 3*0) + 6 : 3 * (off + 3*0) +  9] = n4[i, 0:3]
-            normaldata[3 * (off + 3*1) + 0 : 3 * (off + 3*1) +  3] = n1[i, 0:3]
-            normaldata[3 * (off + 3*1) + 3 : 3 * (off + 3*1) +  6] = n4[i, 0:3]
-            normaldata[3 * (off + 3*1) + 6 : 3 * (off + 3*1) +  9] = n3[i, 0:3]
-
-            off += 6
-            
-        # Build the rest
-        # I could make this more efficient by building just
-        # one circle, and then offsetting subsequent circles by x
-        for j in range(1, self._ncenters-1):
-            newn3 = n1
-            newn4 = n2
-            newp3 = p1
-            newp4 = p2
-            for i in range(self._num_edge_points):
-                newn3[i] = quaternion_multiply(qdphi, quaternion_multiply(n3[i], qinvdphi))
-                newn4[i] = quaternion_multiply(qdphi, quaternion_multiply(n4[i], qinvdphi))
-                newp3[i] = quaternion_multiply(qdphi, quaternion_multiply(p3[i], qinvdphi))
-                newp4[i] = quaternion_multiply(qdphi, quaternion_multiply(p4[i], qinvdphi))
-                newp3[i, 0] += dx
-                newp4[i, 0] += dx
-            p1 = p3
-            p2 = p4
-            p3 = newp3
-            p4 = newp4
-            n1 = n3
-            n2 = n4
-            n3 = newn3
-            n4 = newn4
-            for i in range(self._num_edge_points):
-                vertexdata[4 * (off + 3*0) + 0 : 4 * (off + 3*0) +  4] = p1[i]
-                vertexdata[4 * (off + 3*0) + 4 : 4 * (off + 3*0) +  8] = p2[i]
-                vertexdata[4 * (off + 3*0) + 8 : 4 * (off + 3*0) + 12] = p4[i]
-                vertexdata[4 * (off + 3*1) + 0 : 4 * (off + 3*1) +  4] = p1[i]
-                vertexdata[4 * (off + 3*1) + 4 : 4 * (off + 3*1) +  8] = p4[i]
-                vertexdata[4 * (off + 3*1) + 8 : 4 * (off + 3*1) + 12] = p3[i]
-
-                normaldata[3 * (off + 3*0) + 0 : 3 * (off + 3*0) +  3] = n1[i, 0:3]
-                normaldata[3 * (off + 3*0) + 3 : 3 * (off + 3*0) +  6] = n2[i, 0:3]
-                normaldata[3 * (off + 3*0) + 6 : 3 * (off + 3*0) +  9] = n4[i, 0:3]
-                normaldata[3 * (off + 3*1) + 0 : 3 * (off + 3*1) +  3] = n1[i, 0:3]
-                normaldata[3 * (off + 3*1) + 3 : 3 * (off + 3*1) +  6] = n4[i, 0:3]
-                normaldata[3 * (off + 3*1) + 6 : 3 * (off + 3*1) +  9] = n3[i, 0:3]
-
-                off += 6
-
-        # sys.stderr.write("Last off = {} ; self.num_triangles = {}\n".format(off, self.num_triangles))
-        
-        # with GLUTContext._threadlock:
-        self.vertexdata = vertexdata
-        self.normaldata = normaldata
-                                        
-        
-        
-    # This is a very expensive function, and for a spring
-    #  it could be called a lot.  Optimize!
-    # (I bet I could build a helix with really clever OpenGL instancing....)
-    #
-    # What I should probably do is create one circle's worth of normals,
-    #  and then just use them repeatedly.  The only issue is when the number
-    #  of coils isn't an integral number of helix segments.  (E.g., if
-    #  num_circ_points = 5, and coils = 3.5, then the end of the coil is in between
-    #  a couple of circles.)
-    def create_vertex_data_old(self):
-        # There are 2*num_edge_points triangles per center point (except for the last)
-        # (I'm leaving the endcaps open)
-
-        self.num_triangles = 2 * self._num_edge_points * (self._ncenters - 1)
-        
-        vertexdata = numpy.empty( 4 * 3 * self.num_triangles, dtype=numpy.float32 )
-        normaldata = numpy.empty( 3 * 3 * self.num_triangles, dtype=numpy.float32 )
-
-        # psis are angles around the long local axis of the spring (for making the cross-section)
-        psis = numpy.arange(self._num_edge_points) * 2.*math.pi / self._num_edge_points
-        sinpsi = numpy.sin(psis)
-        cospsi = numpy.cos(psis)
-        sinpsi1 = numpy.empty(len(sinpsi))
-        sinpsi1[:-1] = sinpsi[1:]
-        sinpsi1[-1] = sinpsi[0]
-        cospsi1 = numpy.empty(len(cospsi))
-        cospsi1[:-1] = cospsi[1:]
-        cospsi1[-1] = cospsi[0]
-        
-        
-        # phi tells us where we are along the spring
-        dphi = 2*math.pi * self._coils / (self._ncenters - 1)
-        phi = 0.
-        nextphi = dphi
-
-        x = 0.
-        y = 0.
-        z = self._radius
-        rhat = numpy.array( [0., 0., 1., 0.] )
-
-        nextx = self._length / float(self._ncenters - 1)
-        nextz = math.cos(nextphi) * self._radius
-        nexty = math.sin(nextphi) * self._radius
-        lvec = numpy.array( [nextx - x, nexty - y, nextz - z, 0.] )
-        lhat = lvec / math.sqrt(numpy.square(lvec).sum())
-        yhat = numpy.array( [ rhat[1] * lhat[2] - rhat[2] * lhat[1],
-                              rhat[2] * lhat[0] - rhat[0] * lhat[2],
-                              rhat[0] * lhat[1] - rhat[1] * lhat[0], 0. ] )
-        yhat /= math.sqrt(numpy.square(yhat).sum())
-        
-        n1 = numpy.empty( [self._num_edge_points, 4] )
-        n2 = numpy.empty( [self._num_edge_points, 4] )
-        n3 = numpy.empty( [self._num_edge_points, 4] )
-        n4 = numpy.empty( [self._num_edge_points, 4] )
-        p1 = numpy.empty( [self._num_edge_points, 4] )
-        p2 = numpy.empty( [self._num_edge_points, 4] )
-        p3 = numpy.empty( [self._num_edge_points, 4] )
-        p4 = numpy.empty( [self._num_edge_points, 4] )
-
-        off = 0
-        for i in range(1, self._ncenters):
-            lastphi = phi
-            phi = nextphi
-            nextphi = (i+1) * dphi
-            lastx = x
-            lasty = y
-            lastz = z
-            x = nextx
-            y = nexty
-            z = nextz
-            lastrhat = rhat
-            lastlhat = lhat
-            lastyhat = yhat
-
-            rhat = numpy.array( [0., math.sin(phi), math.cos(phi), 0.] )
-            
-            # This isn't quite right... I orient the thing perpendicular
-            #  to the next cylinder in the chain, but really it should
-            #  be the average of previous and next
-
-            if i < self._ncenters-1 :
-                nextx = (i+1) * self._length / float(self._ncenters - 1)
-                nextz = math.cos(nextphi) * self._radius
-                nexty = math.sin(nextphi) * self._radius
-                lvec = numpy.array( [nextx - x, nexty - y, nextz - z, 0.] )
-                lhat = lvec / math.sqrt(numpy.square(lvec).sum())
-                yhat = numpy.array( [ rhat[1] * lhat[2] - rhat[2] * lhat[1],
-                                      rhat[2] * lhat[0] - rhat[0] * lhat[2],
-                                      rhat[0] * lhat[1] - rhat[1] * lhat[0], 0. ] )
-            else:
-                yhat = numpy.array( [ rhat[1] * lastlhat[2] - rhat[2] * lastlhat[1],
-                                      rhat[2] * lastlhat[0] - rhat[0] * lastlhat[2],
-                                      rhat[0] * lastlhat[1] - rhat[1] * lastlhat[0], 0. ] )
-
-            yhat /= math.sqrt(numpy.square(yhat).sum())
-
-            # sys.stderr.write("*** rhat = {}\n    lhat = {}\n    yhat = {}\n"
-            #                  .format(rhat, lhat, yhat))
-                
-            n1[:] = sinpsi[:, numpy.newaxis] * lastrhat + cospsi[:, numpy.newaxis] * lastyhat
-            n2[:] = sinpsi1[:, numpy.newaxis] * lastrhat + cospsi1[:, numpy.newaxis] * lastyhat
-            n3[:] = sinpsi[:, numpy.newaxis] * rhat + cospsi[:, numpy.newaxis] * yhat
-            n4[:] = sinpsi1[:, numpy.newaxis] * rhat + cospsi1[:, numpy.newaxis] * yhat
-
-            p1[:] = n1 * self._thickness + numpy.array( [lastx, lasty, lastz, 1.] )
-            p2[:] = n2 * self._thickness + numpy.array( [lastx, lasty, lastz, 1.] )
-            p3[:] = n3 * self._thickness + numpy.array( [x, y, z, 1.] )
-            p4[:] = n4 * self._thickness + numpy.array( [x, y, z, 1.] )
-            
-            
-            for ipsi in range(self._num_edge_points):
-                # I'm trying to make these right-handed, but I don't think it matters.
-                # Plus, I may have thought about it wrong
-                vertexdata[4 * (off + 3*0 + 0) : 4 * (off + 3*0 + 0) + 4] = p1[ipsi]
-                vertexdata[4 * (off + 3*0 + 1) : 4 * (off + 3*0 + 1) + 4] = p2[ipsi]
-                vertexdata[4 * (off + 3*0 + 2) : 4 * (off + 3*0 + 2) + 4] = p4[ipsi]
-                vertexdata[4 * (off + 3*1 + 0) : 4 * (off + 3*1 + 0) + 4] = p1[ipsi]
-                vertexdata[4 * (off + 3*1 + 1) : 4 * (off + 3*1 + 1) + 4] = p4[ipsi]
-                vertexdata[4 * (off + 3*1 + 2) : 4 * (off + 3*1 + 2) + 4] = p3[ipsi]
-
-                normaldata[3 * (off + 3*0 + 0) : 3 * (off + 3*0 + 0) + 3] = n1[ipsi,0:3]
-                normaldata[3 * (off + 3*0 + 1) : 3 * (off + 3*0 + 1) + 3] = n2[ipsi,0:3]
-                normaldata[3 * (off + 3*0 + 2) : 3 * (off + 3*0 + 2) + 3] = n4[ipsi,0:3]
-                normaldata[3 * (off + 3*1 + 0) : 3 * (off + 3*1 + 0) + 3] = n1[ipsi,0:3]
-                normaldata[3 * (off + 3*1 + 1) : 3 * (off + 3*1 + 1) + 3] = n4[ipsi,0:3]
-                normaldata[3 * (off + 3*1 + 2) : 3 * (off + 3*1 + 2) + 3] = n3[ipsi,0:3]
-
-                off += 6
-
-        with GLUTContext._threadlock:
-            self.vertexdata = vertexdata
-            self.normaldata = normaldata
-
-    @property
-    def length(self):
-        return self._length
-
-    @length.setter
-    def length(self, value):
-        self._length = value
-        self.create_vertex_data()
-        self.broadcast("update vertices")
-
-    @property
-    def radius(self):
-        return self._radius
-
-    @radius.setter
-    def radius(self, value):
-        self._radius = value
-        self.create_vertex_data()
-        self.broadcast("update vertices")
-
-    @property
-    def thickness(self):
-        return self._thickness
-
-    @thickness.setter
-    def thickness(self, value):
-        self._thickness = value
-        self.create_vertex_data()
-        self.broadcast("update vertices")
-        
 # ======================================================================
 # This is a curve intended when you're going to update the points a lot.
 # The full triangles are actually caulcated in a geometry shader, which

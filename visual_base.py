@@ -26,23 +26,34 @@ _exit_whole_program = False
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
-_time_of_last_rate_call = None
+rater = None
 def rate(fps):
-    global _time_of_last_rate_call
-    global _exit_whole_program
-    if _exit_whole_program:
-        # I wonder if I should do some cleanup?  Eh.  Whatever.
-        sys.exit(0)
-    if _time_of_last_rate_call is None:
-        time.sleep(1./fps)
-    else:
-        sleeptime = _time_of_last_rate_call + 1./fps - time.perf_counter()
-        # sys.stderr.write("Sleeping for {} seconds\n".format(sleeptime))
-        if sleeptime > 0.01:
-            time.sleep(sleeptime)
+    global rater
+    if rater is None:
+        rater = Rater()
+    rater.rate(fps)
+
+class Rater(threading.Event):
+    def __init__(self):
+        super().__init__()
+        self._time_of_last_rate_call = None
+        self.clear()
+
+    def rate(self, fps):
+        global _exit_whole_program
+        if _exit_whole_program:
+            # I wonder if I should do some cleanup?  Eh.  Whatever.
+            sys.exit(0)
+        if self._time_of_last_rate_call is None:
+            time.sleep(1./fps)
         else:
-            time.sleep(0.01)
-    _time_of_last_rate_call = time.perf_counter()
+            sleeptime = self._time_of_last_rate_call + 1./fps - time.perf_counter()
+            # sys.stderr.write("Sleeping for {} seconds\n".format(sleeptime))
+            if sleeptime > 0:
+                time.sleep(sleeptime)
+        self.wait()
+        self.clear()
+        self._time_of_last_rate_call = time.perf_counter()
 
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
 #
@@ -908,6 +919,8 @@ class GLUTContext(Observer):
             collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
 
     def draw(self):
+        global rater
+        
         glClearColor(0., 0., 0., 0.)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glEnable(GL_DEPTH_TEST)
@@ -926,6 +939,9 @@ class GLUTContext(Observer):
 
             glutSwapBuffers()
             # sys.stderr.write("Done drawing collections.\n")
+
+            if rater is not None:
+                rater.set()
             
         self.framecount += 1
 
@@ -2820,7 +2836,7 @@ def main():
         curve = FixedLengthCurve(radius = 0.05, color = (0.75, 1.0, 0.), points = points)
         
     if domanyelongatedboxes:
-        n = 11
+        n = 8
         sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
         boxes = []
         phases = []

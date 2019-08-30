@@ -116,8 +116,9 @@ class Subject(object):
             listener.receive_message("destruct", self)
 
     def broadcast(self, message):
-        for listener in self.listeners:
-            listener.receive_message(message, self)
+        with GLUTContext._threadlock:
+            for listener in self.listeners:
+                listener.receive_message(message, self)
 
     def add_listener(self, listener):
         if not listener in self.listeners:
@@ -145,8 +146,9 @@ class GLObjectCollection(Observer):
     def __init__(self, context, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
-        self.objects = []
-        self.object_index = []
+        self.objects = {}
+        self.object_index = {}
+        self.numobjects = 0
 
         self.context = context
 
@@ -191,6 +193,12 @@ class GLObjectCollection(Observer):
         # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
         # and http://sol.gfxile.net/instancing.html
 
+    def remove_object(self, obj):
+        if not obj._id in self.objects:
+            return
+
+        self.context.run_glcode(lambda : self.do_remove_object(obj))
+
     def bind_uniform_buffers(self):
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
         glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
@@ -198,14 +206,9 @@ class GLObjectCollection(Observer):
         
         
     def update_object_matrix(self, obj):
-        found = False
-        # sys.stderr.write("Going to try to update object matrix for {}\n".format(obj._id))
-        for i in range(len(self.objects)):
-            if self.objects[i]._id == obj._id:
-                found = True
-                break
+        if not obj.visible: return
 
-        if not found:
+        if not obj._id in self.objects:
             sys.stderr.write("...object not found whose matrix was to be updated!!\n")
             return
 
@@ -213,33 +216,52 @@ class GLObjectCollection(Observer):
         # sys.stderr.write("\nmatrixdata:\n{}\n".format(obj.model_matrix))
         # sys.stderr.write("\nnormalmatrixdata:\n{}\n".format(obj.inverse_model_matrix))
 
-        self.context.run_glcode(lambda : self.do_update_object_matrix(i, obj))
+        self.context.run_glcode(lambda : self.do_update_object_matrix(obj))
 
-    def do_update_object_matrix(self, dex, obj):
+    def do_update_object_matrix(self, obj):
         with GLUTContext._threadlock:
+            if not obj._id in self.objects:
+                return
+            dex = self.object_index[obj._id]
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*16, obj.model_matrix.flatten())
+            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
             glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*12, obj.inverse_model_matrix.flatten())
+            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
             glutPostRedisplay()
 
-    def update_object_color(self, obj):
-        found = False
-        for i in range(len(self.objects)):
-            if self.objects[i]._id == obj._id:
-                found = True
-                break
+    def do_remove_object_uniform_buffer_data(self, obj):
+        with GLUTContext._threadlock:
+            if not obj._id in self.objects: return
+            dex = self.object_index[obj._id]
+            # sys.stderr.write("Removing uniform buffer data at dex={}\n".format(dex))
+            if dex < len(self.objects)-1:
+                glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*16, (len(self.objects)-(dex+1))*4*16 )
+                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*16, data)
 
-        if not found:
+                glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*12, (len(self.objects)-(dex+1))*4*12 )
+                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*12, data)
+
+                glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*4, data)
+            
+    def update_object_color(self, obj):
+        if not obj.visible: return
+        if not obj._id in self.objects:
             return
 
-        self.context.run_glcode(lambda : self.do_update_object_color(i, obj))
+        self.context.run_glcode(lambda : self.do_update_object_color(obj))
 
-    def do_update_object_color(self, dex, obj):
+    def do_update_object_color(self, obj):
         with GLUTContext._threadlock:
+            if not obj._id in self.objects:
+                return
             # sys.stderr.write("Updating an object color.\n")
+            dex = self.object_index[obj._id]
             glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, self.object_index[dex]*4*4, obj._color)
+            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*4, obj._color)
             glutPostRedisplay()
             
     def receive_message(self, message, subject):
@@ -295,7 +317,7 @@ class SimpleObjectCollection(GLObjectCollection):
         self.maxnumtris = 32768
 
         self.curnumtris = 0
-        self.object_triangle_index = []
+        self.object_triangle_index = {}
 
         self.draw_as_lines = False
 
@@ -345,86 +367,116 @@ class SimpleObjectCollection(GLObjectCollection):
 
     def add_object(self, obj):
         # Make sure not to double-add
-        for cur in self.objects:
-            if cur._id == obj._id:
-                return
+        if obj._id in self.objects:
+            return
 
         if len(self.objects) >= self.maxnumobjs:
             raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
         if self.curnumtris + obj.num_triangles > self.maxnumtris:
             raise Exception("Error, I can currently only handle {} triangles.".format(self.maxnumtris))
 
-        self.object_triangle_index.append(self.curnumtris)
-        self.object_index.append(len(self.objects))
-        self.objects.append(obj)
-        obj.add_listener(self)
-        self.curnumtris += obj.num_triangles
-        # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
+        self.context.run_glcode(lambda : self.do_add_object(obj))
 
-        # I will admit to not fully understanding how lambdas work
-        # I originally had lambda : self.push_all_object_info(len(self.objects)-1); however
-        # the argument didn't seem to be evaluated at the time of the lambda creation,
-        # but rather later.  Calculating n first seemed to fix the issue.
+    def do_add_object(self, obj):
+        with GLUTContext._threadlock:
+            if obj._id in self.objects:
+                return
+            self.object_triangle_index[obj._id] = self.curnumtris
+            self.objects[obj._id] = obj
+            self.curnumtris += obj.num_triangles
+            self.object_index[obj._id] = len(self.objects) - 1
+            self.push_all_object_info(obj)
+            obj.add_listener(self)
+            # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
-        n = len(self.objects) - 1 
-        self.context.run_glcode(lambda : self.push_all_object_info(n))
-        # sys.stderr.write("Object added to a SimpleObjectCollection.\n")
-        
+    def do_remove_object(self, obj):
+        with GLUTContext._threadlock:
+            if not obj._id in self.objects:
+                return
+            dex = self.object_index[obj._id]
+            # sys.stderr.write("Removing object at dex={} out of {}\n".format(dex, len(self.objects)))
+            if dex < len(self.objects)-1:
+                srcoffset = self.object_triangle_index[obj._id] + obj.num_triangles
+                dstoffset = self.object_triangle_index[obj._id]
+                glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
+                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*3, (self.curnumtris - srcoffset)*4*4*3 )
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*3, data)
 
+                glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*3*3, (self.curnumtris - srcoffset)*4*3*3 )
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*3*3, data)
+
+                glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+                data = numpy.empty( (self.curnumtris - srcoffset)*3, dtype=numpy.int32 )
+                glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*1*3, (self.curnumtris - srcoffset)*4*1*3,
+                                    ctypes.c_void_p(data.__array_interface__['data'][0]) )
+                data[:] -= 1
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*1*3, data)
+
+                self.do_remove_object_uniform_buffer_data(obj)
+
+            for objid in self.objects:
+                if self.object_index[objid] > dex:
+                    self.object_triangle_index[objid] -= obj.num_triangles
+                    self.object_index[objid] -= 1
+            self.curnumtris -= obj.num_triangles
+
+            del self.objects[obj._id]
+            del self.object_index[obj._id]
+            del self.object_triangle_index[obj._id]
+            obj.remove_listener(self)
+            
+            glutPostRedisplay()
+                
     # Updates positions of verticies and directions of normals.
     # Can NOT change the number of vertices
     def update_object_vertices(self, obj):
-        found = False
-        # sys.stderr.write("Going to try to update object vertex data for {}\n".format(obj._id))
-        for i in range(len(self.objects)):
-            if self.objects[i]._id == obj._id:
-                found = True
-                break
+        if not obj.visible: return
+        if not obj._id in self.objects: return
+        self.context.run_glcode(lambda : self.do_update_object_vertex(obj))
 
-        if not found:
-            # sys.stderr.write("...not found\n")
-            return
-
-        self.context.run_glcode(lambda : self.do_update_object_vertex(i, obj))
-
-    def do_update_object_vertex(self, dex, obj):
+    def do_update_object_vertex(self, obj):
         with GLUTContext._threadlock:
+            if not obj._id in self.objects:
+                return
             glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, obj.vertexdata)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
             glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, obj.normaldata)
+            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
             glutPostRedisplay()
 
 
-    def push_all_object_info(self, dex):
-
+    def push_all_object_info(self, obj):
+        if not obj._id in self.objects: return
+        dex = self.object_index[obj._id]
+        
         # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-        #                  .format(dex, self.objects[dex].num_triangles,
-        #                          self.object_triangle_index[dex]))
-        # sys.stderr.write("\nvertexdata: {}\n".format(self.objects[dex].vertexdata))
-        # sys.stderr.write("\nnormaldata: {}\n".format(self.objects[dex].normaldata))
-        # sys.stderr.write("\ncolordata: {}\n".format(self.objects[dex].colordata))
-        # sys.stderr.write("\nmatrixdata: {}\n".format(self.objects[dex].matrixdata))
-        # sys.stderr.write("\nnormalmatrixdata: {}\n".format(self.objects[dex].normalmatrixdata))
+        #                  .format(dex, obj.num_triangles,
+        #                          self.object_triangle_index[obj._id]))
+        # sys.stderr.write("\nvertexdata: {}\n".format(obj.vertexdata))
+        # sys.stderr.write("\nnormaldata: {}\n".format(obj.normaldata))
+        # sys.stderr.write("\ncolordata: {}\n".format(obj.colordata))
+        # sys.stderr.write("\nmatrixdata: {}\n".format(obj.matrixdata))
+        # sys.stderr.write("\nnormalmatrixdata: {}\n".format(obj.normalmatrixdata))
         # sys.exit(20)
 
         # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
         glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*4*3, self.objects[dex].vertexdata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
 
         # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
         glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*3*3, self.objects[dex].normaldata)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
 
-        objindexcopies = numpy.empty(self.objects[dex].num_triangles*3, dtype=numpy.int32)
-        objindexcopies[:] = self.object_index[dex]
+        objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
+        objindexcopies[:] = dex
         # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
         # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
         glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[dex]*4*1*3, objindexcopies)
+        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
         
-        self.do_update_object_matrix(dex, self.objects[dex])
-        self.do_update_object_color(dex, self.objects[dex])
+        self.do_update_object_matrix(obj)
+        self.do_update_object_color(obj)
 
         glutPostRedisplay()    # Redundant... it just happened in the last two function calls
 
@@ -461,7 +513,7 @@ class CurveCollection(GLObjectCollection):
         self.maxnumlines=16384
 
         self.curnumlines = 0
-        self.object_line_index = []
+        self.line_index = {}
 
         self.draw_as_lines = False
         
@@ -510,41 +562,80 @@ class CurveCollection(GLObjectCollection):
         glEnableVertexAttribArray(2)
 
     def add_object(self, obj):
-        for cur in self.objects:
-            if cur._id == obj._id:
-                return
+        if obj._id in self.objects:
+            return
 
         if len(self.objects) >= self.maxnumobjs:
             raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
-        if self.curnumlines + (obj.points.shape[0]-1)*2 > self.maxnumlines:
+        if self.curnumlines + (obj.points.shape[0]-1) > self.maxnumlines:
             raise Exception("Error, I can currently only handle {} lines.".format(self.maxnumlines))
 
-        self.object_line_index.append(self.curnumlines)
-        self.object_index.append(len(self.objects))
-        self.objects.append(obj)
-        obj.add_listener(self)
-        self.curnumlines += 2*(obj.points.shape[0]-1)
-        # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
+        self.context.run_glcode(lambda : self.do_add_object(obj))
 
-        n = len(self.objects) - 1
-        self.context.run_glcode(lambda : self.push_all_object_info(n))
+    def do_add_object(self, obj):
+        with GLUTContext._threadlock:
+            self.objects[obj._id] = obj
+            self.line_index[obj._id] = self.curnumlines
+            obj.add_listener(self)
+            self.curnumlines += obj.points.shape[0]-1
+            # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
+
+            n = len(self.objects) - 1
+            self.object_index[obj._id] = n
+            self.push_all_object_info(obj)
         
-    def update_object_vertices(self, obj):
-        found = False
-        for i in range(len(self.objects)):
-            if self.objects[i]._id == obj._id:
-                found = True
-                break
+    def do_remove_object(self, obj):
+        with GLUTContext._threadlock:
+            if not obj._id in self.objects: return
+            dex = self.object_index[obj._id]
+            if dex < len(self.objects)-1:
+                srcoffset = self.line_index[obj._id] + (obj.points.shape[0]-1)
+                dstoffset = self.line_index[obj._id]
+                glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
+                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
 
-        if not found:
+                glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
+                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
+
+                glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+                data = numpy.empty( (self.curnumlines - srcoffset)*2, dtype=numpy.int32 )
+                glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*1*2, (self.curnumlines - srcoffset)*4*1*2,
+                                    ctypes.c_void_p(data.__array_interface__['data'][0]) )
+                data[:] -= 1
+                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*1*2, data)
+                
+                self.do_remove_object_uniform_buffer_data(obj)
+
+            numlinestoyank = obj.points.shape[0]-1
+            for objid in self.objects:
+                if self.object_index[objid] > dex:
+                    self.line_index[objid] -= numlinestoyank
+                    self.object_index[objid] -= 1
+            self.curnumlines -= numlinestoyank
+
+            del self.objects[obj._id]
+            del self.object_index[obj._id]
+            del self.line_index[obj._id]
+            obj.remove_listener(self)
+            
+            glutPostRedisplay()
+
+    def update_object_vertices(self, obj):
+        if not obj.visible: return
+        if not obj._id in self.objects:
             return
 
-        self.context.run_glcode(lambda : self.do_update_object_points(i, obj))
+        self.context.run_glcode(lambda : self.do_update_object_points(obj))
 
-    def do_update_object_points(self, dex, obj):
+    def do_update_object_points(self, obj):
         with GLUTContext._threadlock:
             if obj.points.shape[0] == 0:
                 return
+            if not obj._id in self.objects:
+                return
+            
             linespoints = numpy.empty( [ (obj.points.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
             transpoints = numpy.empty( [ (obj.trans.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
             linespoints[:, 3] = 1.
@@ -559,22 +650,27 @@ class CurveCollection(GLObjectCollection):
             linespoints[-1, 0:3] = obj.points[-1, :]
             transpoints[-1, 0:3] = obj.trans[-1, :]
 
+            offset = self.line_index[obj._id]
             glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*4*2, linespoints)
+            glBufferSubData(GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
             glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*4*2, transpoints)
+            glBufferSubData(GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
             glutPostRedisplay()
         
-    def push_all_object_info(self, dex):
-        self.do_update_object_points(dex, self.objects[dex])
-
-        objindexcopies = numpy.empty(2*(self.objects[dex].points.shape[0]-1), dtype=numpy.int32)
-        objindexcopies[:] = self.object_index[dex]
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_line_index[dex]*4*1*2, objindexcopies)
+    def push_all_object_info(self, obj):
+        if not obj._id in self.objects:
+            return
         
-        self.do_update_object_matrix(dex, self.objects[dex])
-        self.do_update_object_color(dex, self.objects[dex])
+        self.do_update_object_points(obj)
+
+        dex = self.object_index[obj._id]
+        objindexcopies = numpy.empty(2*(obj.points.shape[0]-1), dtype=numpy.int32)
+        objindexcopies[:] = dex
+        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        glBufferSubData(GL_ARRAY_BUFFER, self.line_index[obj._id]*4*1*2, objindexcopies)
+        
+        self.do_update_object_matrix(obj)
+        self.do_update_object_color(obj)
 
         glutPostRedisplay()
             
@@ -953,7 +1049,9 @@ class GLUTContext(Observer):
             self.curve_collections[0].add_object(obj)
 
     def remove_object(self, obj):
-        raise Exception("GAH!  Removing objects isn't implemented.")
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
+            collection.remove_object(obj)
 
 # ======================================================================
 # ======================================================================
@@ -1490,6 +1588,7 @@ class GrObject(Subject):
 
         self._object_type = _OBJ_TYPE_SIMPLE
         self._make_trail = False
+        self._trail = None
         self.num_triangles = 0
         self._visible = True
 
@@ -1734,7 +1833,6 @@ class GrObject(Subject):
         if value == True:
             self.context.add_object(self)
         else:
-            raise Exception("Setting objects not visible is broken.")
             self.context.remove_object(self)
 
     @property
@@ -1796,6 +1894,8 @@ class GrObject(Subject):
                 self.initialize_trail()
                 
     def kill_trail(self):
+        if self._trail is not None:
+            self._trail.visible = False
         self._trail = None
 
     def initialize_trail(self):
@@ -2735,6 +2835,8 @@ class CylindarStack(object):
         self.nextpoint = len(points)
         if self.nextpoint > self.maxpoints:
             self.nextpoint = 0
+
+        self._visible = True
         
     def add_point(self, point, *args, **kwargs):
         self.pointbuffer[self.nextpoint, :] = point[:]
@@ -2773,21 +2875,35 @@ class CylindarStack(object):
                 self.cylbuffer[i].position = self.pointbuffer[i]
 
     
-        
+    @property
+    def visible(self):
+        return self._visible
+
+    @visible.setter
+    def visible(self, value):
+        if value == self._visible: return
+
+        self._visible = value
+        for cyl in self.cylbuffer:
+            if cyl is not None:
+                cyl.visible = self._visible
             
+    def __del__(self):
+        self.visible = False
+
 # ======================================================================
 
 def main():
     dobox1 = True
     dobox2 = True
     doball = True
-    dopeg = True
-    dopeg2 = True
-    doblob = True
+    dopeg = False
+    dopeg2 = False
+    doblob = False
     doarrow = True
     dohelix = True
     docurve = True
-    domanyelongatedboxes = True
+    domanyelongatedboxes = False
 
     # Make objects
     sys.stderr.write("Making boxes and peg and other things.\n")
@@ -2822,11 +2938,6 @@ def main():
         # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
     
 
-    if dohelix:
-        sys.stderr.write("Making helix.\n")
-        helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
-                      num_circ_points=12)
-
     if docurve:
         sys.stderr.write("Making curve.\n")
         points = numpy.empty( [100, 3] )
@@ -2835,6 +2946,11 @@ def main():
             points[i] = [0.375*math.cos(phi), 0.375*math.sin(phi), 1.5 * i*i / 5000. ]
         curve = FixedLengthCurve(radius = 0.05, color = (0.75, 1.0, 0.), points = points)
         
+    if dohelix:
+        sys.stderr.write("Making helix.\n")
+        helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
+                      num_circ_points=12)
+
     if domanyelongatedboxes:
         n = 8
         sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
@@ -2886,6 +3002,12 @@ def main():
             else:
                 ball.rotate(-dphi)
 
+            if phi > math.pi/2. and phi <= 3.*math.pi/2.:
+                ball.visible = False
+            else:
+                ball.visible = True
+
+                
         if dobox2:
             q = numpy.array( [0., 0., -math.sin(math.pi/6.), math.cos(math.pi/6.)] )
             box2.position = quaternion_rotate(numpy.array( [ 2.*math.sin(phi2),
@@ -2898,7 +3020,12 @@ def main():
                 box2.retain = 50
                 box2.make_trail = True
                 first = False
-    
+
+            # if phi > math.pi:
+            #     box2.visible = False
+            # else:
+            #     box2.visible = True
+                
         if doarrow:
             arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),
                           math.sin(phi) * (1. + 0.5*math.cos(phi)), 0.]
@@ -2910,6 +3037,11 @@ def main():
         if docurve:
             curve.radius = 0.05 + 0.04*math.sin(phi)
 
+            if phi2 > math.pi and phi2 < 3.*math.pi/2.:
+                curve.visible = False
+            else:
+                curve.visible = True
+                
         if domanyelongatedboxes:
             # Rotate all the elongated boxes
             for i in range(len(boxes)):

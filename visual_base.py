@@ -1581,7 +1581,7 @@ void main(void)
 # ======================================================================
 
 class GrObject(Subject):
-    def __init__(self, context=None, position=None, axis=None, up=None, scale=None,
+    def __init__(self, context=None, pos=None, axis=None, up=None, scale=None,
                  color=None, opacity=None, make_trail=False, interval=10, retain=50,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1605,10 +1605,10 @@ class GrObject(Subject):
 
         self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quaternion
 
-        if position is None:
-            self._position = numpy.array([0., 0., 0.])
+        if pos is None:
+            self._pos = numpy.array([0., 0., 0.])
         else:
-            self._position = numpy.array(position)
+            self._pos = numpy.array(pos)
 
         if scale is None:
             self._scale = numpy.array([1., 1., 1.])
@@ -1642,6 +1642,7 @@ class GrObject(Subject):
         self.matrixdata = None
         self.normalmatrixdata = None
 
+        self._axis = [1., 0., 0.]
         if axis is not None:
             self.axis = numpy.array(axis)
 
@@ -1658,45 +1659,45 @@ class GrObject(Subject):
         self.context.add_object(self)
 
     @property
-    def position(self):
-        return self._position
+    def pos(self):
+        return self._pos
 
-    @position.setter
-    def position(self, value):
+    @pos.setter
+    def pos(self, value):
         if len(value) != 3:
-            sys.stderr.write("ERROR, position must have 3 elements.")
+            sys.stderr.write("ERROR, pos must have 3 elements.")
             sys.exit(20)
-        self._position = numpy.array(value)
+        self._pos = numpy.array(value)
         self.update_model_matrix()
         self.update_trail()
 
     @property
     def x(self):
-        return self._position[0]
+        return self._pos[0]
 
     @x.setter
     def x(self, value):
-        self._position[0] = value
+        self._pos[0] = value
         self.update_model_matrix()
         self.update_trail()
 
     @property
     def y(self):
-        return self._position[1]
+        return self._pos[1]
 
     @y.setter
     def y(self, value):
-        self._position[1] = value
+        self._pos[1] = value
         self.update_model_matrix()
         self.update_trail()
 
     @property
     def z(self):
-        return self._position[2]
+        return self._pos[2]
 
     @z.setter
     def z(self, value):
-        self._position[2] = value
+        self._pos[2] = value
         self.update_model_matrix()
         self.update_trail()
 
@@ -1740,7 +1741,8 @@ class GrObject(Subject):
 
     @property
     def axis(self):
-        return quaternion_rotate([self._scale[0], 0., 0.], self._rotation)
+        return self._axis
+        # return quaternion_rotate([self._scale[0], 0., 0.], self._rotation)
         # v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
         # qinv = q.copy()
         # qinv[0:3] *= -1.
@@ -1752,14 +1754,36 @@ class GrObject(Subject):
         if len(value) != 3:
             sys.stderr.write("ERROR, axis must have 3 elements.")
             sys.exit(20)
-        R = math.sqrt(value[0]*value[0] + value[2]*value[2])
-        theta = math.atan2(value[1], R)
-        phi = -math.atan2(value[2], value[0])
-        q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
-        q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
-        self._rotation = quaternion_multiply(q2, q1)
-        self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
+        magaxis = math.sqrt(numpy.square(self._axis).sum())
+        newaxis = numpy.array(value)
+        magnewaxis = math.sqrt(numpy.square(newaxis).sum())
+        cosang = (newaxis * self._axis).sum() / ( magaxis * magnewaxis )
+        if math.fabs(1.-cosang) > 1e-7:
+            rotaxis = numpy.array( [ self._axis[1] * newaxis[2] - self._axis[2] * newaxis[1],
+                                     self._axis[2] * newaxis[0] - self._axis[0] * newaxis[2],
+                                     self._axis[0] * newaxis[1] - self._axis[1] * newaxis[0] ] )
+            rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
+
+            cosang_2 = math.sqrt((1+cosang)/2.)
+            if cosang < 0: cosang_2 *= -1.
+            sinang_2 = math.sqrt((1-cosang)/2.)
+            q = numpy.empty(4)
+            q[0:3] = sinang_2 * rotaxis
+            q[3] = cosang_2
+
+            self._rotation = quaternion_multiply(q, self._rotation)
+        self._axis = newaxis
+        self._scale[0] = magnewaxis
         self.update_model_matrix()
+        
+        # R = math.sqrt(value[0]*value[0] + value[2]*value[2])
+        # theta = math.atan2(value[1], R)
+        # phi = -math.atan2(value[2], value[0])
+        # q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
+        # q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
+        # self._rotation = quaternion_multiply(q2, q1)
+        # self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
+        # self.update_model_matrix()
 
     @property
     def up(self):
@@ -1812,7 +1836,7 @@ class GrObject(Subject):
         rotation[0:3, 0:3] = rot.T
         mat *= rotation
         translation = numpy.identity(4, dtype=numpy.float32)
-        translation[3, 0:3] = self._position
+        translation[3, 0:3] = self._pos
         mat *= translation
         self.model_matrix[:] = mat
         self.inverse_model_matrix[0:3, 0:3] = numpy.linalg.inv(mat[0:3, 0:3]).T
@@ -1900,11 +1924,11 @@ class GrObject(Subject):
 
     def initialize_trail(self):
         self.kill_trail()
-        # sys.stderr.write("Initializing trail at position {}.\n".format(self._position))
+        # sys.stderr.write("Initializing trail at pos {}.\n".format(self._pos))
         self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
-                                    points=[ self._position ], num_edge_points=6)
+                                    points=[ self._pos ], num_edge_points=6)
         # points = numpy.empty( [ self._retain, 3 ] , dtype=numpy.float32 )
-        # points[:, :] = self._position[numpy.newaxis, :]
+        # points[:, :] = self._pos[numpy.newaxis, :]
         # self._trail = Curve(color=self._color, points=points, radius=0.05)
         self._nexttrail = self._interval
 
@@ -1913,8 +1937,8 @@ class GrObject(Subject):
         self._nexttrail -= 1
         if self._nexttrail <= 0:
             self._nexttrail = self._interval
-            self._trail.add_point(self._position)
-            # self._trail.push_point(self._position)
+            self._trail.add_point(self._pos)
+            # self._trail.push_point(self._pos)
 
                 
     def __del__(self):
@@ -2812,9 +2836,9 @@ class Helix(FixedLengthCurve):
 
 class CylindarStack(object):
     def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
-        self._position = numpy.array( [0., 0., 0.] )
+        self._pos = numpy.array( [0., 0., 0.] )
         if points is not None:
-            self._position = points[0]
+            self._pos = points[0]
         points = numpy.array(points)
         if len(points) > maxpoints: maxpoints = len(points)
         self.radius = radius
@@ -2828,7 +2852,7 @@ class CylindarStack(object):
             self.pointbuffer[i, :] = points[i, :]
             if i < len(points)-1:
                 axis = points[i+1] - points[i]
-                self.cylbuffer[i] = Cylinder(position=points[i], axis=axis, color=self.color,
+                self.cylbuffer[i] = Cylinder(pos=points[i], axis=axis, color=self.color,
                                              radius=radius, num_edge_points=self.num_edge_points, *kargs, **kwargs)
 
         self.maxpoints = maxpoints
@@ -2846,10 +2870,10 @@ class CylindarStack(object):
         axis = self.pointbuffer[self.nextpoint, :] - self.pointbuffer[lastpoint, :]
 
         if self.cylbuffer[lastpoint] is not None:
-            self.cylbuffer[lastpoint].position = self.pointbuffer[lastpoint]
+            self.cylbuffer[lastpoint].pos = self.pointbuffer[lastpoint]
             self.cylbuffer[lastpoint].axis = axis
         else:
-            self.cylbuffer[lastpoint] = Cylinder(position=self.pointbuffer[lastpoint, :], axis=axis,
+            self.cylbuffer[lastpoint] = Cylinder(pos=self.pointbuffer[lastpoint, :], axis=axis,
                                                  radius=self.radius, num_edge_points=self.num_edge_points,
                                                  color=self.color,
                                                  *args, **kwargs)
@@ -2858,21 +2882,21 @@ class CylindarStack(object):
         if self.nextpoint >= self.maxpoints: self.nextpoint = 0
 
     @property
-    def position(self):
-        return self._position
+    def pos(self):
+        return self._pos
 
-    @position.setter
-    def position(self, value):
+    @pos.setter
+    def pos(self, value):
         if len(value != 3):
-            sys.stderr.write("ERROR, position must have 3 elements.")
+            sys.stderr.write("ERROR, pos must have 3 elements.")
             sys.exit(20)
-        offset = numpy.array(position) - self._position
-        self._position = numpy.array(position)
+        offset = numpy.array(pos) - self._pos
+        self._pos = numpy.array(pos)
         # This is going to muck about with some uninitialized data, but it doesn't matter.
         self.pointbuffer += offset
         for i in range(self.maxpoints):
             if self.cylbuffer[i] is not None:
-                self.cylbuffer[i].position = self.pointbuffer[i]
+                self.cylbuffer[i].pos = self.pointbuffer[i]
 
     
     @property
@@ -2910,32 +2934,32 @@ def main():
     
     if dobox1:
         sys.stderr.write("Making box1.\n")
-        box1 = Box(position=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=[0.5, 0., 1.])
+        box1 = Box(pos=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=[0.5, 0., 1.])
     if dobox2:
         sys.stderr.write("Making box2.\n")
-        box2 = Box(position=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
+        box2 = Box(pos=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
 
     if dopeg:
         sys.stderr.write("Making peg.\n")
-        peg = Cylinder(position=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
+        peg = Cylinder(pos=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
         peg.axis = (0.5, 0.5, 0.5)
     if dopeg2:
         sys.stderr.write("Making peg2.\n")
-        peg2 = Cylinder(position=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
+        peg2 = Cylinder(pos=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,
                         axis=(-0.5, 0.5, 0.5))
     if doblob:
         sys.stderr.write("Making blob.\n")
-        blob = Ellipsoid(position=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
+        blob = Ellipsoid(pos=(0., 0., 0.), length=0.5, width=0.25, height=0.125, color=color.magenta)
         blob.axis = (-0.5, -0.5, 0.5)
     if doarrow:
         sys.stderr.write("Making arrow.\n")
-        arrow = Arrow(position=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
+        arrow = Arrow(pos=(0., 0., 0.5), shaftwidth=0.05, headwidth = 0.1, headlength=0.2,
                       color=color.yellow, fixedwidth=True)
     
     if doball:
         sys.stderr.write("Making ball.\n")
-        ball = Sphere(position= (2., 0., 0.), radius=0.5, color=color.green)
-        # ball = Icosahedron(position = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
+        ball = Sphere(pos= (2., 0., 0.), radius=0.5, color=color.green)
+        # ball = Icosahedron(pos = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
     
 
     if docurve:
@@ -2962,7 +2986,7 @@ def main():
                 y = j*4./n - 2.
                 phases.append(random.random()*2.*math.pi)
                 col = ( random.random(), random.random(), random.random() )
-                boxes.append( Box(position=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
+                boxes.append( Box(pos=(x, y, 0.), axis=(1., -1., 1.), color=col, # color=color.red,
                                   length=1.5, width=0.05, height=0.05))
 
 
@@ -3010,10 +3034,10 @@ def main():
                 
         if dobox2:
             q = numpy.array( [0., 0., -math.sin(math.pi/6.), math.cos(math.pi/6.)] )
-            box2.position = quaternion_rotate(numpy.array( [ 2.*math.sin(phi2),
-                                                             1.5*math.sin(phi),
--                                                             1.5*math.cos(phi) ] ),
-                                                           q )
+            box2.pos = quaternion_rotate(numpy.array( [ 2.*math.sin(phi2),
+                                                        1.5*math.sin(phi),
+                                                        1.5*math.cos(phi) ] ),
+                                         q )
             
             if first:
                 box2.interval = 5

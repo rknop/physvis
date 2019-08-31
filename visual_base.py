@@ -390,7 +390,7 @@ class SimpleObjectCollection(GLObjectCollection):
         super().__init__(context, *args, **kwargs)
         self.shader = Shader.get("Basic Shader", context)
 
-        self.maxnumtris = 32768
+        self.maxnumtris = 65536
 
         self.curnumtris = 0
         self.object_triangle_index = {}
@@ -1824,9 +1824,6 @@ class GrObject(Subject):
 
     @axis.setter
     def axis(self, value):
-        if len(value) != 3:
-            sys.stderr.write("ERROR, axis must have 3 elements.")
-            sys.exit(20)
         magaxis = numpy.sqrt(numpy.square(self._axis).sum())
         newaxis = vector(value)
         magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
@@ -2852,7 +2849,6 @@ class Helix(FixedLengthCurve):
     def __init__(self, radius=1., coils=5., length=1., thickness=None,
                  num_circ_points=12, *args, **kwargs):
 
-        self._length = length
         self._helixradius = radius
         if thickness is None:
             self._thickness = 0.05 * self._helixradius
@@ -2869,7 +2865,7 @@ class Helix(FixedLengthCurve):
         
     def calculate_helix_points(self):
         dphi = 2.*math.pi / self._num_circ_points
-        dx = self._length / (self._ncenters - 1)
+        dx = 1. / (self._ncenters - 1)
 
         centcounter = numpy.arange(self._ncenters)
         self._helix_points = numpy.empty( [ self._ncenters, 3], dtype=numpy.float32 )
@@ -2879,13 +2875,11 @@ class Helix(FixedLengthCurve):
         
     @property
     def length(self):
-        return self._length
+        self._axis.mag
 
     @length.setter
     def length(self, value):
-        self._length = value
-        self.calculate_helix_points()
-        self.points = self._helix_points
+        self.axis *= value/self._axis.mag
 
     @property
     def radius(self):
@@ -3132,7 +3126,6 @@ def main():
         
         if dohelix:
             helix.length = 2. + math.cos(phi)
-            # helix.axis = [2. + math.cos(phi)/2., 0., 0.]
 
         if docurve:
             curve.radius = 0.05 + 0.04*math.sin(phi)

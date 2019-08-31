@@ -10,6 +10,7 @@ from physvis import *
 import visual_base
 
 def dvals(t, vals, size, num):
+    global dvalsdt
     m = 2.0
     sprconst = 100.0
     diagsprconst = 10.0
@@ -20,37 +21,56 @@ def dvals(t, vals, size, num):
     r = vals[0]
     v = vals[1]
     
-    # I shouldn't. allocate a new array each run through dvals....
     dvalsdt = numpy.zeros( [2, num, num, num, 3] )
     drdt = dvalsdt[0]
     dvdt = dvalsdt[1]
     drdt[:] = v
-    
     dvdt[:] = 0.
+
     # z springs
-    for i in range(num-1):
-        deltar = r[i+1, :, :, :] - r[i, :, :, :]
-        magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
-        rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
+    deltar = r[1:, :, :, :] - r[:-1, :, :, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:-1, :, :, :] += sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[1: , :, :, :] -= sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
+    
+    # for i in range(num-1):
+    #     deltar = r[i+1, :, :, :] - r[i, :, :, :]
+    #     magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
+    #     rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
 
-        dvdt[i,   :, :, :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
-        dvdt[i+1, :, :, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    #     dvdt[i,   :, :, :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    #     dvdt[i+1, :, :, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+
     # y springs
-    for i in range(num-1):
-        deltar = r[:, i+1, :, :] - r[:, i, :, :]
-        magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
-        rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
+    deltar = r[:, 1:, :, :] - r[:, :-1, :, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:, :-1, :, :] += sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[:, 1: , :, :] -= sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
 
-        dvdt[:, i  , :, :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
-        dvdt[:, i+1, :, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    # for i in range(num-1):
+    #     deltar = r[:, i+1, :, :] - r[:, i, :, :]
+    #     magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
+    #     rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
+
+    #     dvdt[:, i  , :, :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    #     dvdt[:, i+1, :, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+
     # x springs
-    for i in range(num-1):
-        deltar = r[:, :, i+1, :] - r[:, :, i, :]
-        magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
-        rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
+    deltar = r[:, :, 1:, :] - r[:, :, :-1, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:, :, :-1, :] += sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[:, :, 1: , :] -= sprconst/m * (magr-l0)[:, :, :, numpy.newaxis] * rhat
 
-        dvdt[:, :, i  , :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
-        dvdt[:, :, i+1, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    # for i in range(num-1):
+    #     deltar = r[:, :, i+1, :] - r[:, :, i, :]
+    #     magr = numpy.sqrt(numpy.square(deltar).sum(axis=2))
+    #     rhat = deltar[:, :, :] / magr[:, :, numpy.newaxis]
+
+    #     dvdt[:, :, i  , :] += sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
+    #     dvdt[:, :, i+1, :] -= sprconst/m * (magr-l0)[:, :, numpy.newaxis] * rhat
 
 
     # # diagonal springs
@@ -58,65 +78,30 @@ def dvals(t, vals, size, num):
     # deltar = r[1:, 1:, 1:, :] - r[:-1, :-1, :-1, :]
     # magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
     # rhat = deltar / magr[:, :, :, numpy.newaxis]
-
     # dvdt[:-1, :-1, :-1, :] += diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
     # dvdt[1:,  1:,  1:,  :] -= diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
 
     ldiag0 = math.sqrt(2.) * l0
     # diagonal springs xy
-    for i in range(num-1):
-        for j in range(num-1):
-            deltar = r[:, j+1, i+1, :] - r[:, j, i, :]
-            magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            dvdt[:, j  , i  , :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            dvdt[:, j+1, i+1, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            
-            # deltar = r[:, j, i+1, :] - r[:, j+1, i, :]
-            # magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            # rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            # dvdt[:, j+1, i  , :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            # dvdt[:, j  , i+1, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            
+    deltar = r[:, 1:, 1:, :] - r[:, :-1, :-1, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:, :-1, :-1, :] += diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[:, 1:,  1:,  :] -= diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
 
     # diagonal springs xz
-    for i in range(num-1):
-        for k in range(num-1):
-            deltar = r[k+1, :, i+1, :] - r[k, :, i, :]
-            magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            dvdt[k  , :, i  , :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            dvdt[k+1, :, i+1, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            
-            # deltar = r[k, :, i+1, :] - r[k+1, :, i, :]
-            # magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            # rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            # dvdt[k+1, :, i  , :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            # dvdt[k  , :, i+1, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            
+    deltar = r[1:, :, 1:, :] - r[:-1, :, :-1, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:-1, :, :-1, :] += diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[1:, :,  1:,  :] -= diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
 
     # diagonal springs yz
-    for j in range(num-1):
-        for k in range(num-1):
-            deltar = r[k+1, j+1, :, :] - r[k, j, :, :]
-            magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            dvdt[k  , j  , :, :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            dvdt[k+1, j+1, :, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-
-            # deltar = r[k, j+1, :, :] - r[k+1, j, :, :]
-            # magr = numpy.sqrt(numpy.square(deltar).sum(axis=1))
-            # rhat = deltar[:, :] / magr[:, numpy.newaxis]
-
-            # dvdt[k+1, j  , :, :] += diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            # dvdt[k  , j+1, :, :] -= diagsprconst/m * (magr-ldiag0)[:, numpy.newaxis] * rhat
-            
-
+    deltar = r[1:, 1:, :, :] - r[:-1, :-1, :, :]
+    magr = numpy.sqrt(numpy.square(deltar).sum(axis=3))
+    rhat = deltar / magr[:, :, :, numpy.newaxis]
+    dvdt[:-1, :-1, :, :] += diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
+    dvdt[1:,  1:,  :, :] -= diagsprconst/m * (magr-ldiag0)[:, :, :, numpy.newaxis] * rhat
         
     vals.shape = [ 2*num*num*num*3 ]
     dvalsdt.shape = [ 2*num*num*num*3 ]
@@ -125,7 +110,7 @@ def dvals(t, vals, size, num):
     
 def main():
     fps = 30.
-    num = 4                        # of balls per axis (total = this cubed)
+    num = 5                        # of balls per axis (total = this cubed)
     size = 3                       # total size of array per axis
     l0 = size / (num-1)            # equil. length of most springs
     ldiag0 = math.sqrt(2) * l0     # equil. length of diagonal spring
@@ -214,7 +199,7 @@ def main():
     while True:
         t += 1./fps
 
-        # Make the array flat; I don't know if scipy.integrate.ode actually needs this!
+        # Make the array flat; I think scipy.integrate.ode needs this
         oder.y.shape = [ 2 * num*num*num * 3 ]                               
         oder.integrate(t)
         oder.y.shape = [ 2, num, num, num, 3 ]
@@ -226,21 +211,15 @@ def main():
                     if i < num-1:
                         xsprings[k][j][i].pos = balls[k][j][i].pos
                         deltar = oder.y[0, k, j, i+1] - oder.y[0, k, j, i]
-                        rmag = math.sqrt(numpy.square(deltar).sum())
                         xsprings[k][j][i].axis = deltar
-                        # xsprings[k][j][i].length = rmag
                     if j < num-1:
                         ysprings[k][j][i].pos = balls[k][j][i].pos
                         deltar = oder.y[0, k, j+1, i] - oder.y[0, k, j, i]
-                        rmag = math.sqrt(numpy.square(deltar).sum())
                         ysprings[k][j][i].axis = deltar
-                        # ysprings[k][j][i].length = rmag
                     if k < num-1:
                         zsprings[k][j][i].pos = balls[k][j][i].pos
                         deltar = oder.y[0, k+1, j, i] - oder.y[0, k, j, i]
-                        rmag = math.sqrt(numpy.square(deltar).sum())
                         zsprings[k][j][i].axis = deltar
-                        # zsprings[k][j][i].length = rmag
                         
         rate(fps)
         nextprint -= 1

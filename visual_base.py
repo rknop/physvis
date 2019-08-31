@@ -90,6 +90,76 @@ def quaternion_rotate(p, q):
     return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
 
 # ======================================================================
+# A special case 3-element numpy.ndarray.  Can't create them as
+#   views or slices of other things.  This might not be exactly what
+#   I want; not 100% sure.  I need to experiment with old VPython to
+#   find out.
+
+class vector(numpy.ndarray):
+    def __new__(subtype, vals=(0., 0., 0.), copyvector=None):
+        if copyvector is not None:
+            return super().__new__(subtype, 3, float, copyvector)
+        if len(vals) != 3:
+            err = "Need 3 values to initialize a vector, got {}\n".format(len(vals))
+            raise IndexError(err)
+        # I *hope* that when I call  __new__, it doesn't copy the data again.
+        #   I don't think it does.
+        tmp = numpy.array(vals, dtype=float)
+        return super().__new__(subtype, (3), float, tmp)
+
+    @property
+    def mag(self):
+        return math.sqrt(numpy.square(self).sum())
+
+    @mag.setter
+    def mag(self, val):
+        self /= self.mag
+        self *= val
+
+    @property
+    def mag2(self):
+        return numpy.square(self).sum()
+        
+    def norm(self):
+        vec = vector(self)/self.mag
+        return vec
+
+    def cross(self, B, **unused_kwargs):
+        if type(B) is not vector:
+            B = vector(B)
+        return vector(copyvector = numpy.cross(self, B))
+
+    def proj(self, B, **unused_kwargs):
+        if type(B) is not vector:
+            B = vector(B)
+        Bn = B.norm()
+        return vector(copyvector = Bn * self.dot(Bn))
+
+    def comp(self, B, **unused_kwargs):
+        if type(B) is not vector:
+            B = vector(B)
+        return vector(copyvector = self.dot(B.norm()))
+
+    def diff_angle(self, B, **unused_kwargs):
+        if type(B) is not vector:
+            B = vector(B)
+        return math.acos( self.dot(B) / (self.mag * B.mag) )
+
+    def rotate(self, theta, B, **unused_kwargs):
+        if type(B) is not vector:
+            B = vector(B)
+        B = B.norm()
+        st = math.sin(theta/2.)
+        ct = math.cos(theta/2.)
+        roted = quaternion_rotate(self, numpy.array( [st*B[0], st*B[1], st*B[2], ct] ))
+        return vector(copyvector = roted)
+
+    # I don't know if this is really faster than astype(self)
+    def astuple(self):
+        return ( self[0], self[1], self[2] )
+    
+    
+# ======================================================================
 
 class color(object):
     red = numpy.array( [1., 0., 0.] )
@@ -102,6 +172,12 @@ class color(object):
     black = numpy.array( [0., 0. ,0.] )
     white = numpy.array( [1., 1., 1.] )
 
+    def gray(val):
+        return numpy.array( [val, val, val] )
+
+    def grey(val):
+        return gray(val)
+    
 # ======================================================================
 
 class Subject(object):
@@ -1606,9 +1682,9 @@ class GrObject(Subject):
         self._rotation = numpy.array( [0., 0., 0., 1.] )    # Identity quaternion
 
         if pos is None:
-            self._pos = numpy.array([0., 0., 0.])
+            self._pos = vector([0., 0., 0.])
         else:
-            self._pos = numpy.array(pos)
+            self._pos = vector(pos)
 
         if scale is None:
             self._scale = numpy.array([1., 1., 1.])
@@ -1642,9 +1718,9 @@ class GrObject(Subject):
         self.matrixdata = None
         self.normalmatrixdata = None
 
-        self._axis = [1., 0., 0.]
+        self._axis = vector([1., 0., 0.])
         if axis is not None:
-            self.axis = numpy.array(axis)
+            self.axis = vector(axis)
 
         if up is not None:
             self.up = numpy.array(up)
@@ -1664,10 +1740,7 @@ class GrObject(Subject):
 
     @pos.setter
     def pos(self, value):
-        if len(value) != 3:
-            sys.stderr.write("ERROR, pos must have 3 elements.")
-            sys.exit(20)
-        self._pos = numpy.array(value)
+        self._pos = vector(value)
         self.update_model_matrix()
         self.update_trail()
 
@@ -1754,18 +1827,14 @@ class GrObject(Subject):
         if len(value) != 3:
             sys.stderr.write("ERROR, axis must have 3 elements.")
             sys.exit(20)
-        magaxis = math.sqrt(numpy.square(self._axis).sum())
-        newaxis = numpy.array(value)
-        magnewaxis = math.sqrt(numpy.square(newaxis).sum())
-        cosang = (newaxis * self._axis).sum() / ( magaxis * magnewaxis )
+        magaxis = numpy.sqrt(numpy.square(self._axis).sum())
+        newaxis = vector(value)
+        magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
+        cosang = (self._axis * newaxis).sum() / ( magaxis * magnewaxis )
         if math.fabs(1.-cosang) > 1e-7:
-            rotaxis = numpy.array( [ self._axis[1] * newaxis[2] - self._axis[2] * newaxis[1],
-                                     self._axis[2] * newaxis[0] - self._axis[0] * newaxis[2],
-                                     self._axis[0] * newaxis[1] - self._axis[1] * newaxis[0] ] )
+            rotaxis = numpy.cross(self._axis, newaxis)
             rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
-
             cosang_2 = math.sqrt((1+cosang)/2.)
-            if cosang < 0: cosang_2 *= -1.
             sinang_2 = math.sqrt((1-cosang)/2.)
             q = numpy.empty(4)
             q[0:3] = sinang_2 * rotaxis
@@ -1811,13 +1880,20 @@ class GrObject(Subject):
         self.update_model_matrix()
 
     def rotate(self, angle, axis=None, origin=None):
-        if origin is not None:
-            sys.stderr.write("WARNING: Rotations not around object origin aren't currently supported.\n")
         if axis is None:
             axis = self.axis
+        axis = numpy.array(axis)
+        axis /= math.sqrt(numpy.square(axis).sum())
         s = math.sin(angle/2.)
         c = math.cos(angle/2.)
         q = numpy.array( [axis[0]*s, axis[1]*s, axis[2]*s, c] )
+        if origin is not None:
+            if len(origin) != 3:
+                raise Exception("Error, origin must have 3 values.")
+            origin = numpy.array(origin)
+            relpos = self._pos - origin
+            relpos = quaternion_rotate(relpos, q)
+            self.pos = origin + relpos
         self.rotation = quaternion_multiply(q, self.rotation)
 
     def update_model_matrix(self):
@@ -1924,7 +2000,7 @@ class GrObject(Subject):
 
     def initialize_trail(self):
         self.kill_trail()
-        # sys.stderr.write("Initializing trail at pos {}.\n".format(self._pos))
+        # sys.stderr.write("Initializing trail at pos {} with color {}.\n".format(self._pos, self._color))
         self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
                                     points=[ self._pos ], num_edge_points=6)
         # points = numpy.empty( [ self._retain, 3 ] , dtype=numpy.float32 )
@@ -2657,7 +2733,7 @@ class Arrow(GrObject):
     @GrObject.axis.setter
     def axis(self, value):
         GrObject.axis.fset(self, value)
-        if self.fixedwidth:
+        if hasattr(self, 'fixedwidth') and self.fixedwidth:
             self.make_arrow()
             self.broadcast("update vertices")
         else:
@@ -2836,9 +2912,9 @@ class Helix(FixedLengthCurve):
 
 class CylindarStack(object):
     def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
-        self._pos = numpy.array( [0., 0., 0.] )
+        self._pos = vector( [0., 0., 0.] )
         if points is not None:
-            self._pos = points[0]
+            self._pos = vector(points[0])
         points = numpy.array(points)
         if len(points) > maxpoints: maxpoints = len(points)
         self.radius = radius
@@ -2891,7 +2967,7 @@ class CylindarStack(object):
             sys.stderr.write("ERROR, pos must have 3 elements.")
             sys.exit(20)
         offset = numpy.array(pos) - self._pos
-        self._pos = numpy.array(pos)
+        self._pos = vector(pos)
         # This is going to muck about with some uninitialized data, but it doesn't matter.
         self.pointbuffer += offset
         for i in range(self.maxpoints):

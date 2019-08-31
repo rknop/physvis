@@ -15,33 +15,55 @@ import itertools
 import numpy
 import numpy.linalg
 
-from OpenGL.GL import *
-from OpenGL.GLUT import *
-from OpenGL.GLU import *
+import OpenGL.GL as GL
+import OpenGL.GLUT as GLUT
 
 _debug_shaders = False
 _print_fps = False
-_exit_whole_program = False
 
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
-rater = None
 def rate(fps):
-    global rater
-    if rater is None:
-        rater = Rater()
+    """Call this in the main loop of your program to have it run at most every 1/fps seconds."""
+    rater = Rater.get()
     rater.rate(fps)
 
+def exit_whole_program():
+    """Call this to have the program quit next time you call rate()."""
+    Rater.exit_whole_program()
+    
 class Rater(threading.Event):
+    """A singleton class used internally to implement rate().  Get the instance with Rater.get()"""
+
+    _instance = None
+    _exit_whole_program = False
+
+    @staticmethod
+    def get():
+        """Return the singleton Rater instance"""
+
+        if Rater._instance is None:
+            Rater._instance = Rater()
+        return Rater._instance
+
+    @staticmethod
+    def exit_whole_program():
+        """Call this to have the program quit the next time you call rate()."""
+        
+        Rater._exit_whole_program = True
+    
     def __init__(self):
+        """Never call this."""
+        
         super().__init__()
         self._time_of_last_rate_call = None
         self.clear()
-
+        
     def rate(self, fps):
-        global _exit_whole_program
-        if _exit_whole_program:
+        """Call this in the main loop of your program to have it run at most every 1/fps seconds."""
+        
+        if Rater._exit_whole_program:
             # I wonder if I should do some cleanup?  Eh.  Whatever.
             sys.exit(0)
         if self._time_of_last_rate_call is None:
@@ -72,6 +94,11 @@ class Rater(threading.Event):
 # NOTE!  You MUST pass p and q as numpy arrays, or things might be sad
 
 def quaternion_multiply(p, q):
+    """Multiply a vector or quaternion p by a quaternion q.
+
+    If p is a quaternion, the returned quaternion represents rotation q followed by rotation p
+    """
+
     if len(p) == 3:
         px, py, pz = p
         pr = 0.
@@ -83,8 +110,8 @@ def quaternion_multiply(p, q):
                           pr*qz + px*qy - py*qx + pz*qr,
                           pr*qr - px*qx - py*qy - pz*qz ] , dtype=numpy.float32 )
 
-# Rotate vector p by quaternion q
 def quaternion_rotate(p, q):
+    """Rotate vector p by quaternion q."""
     qinv = q.copy()
     qinv[0:3] *= -1.
     return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
@@ -96,6 +123,8 @@ def quaternion_rotate(p, q):
 #   find out.
 
 class vector(numpy.ndarray):
+    """A 3-element vector of floats that represents a physical vector quantity (displacement, velocity, etc.)"""
+    
     def __new__(subtype, vals=(0., 0., 0.), copyvector=None):
         if copyvector is not None:
             return super().__new__(subtype, 3, float, copyvector)
@@ -109,6 +138,7 @@ class vector(numpy.ndarray):
 
     @property
     def mag(self):
+        """The magnitude of the vector."""
         return math.sqrt(numpy.square(self).sum())
 
     @mag.setter
@@ -118,34 +148,56 @@ class vector(numpy.ndarray):
 
     @property
     def mag2(self):
+        """The square of the magnitude of the vector.
+
+        Faster than getting vector.mag and then squaring.
+        """
         return numpy.square(self).sum()
         
     def norm(self):
+        """Returns a new vector that is the unit vector in the same direction."""
+        
         vec = vector(self)/self.mag
         return vec
 
     def cross(self, B, **unused_kwargs):
+        """Returns the cross product of this vector and B."""
+        
         if type(B) is not vector:
             B = vector(B)
         return vector(copyvector = numpy.cross(self, B))
 
     def proj(self, B, **unused_kwargs):
+        """Returns this vector projected on to B.
+
+        A.proj(B) = A.dot(B.norm()) * B.norm()
+        """
+        
         if type(B) is not vector:
             B = vector(B)
         Bn = B.norm()
         return vector(copyvector = Bn * self.dot(Bn))
 
     def comp(self, B, **unused_kwargs):
+        """Returns the component of this vector along B.
+
+        A.comp(B) = A.dot(B.norm())
+        """
+
         if type(B) is not vector:
             B = vector(B)
-        return vector(copyvector = self.dot(B.norm()))
+        return self.dot(B.norm())
 
     def diff_angle(self, B, **unused_kwargs):
+        """Returns the angle between this vector and V."""
+        
         if type(B) is not vector:
             B = vector(B)
         return math.acos( self.dot(B) / (self.mag * B.mag) )
 
     def rotate(self, theta, B, **unused_kwargs):
+        """Rotates this vector by angle theta about vecytor B."""
+        
         if type(B) is not vector:
             B = vector(B)
         B = B.norm()
@@ -156,12 +208,28 @@ class vector(numpy.ndarray):
 
     # I don't know if this is really faster than astype(self)
     def astuple(self):
+        """Return a 3-element tuple of the vector components."""
+        
         return ( self[0], self[1], self[2] )
     
     
 # ======================================================================
 
 class color(object):
+    """A helper class for creating colors (which are just 3-element numpy arrays.
+
+    Defined colors:
+    color.red — [1, 0, 0]
+    color.green — [0, 1, 0]
+    color.blue — [0, 0, 1]
+    color.yellow — [1, 1, 0]
+    color.cyan — [0, 1, 1]
+    color.magenta — [1, 0, 1]
+    color.orange — [1, 0.5, 0]
+    color.black — [0, 0, 0]
+    color.white — [1, 1, 1]
+    """
+    
     red = numpy.array( [1., 0., 0.] )
     green = numpy.array( [0., 1., 0.] )
     blue = numpy.array( [0., 0., 1.] )
@@ -173,14 +241,18 @@ class color(object):
     white = numpy.array( [1., 1., 1.] )
 
     def gray(val):
+        """Returns a grey color; val=0 is black, val=1 is white."""
         return numpy.array( [val, val, val] )
 
     def grey(val):
+        """Returns a grey color; val=0 is black, val=1 is white."""
         return gray(val)
     
 # ======================================================================
 
 class Subject(object):
+    """Subclass this to create something from which Observers will listen for messages."""
+    
     def __init__(self, *args, **kwargs):
         super().__init__()
         self._id = uuid.uuid4()
@@ -192,23 +264,39 @@ class Subject(object):
             listener.receive_message("destruct", self)
 
     def broadcast(self, message):
+        """Call this on yourself to broadcast message to all listeners."""
         with GLUTContext._threadlock:
             for listener in self.listeners:
                 listener.receive_message(message, self)
 
     def add_listener(self, listener):
+        """Add Observer listener to the list of things that gets messages."""
         if not listener in self.listeners:
             self.listeners.append(listener)
 
     def remove_listener(self, listener):
+        """Remove Observer listener from the list of things that gets messages."""
         self.listeners = [x for x in self.listeners if x != listener]
 
 class Observer(object):
+    """Subclass this to be able to get messages from a Subject.
+
+    Must implement receive_message (if you want to do anything).
+
+    Call the add_listener() method of a Subject object, passing self as
+    an argument, to start getting messages from the Subject.
+
+    Call the remove_listener() method of a Subject object to no logner
+    get messages.  You need to do this if you want yourself to be
+    deleted.
+    """
+    
     def __init__(self, *args, **kwargs):
         super().__init__()
         # ROB!  Print errors about unknown arguments
 
     def receive_message(self, message, subject):
+        """In your subclass, implement this to get message (usually just a text string) from Subject subject."""
         pass
 
 
@@ -219,6 +307,25 @@ class Observer(object):
 
 
 class GLObjectCollection(Observer):
+    """The base class for a collection of openGL objects, used internally by a drawing context.
+
+    It makes some assumptions about the shader that will be used with
+    the object collection.  There are three Uniform buffers, with one
+    element array represented by the buffer for each objectin the
+    collection.
+       — a model matrix uniform buffer (for transforming the object) -- mat4
+       — a model normal matrix uniform buffer (for transforming the normals for light interaction) -- mat3 (**)
+       — a color uniform buffer (the color of the object) -- vec4
+
+    Objects added to a GLObjectCollection must have:
+       _id — An id that is unique for all objects anywhere in the code
+       visible — True or False if the object should be drawn
+       _color — A 4-element float32 numpy array (r, g, b, opacity) (opacity isn't currently used)
+       model_matrix — a 16-element float32 numpy array
+       inverse_model_matrix — a 12-element float32 numpy array (3x3 plus std140 layout padding)
+      
+    """
+    
     def __init__(self, context, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
@@ -229,37 +336,37 @@ class GLObjectCollection(Observer):
         self.context = context
 
     def initglstuff(self):
-        self.modelmatrixbuffer = glGenBuffers(1)
+        self.modelmatrixbuffer = GL.glGenBuffers(1)
         # sys.stderr.write("self.modelmatrixbuffer = {}\n".format(self.modelmatrixbuffer))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         # 4 bytes per float * 16 floats per object
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
-        self.modelnormalmatrixbuffer = glGenBuffers(1)
+        self.modelnormalmatrixbuffer = GL.glGenBuffers(1)
         # sys.stderr.write("self.modelnormalmatrixbuffer = {}\n".format(self.modelnormalmatrixbuffer))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
         # 4 bytes per float * 9 floats per object
         #  BUT!  Because of std140 layout, there's actually 12 floats per object,
         #    as the alignment of each row of the matrix is like a vec4 rather than a vec3
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
-        self.colorbuffer = glGenBuffers(1)
+        self.colorbuffer = GL.glGenBuffers(1)
         # sys.stderr.write("self.colorbuffer = {}\n".format(self.colorbuffer))
-        glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
         # 4 bytes per float * 4 floats per object
-        glBufferData(GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL_DYNAMIC_DRAW)
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
-        dex = glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
+        dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
         # sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
-        glUniformBlockBinding(self.shader.progid, dex, 0);
+        GL.glUniformBlockBinding(self.shader.progid, dex, 0);
 
-        dex = glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
+        dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
         # sys.stderr.write("ModelNormalMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
-        glUniformBlockBinding(self.shader.progid, dex, 1);
+        GL.glUniformBlockBinding(self.shader.progid, dex, 1);
 
-        dex = glGetUniformBlockIndex(self.shader.progid, "Colors")
+        dex = GL.glGetUniformBlockIndex(self.shader.progid, "Colors")
         # sys.stderr.write("Colors block index (progid={}): {}\n".format(self.shader.progid, dex))
-        glUniformBlockBinding(self.shader.progid, dex, 2);
+        GL.glUniformBlockBinding(self.shader.progid, dex, 2);
 
         self.bind_uniform_buffers()
         
@@ -276,9 +383,9 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_remove_object(obj))
 
     def bind_uniform_buffers(self):
-        glBindBufferBase(GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
-        glBindBufferBase(GL_UNIFORM_BUFFER, 2, self.colorbuffer)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 2, self.colorbuffer)
         
         
     def update_object_matrix(self, obj):
@@ -299,11 +406,11 @@ class GLObjectCollection(Observer):
             if not obj._id in self.objects:
                 return
             dex = self.object_index[obj._id]
-            glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
-            glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
-            glutPostRedisplay()
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
+            GLUT.glutPostRedisplay()
 
     def do_remove_object_uniform_buffer_data(self, obj):
         with GLUTContext._threadlock:
@@ -311,17 +418,17 @@ class GLObjectCollection(Observer):
             dex = self.object_index[obj._id]
             # sys.stderr.write("Removing uniform buffer data at dex={}\n".format(dex))
             if dex < len(self.objects)-1:
-                glBindBuffer(GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*16, (len(self.objects)-(dex+1))*4*16 )
-                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*16, data)
+                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*16, (len(self.objects)-(dex+1))*4*16 )
+                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, data)
 
-                glBindBuffer(GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*12, (len(self.objects)-(dex+1))*4*12 )
-                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*12, data)
+                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*12, (len(self.objects)-(dex+1))*4*12 )
+                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, data)
 
-                glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
-                data = glGetBufferSubData( GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
-                glBufferSubData(GL_UNIFORM_BUFFER, dex*4*4, data)
+                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
+                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
             
     def update_object_color(self, obj):
         if not obj.visible: return
@@ -336,9 +443,9 @@ class GLObjectCollection(Observer):
                 return
             # sys.stderr.write("Updating an object color.\n")
             dex = self.object_index[obj._id]
-            glBindBuffer(GL_UNIFORM_BUFFER, self.colorbuffer)
-            glBufferSubData(GL_UNIFORM_BUFFER, dex*4*4, obj._color)
-            glutPostRedisplay()
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, obj._color)
+            GLUT.glutPostRedisplay()
             
     def receive_message(self, message, subject):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
@@ -386,6 +493,17 @@ class GLObjectCollection(Observer):
 #
 
 class SimpleObjectCollection(GLObjectCollection):
+    """A collection of "simple" objects.
+
+    Each object is represented by a number of triangles.  An object that
+    goes into one of these collections must have:
+      — num_triangles : the number of triangles in the object
+      — vertexdata : a numpy array of float32 that has a sequence of vec4 (w=1), 3 for each triangle (w = 1)
+      — normaldata : a numpy array of float32 that has a sequence of vec3, 3 for each triangle
+
+    They must also meet the requirements of GLObjectCollection
+    """
+    
     def __init__(self, context, *args, **kwargs):
         super().__init__(context, *args, **kwargs)
         self.shader = Shader.get("Basic Shader", context)
@@ -406,40 +524,40 @@ class SimpleObjectCollection(GLObjectCollection):
     def initglstuff(self):
         super().initglstuff()
         
-        self.vertexbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
+        self.vertexbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
         # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 4 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
 
-        self.normalbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
+        self.normalbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
         # 4 bytes per float * 3 floats per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 3 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 3 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
 
-        self.objindexbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        self.objindexbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         # 4 bytes per int * 1 int per vertex * 3 vertices per triangle
-        glBufferData(GL_ARRAY_BUFFER, 4 * 1 * 3 * self.maxnumtris, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 1 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
         
-        self.VAO = glGenVertexArrays(1)
+        self.VAO = GL.glGenVertexArrays(1)
 
         self.bind_vertex_attribs()
         self.is_initialized = True
 
     def bind_vertex_attribs(self):
-        glBindVertexArray(self.VAO)
+        GL.glBindVertexArray(self.VAO)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(0)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+        GL.glVertexAttribPointer(0, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(0)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+        GL.glVertexAttribPointer(1, 3, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(1)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glVertexAttribIPointer(2, 1, GL_INT, 0, None)
-        glEnableVertexAttribArray(2)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glVertexAttribIPointer(2, 1, GL.GL_INT, 0, None)
+        GL.glEnableVertexAttribArray(2)
 
     def add_object(self, obj):
         # Make sure not to double-add
@@ -474,20 +592,20 @@ class SimpleObjectCollection(GLObjectCollection):
             if dex < len(self.objects)-1:
                 srcoffset = self.object_triangle_index[obj._id] + obj.num_triangles
                 dstoffset = self.object_triangle_index[obj._id]
-                glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*3, (self.curnumtris - srcoffset)*4*4*3 )
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*3, data)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*3, (self.curnumtris - srcoffset)*4*4*3 )
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*3, data)
 
-                glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*3*3, (self.curnumtris - srcoffset)*4*3*3 )
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*3*3, data)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*3*3, (self.curnumtris - srcoffset)*4*3*3 )
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*3*3, data)
 
-                glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
                 data = numpy.empty( (self.curnumtris - srcoffset)*3, dtype=numpy.int32 )
-                glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*1*3, (self.curnumtris - srcoffset)*4*1*3,
+                GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*3, (self.curnumtris - srcoffset)*4*1*3,
                                     ctypes.c_void_p(data.__array_interface__['data'][0]) )
                 data[:] -= 1
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*1*3, data)
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*3, data)
 
                 self.do_remove_object_uniform_buffer_data(obj)
 
@@ -502,7 +620,7 @@ class SimpleObjectCollection(GLObjectCollection):
             del self.object_triangle_index[obj._id]
             obj.remove_listener(self)
             
-            glutPostRedisplay()
+            GLUT.glutPostRedisplay()
                 
     # Updates positions of verticies and directions of normals.
     # Can NOT change the number of vertices
@@ -515,11 +633,11 @@ class SimpleObjectCollection(GLObjectCollection):
         with GLUTContext._threadlock:
             if not obj._id in self.objects:
                 return
-            glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
-            glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
-            glutPostRedisplay()
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
+            GLUT.glutPostRedisplay()
 
 
     def push_all_object_info(self, obj):
@@ -537,31 +655,31 @@ class SimpleObjectCollection(GLObjectCollection):
         # sys.exit(20)
 
         # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
-        glBindBuffer(GL_ARRAY_BUFFER, self.vertexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
 
         # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
-        glBindBuffer(GL_ARRAY_BUFFER, self.normalbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
 
         objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
         objindexcopies[:] = dex
         # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
         # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
         
         self.do_update_object_matrix(obj)
         self.do_update_object_color(obj)
 
-        glutPostRedisplay()    # Redundant... it just happened in the last two function calls
+        GLUT.glutPostRedisplay()    # Redundant... it just happened in the last two function calls
 
     # Never call this directly!  It should only be called from within the
     #   draw method of a GLUTContext
     def draw(self):
         with GLUTContext._threadlock:
             # sys.stderr.write("Drawing Simple Object Collection with shader progid {}\n".format(self.shader.progid))
-            glUseProgram(self.shader.progid)
+            GL.glUseProgram(self.shader.progid)
             self.bind_uniform_buffers()
             self.bind_vertex_attribs()
             self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
@@ -570,12 +688,12 @@ class SimpleObjectCollection(GLObjectCollection):
                                           self.context._camtheta, self.context._camphi)
 
             if self.draw_as_lines:
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
             else:
-                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-            glBindVertexArray(self.VAO)
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+            GL.glBindVertexArray(self.VAO)
             # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
-            glDrawArrays(GL_TRIANGLES, 0, self.curnumtris*3)
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.curnumtris*3)
             # sys.stderr.write("...done drawing triangles.")
 
 
@@ -583,6 +701,11 @@ class SimpleObjectCollection(GLObjectCollection):
 # CurveCollection
 
 class CurveCollection(GLObjectCollection):
+    """A collection of curves defined by a sequence of points.
+
+    ROB WRITE MORE
+    """
+    
     def __init__(self, context, *args, **kwargs):
         super().__init__(context, *args, **kwargs)
         self.shader = Shader.get("Curve Tube Shader", context)
@@ -602,40 +725,40 @@ class CurveCollection(GLObjectCollection):
     def initglstuff(self):
         super().initglstuff()
 
-        self.linebuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
+        self.linebuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
         # 4 bytes per float * 4 floats per vertex * 2 vertices per line
-        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL.GL_STATIC_DRAW)
 
-        self.transversebuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
+        self.transversebuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
         # Same length
-        glBufferData(GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 4 * 2 * self.maxnumlines, None, GL.GL_STATIC_DRAW)
 
-        self.objindexbuffer = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+        self.objindexbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         # 4 bytes per int * 1 int per vertex * 2 vertices per line
-        glBufferData(GL_ARRAY_BUFFER, 4 * 1 * 2 * self.maxnumlines, None, GL_STATIC_DRAW)
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 1 * 2 * self.maxnumlines, None, GL.GL_STATIC_DRAW)
         
-        self.VAO = glGenVertexArrays(1)
+        self.VAO = GL.glGenVertexArrays(1)
 
         self.bind_vertex_attribs()
         self.is_initialized = True
 
     def bind_vertex_attribs(self):
-        glBindVertexArray(self.VAO)
+        GL.glBindVertexArray(self.VAO)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
-        glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(0)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
+        GL.glVertexAttribPointer(0, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(0)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
-        glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 0, None)
-        glEnableVertexAttribArray(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
+        GL.glVertexAttribPointer(1, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(1)
 
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glVertexAttribIPointer(2, 1, GL_INT, 0, None)
-        glEnableVertexAttribArray(2)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glVertexAttribIPointer(2, 1, GL.GL_INT, 0, None)
+        GL.glEnableVertexAttribArray(2)
 
     def add_object(self, obj):
         if obj._id in self.objects:
@@ -667,20 +790,20 @@ class CurveCollection(GLObjectCollection):
             if dex < len(self.objects)-1:
                 srcoffset = self.line_index[obj._id] + (obj.points.shape[0]-1)
                 dstoffset = self.line_index[obj._id]
-                glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
-                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
+                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
 
-                glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
-                data = glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
+                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
 
-                glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
+                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
                 data = numpy.empty( (self.curnumlines - srcoffset)*2, dtype=numpy.int32 )
-                glGetBufferSubData( GL_ARRAY_BUFFER, srcoffset*4*1*2, (self.curnumlines - srcoffset)*4*1*2,
+                GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*2, (self.curnumlines - srcoffset)*4*1*2,
                                     ctypes.c_void_p(data.__array_interface__['data'][0]) )
                 data[:] -= 1
-                glBufferSubData(GL_ARRAY_BUFFER, dstoffset*4*1*2, data)
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*2, data)
                 
                 self.do_remove_object_uniform_buffer_data(obj)
 
@@ -696,7 +819,7 @@ class CurveCollection(GLObjectCollection):
             del self.line_index[obj._id]
             obj.remove_listener(self)
             
-            glutPostRedisplay()
+            GLUT.glutPostRedisplay()
 
     def update_object_vertices(self, obj):
         if not obj.visible: return
@@ -727,11 +850,11 @@ class CurveCollection(GLObjectCollection):
             transpoints[-1, 0:3] = obj.trans[-1, :]
 
             offset = self.line_index[obj._id]
-            glBindBuffer(GL_ARRAY_BUFFER, self.linebuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
-            glBindBuffer(GL_ARRAY_BUFFER, self.transversebuffer)
-            glBufferSubData(GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
-            glutPostRedisplay()
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
+            GLUT.glutPostRedisplay()
         
     def push_all_object_info(self, obj):
         if not obj._id in self.objects:
@@ -742,13 +865,13 @@ class CurveCollection(GLObjectCollection):
         dex = self.object_index[obj._id]
         objindexcopies = numpy.empty(2*(obj.points.shape[0]-1), dtype=numpy.int32)
         objindexcopies[:] = dex
-        glBindBuffer(GL_ARRAY_BUFFER, self.objindexbuffer)
-        glBufferSubData(GL_ARRAY_BUFFER, self.line_index[obj._id]*4*1*2, objindexcopies)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.line_index[obj._id]*4*1*2, objindexcopies)
         
         self.do_update_object_matrix(obj)
         self.do_update_object_color(obj)
 
-        glutPostRedisplay()
+        GLUT.glutPostRedisplay()
             
     # Never call this directly!  It should only be called from within the
     #   draw method of a GLUTContext
@@ -757,7 +880,7 @@ class CurveCollection(GLObjectCollection):
     def draw(self):
         with GLUTContext._threadlock:
             # sys.stderr.write("Drawing Curve Tube Collection with shader progid {}\n".format(self.shader.progid))
-            glUseProgram(self.shader.progid)
+            GL.glUseProgram(self.shader.progid)
             self.bind_uniform_buffers()
             self.bind_vertex_attribs()
             self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
@@ -766,12 +889,12 @@ class CurveCollection(GLObjectCollection):
                                           self.context._camtheta, self.context._camphi)
 
             if self.draw_as_lines:
-                glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
             else:
-                glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-            glBindVertexArray(self.VAO)
+                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+            GL.glBindVertexArray(self.VAO)
             # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
-            glDrawArrays(GL_LINES, 0, self.curnumlines*2)
+            GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
             # sys.stderr.write("...done drawing lines\n");
         
 # ======================================================================
@@ -780,16 +903,23 @@ class CurveCollection(GLObjectCollection):
 #
 # I think I was trying to set this up so taht you couold have more
 # than one GLUTContext object... but then the class stuff seems
-# to be setting things up so there's only one GLUT Context, and I'm
-# not 100% clear on what a GLUT Context fully means.
+# to be setting things up so there's only one GLUT.GLUT Context, and I'm
+# not 100% clear on what a GLUT.GLUT Context fully means.
 #
 # I added passing "instance" to class_init_2, as it seemed that
-# I had to initialize GLUT in the same therad as the mainloop.  I suspect
+# I had to initialize GLUT.GLUT in the same therad as the mainloop.  I suspect
 # that the whole setup of the thing is now more complicated than it
 # needs to be, and it certainly won't work with more than one window
 # now.  Rethinking is needed.
 
 class GLUTContext(Observer):
+    """Encapsulates a window and OpenGL context in which to draw.
+
+    Will break if you make more than one.  If you need the context
+    instance, use the _default_context static class member.  That sounds
+    like kind of a messy implementation.  I should make it better.
+    """
+    
     _threadlock = threading.RLock()
     _class_init_1 = False
     _class_init_2 = False
@@ -810,15 +940,15 @@ class GLUTContext(Observer):
             if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
                 GLUTContext._default_context = object
 
-            glutInit(len(sys.argv), sys.argv)
-            glutInitContextVersion(3, 3)
-            glutInitContextFlags(GLUT_FORWARD_COMPATIBLE)
-            glutInitContextProfile(GLUT_CORE_PROFILE)
-            glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_GLUTMAINLOOP_RETURNS)
-            glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
+            GLUT.glutInit(len(sys.argv), sys.argv)
+            GLUT.glutInitContextVersion(3, 3)
+            GLUT.glutInitContextFlags(GLUT.GLUT_FORWARD_COMPATIBLE)
+            GLUT.glutInitContextProfile(GLUT.GLUT_CORE_PROFILE)
+            GLUT.glutSetOption(GLUT.GLUT_ACTION_ON_WINDOW_CLOSE, GLUT.GLUT_ACTION_GLUTMAINLOOP_RETURNS)
+            GLUT.glutInitDisplayMode(GLUT.GLUT_RGBA | GLUT.GLUT_DOUBLE | GLUT.GLUT_DEPTH)
 
-            ### res = glInitSeparateShaderObjectsARB() # ROB check error return
-            ### glEnable(res)
+            ### res = GL.glInitSeparateShaderObjectsARB() # ROB check error return
+            ### GL.glEnable(res)
 
             GLUTContext._class_init_1 = True
 
@@ -836,7 +966,7 @@ class GLUTContext(Observer):
             GLUTContext.idle_funcs = []
             GLUTContext.things_to_run = queue.Queue()
 
-            # sys.stderr.write("Starting GLUT thread...\n")
+            # sys.stderr.write("Starting GLUT.GLUT thread...\n")
             # GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
             GLUTContext.thread = threading.Thread(target=GLUTContext.thread_main, args=(instance,))
             GLUTContext.thread.daemon = True
@@ -851,13 +981,13 @@ class GLUTContext(Observer):
     @staticmethod
     def thread_main(instance):
         sys.stderr.write("Starting thread_main\n")
-        glutInitWindowSize(instance.width, instance.height)
-        glutInitWindowPosition(0, 0)
-        instance.window = glutCreateWindow(instance.title)
-        glutSetWindow(instance.window)
-        glutIdleFunc(lambda: GLUTContext.idle())
-        sys.stderr.write("Going into GLUT main loop.\n")
-        glutMainLoop()
+        GLUT.glutInitWindowSize(instance.width, instance.height)
+        GLUT.glutInitWindowPosition(0, 0)
+        instance.window = GLUT.glutCreateWindow(instance.title)
+        GLUT.glutSetWindow(instance.window)
+        GLUT.glutIdleFunc(lambda: GLUTContext.idle())
+        sys.stderr.write("Going into GLUT.GLUT main loop.\n")
+        GLUT.glutMainLoop()
 
     @staticmethod
     def add_idle_func(func):
@@ -890,16 +1020,16 @@ class GLUTContext(Observer):
     #  the gl_version_info method of a GLUTContext instance.
     @staticmethod
     def do_gl_version_info():
-        sys.stderr.write("OpenGL version: {}\n".format(glGetString(GL_VERSION)))
-        sys.stderr.write("OpenGL renderer: {}\n".format(glGetString(GL_RENDERER)))
-        sys.stderr.write("OpenGL vendor: {}\n".format(glGetString(GL_VENDOR)))
+        sys.stderr.write("OpenGL version: {}\n".format(GL.glGetString(GL.GL_VERSION)))
+        sys.stderr.write("OpenGL renderer: {}\n".format(GL.glGetString(GL.GL_RENDERER)))
+        sys.stderr.write("OpenGL vendor: {}\n".format(GL.glGetString(GL.GL_VENDOR)))
         sys.stderr.write("OpenGL shading language version: {}\n"
-                         .format(glGetString(GL_SHADING_LANGUAGE_VERSION)))
+                         .format(GL.glGetString(GL.GL_SHADING_LANGUAGE_VERSION)))
 
     # ======================================================================
     # Instance methods
 
-    def __init__(self, width=500, height=400, title="GLUT", *args, **kwargs):
+    def __init__(self, width=500, height=400, title="GLUT.GLUT", *args, **kwargs):
         super().__init__(*args, **kwargs)
         # sys.stderr.write("Starting __init__")
         GLUTContext.class_init(self)
@@ -946,14 +1076,14 @@ class GLUTContext(Observer):
 
     def gl_init(self):
         # sys.stderr.write("Starting gl_init\n")
-        glutSetWindow(self.window)
-        glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
-        glutReshapeFunc(lambda width, height : self.resize2d(width, height))
-        glutDisplayFunc(lambda : self.draw())
-        glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
+        GLUT.glutSetWindow(self.window)
+        GLUT.glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
+        GLUT.glutReshapeFunc(lambda width, height : self.resize2d(width, height))
+        GLUT.glutDisplayFunc(lambda : self.draw())
+        GLUT.glutVisibilityFunc(lambda state : self.window_visibility_handler(state))
         # Right now, the timer just prints FPS
-        glutTimerFunc(0, lambda val : self.timer(val), 0)
-        glutCloseFunc(lambda : self.cleanup())
+        GLUT.glutTimerFunc(0, lambda val : self.timer(val), 0)
+        GLUT.glutCloseFunc(lambda : self.cleanup())
         self.window_is_initialized = True
         # sys.stderr.write("Exiting gl_init\n")
 
@@ -961,19 +1091,19 @@ class GLUTContext(Observer):
         GLUTContext.run_glcode(lambda : GLUTContext.do_gl_version_info())
 
     def window_visibility_handler(self, state):
-        if state != GLUT_VISIBLE:
+        if state != GLUT.GLUT_VISIBLE:
             return
-        glutSetWindow(self.window)
+        GLUT.glutSetWindow(self.window)
         with GLUTContext._threadlock:
             GLUTContext._full_init = True
-        glutVisibilityFunc(None)
+        GLUT.glutVisibilityFunc(None)
 
     def mouse_button_handler(self, button, state, x, y):
-        if button == GLUT_RIGHT_BUTTON:
-            glutSetWindow(self.window)
+        if button == GLUT.GLUT_RIGHT_BUTTON:
+            GLUT.glutSetWindow(self.window)
 
-            if state == GLUT_UP:
-                glutMotionFunc(None)
+            if state == GLUT.GLUT_UP:
+                GLUT.glutMotionFunc(None)
                 if self._camtheta > math.pi:
                     self._camtheta = math.pi
                 if self._camtheta < 0.:
@@ -983,46 +1113,46 @@ class GLUTContext(Observer):
                 if self._camphi < 0.:
                     self._camphi += 2.*math.pi
 
-            elif state == GLUT_DOWN:
+            elif state == GLUT.GLUT_DOWN:
                 self._mousex0 = x
                 self._mousey0 = y
                 self._origtheta = self._camtheta
                 self._origphi = self._camphi
-                glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
+                GLUT.glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
 
-        if button == GLUT_MIDDLE_BUTTON:
-            glutSetWindow(self.window)
+        if button == GLUT.GLUT_MIDDLE_BUTTON:
+            GLUT.glutSetWindow(self.window)
 
-            if state == GLUT_UP:
+            if state == GLUT.GLUT_UP:
                 # sys.stderr.write("MMB up\n")
-                glutMotionFunc(None)
+                GLUT.glutMotionFunc(None)
 
-            elif state ==GLUT_DOWN:
+            elif state ==GLUT.GLUT_DOWN:
                 # sys.stderr.write("MMB down\n")
                 self._mousex0 = x
                 self._mousey0 = y
                 self._origcamz = self._camz
-                glutMotionFunc(lambda x, y : self.mmb_moved(x, y))
+                GLUT.glutMotionFunc(lambda x, y : self.mmb_moved(x, y))
 
-        if button == GLUT_LEFT_BUTTON:
-            glutSetWindow(self.window)
+        if button == GLUT.GLUT_LEFT_BUTTON:
+            GLUT.glutSetWindow(self.window)
             
-            if state == GLUT_UP:
+            if state == GLUT.GLUT_UP:
                 # sys.stderr.write("LMB up\n")
-                glutMotionFunc(None)
+                GLUT.glutMotionFunc(None)
 
-            if state == GLUT_DOWN:
+            if state == GLUT.GLUT_DOWN:
                 # sys.stderr.write("LMB down\n")
-                keys = glutGetModifiers()
-                if keys & GLUT_ACTIVE_SHIFT:
+                keys = GLUT.glutGetModifiers()
+                if keys & GLUT.GLUT_ACTIVE_SHIFT:
                     self._mouseposx0 = x
                     self._mouseposy0 = y
                     self._origcamx = self._camx
                     self._origcamy = self._camy
-                    glutMotionFunc(lambda x, y : self.lmb_moved(x, y))
+                    GLUT.glutMotionFunc(lambda x, y : self.lmb_moved(x, y))
             
-        if (state == GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
-            glutSetWindow(self.window)
+        if (state == GLUT.GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
+            GLUT.glutSetWindow(self.window)
 
             if button == 3:
                 self._camz *= 0.9
@@ -1056,9 +1186,8 @@ class GLUTContext(Observer):
                          .format(message, subject))
 
     def cleanup(self):
-        global _exit_whole_program
         # sys.stderr.write("cleanup called in thread {}\n".format(threading.get_ident()))
-        _exit_whole_program = True
+        exit_whole_program()
         # I should do better than this:
         #  * actually clean up
         #  * think about multiple windows
@@ -1068,7 +1197,7 @@ class GLUTContext(Observer):
         if _print_fps:
             sys.stderr.write("Display fps: {}\n".format(self.framecount/2.))
         self.framecount = 0
-        glutTimerFunc(2000, lambda val : self.timer(val), 0)
+        GLUT.glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
     def resize2d(self, width, height):
         # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
@@ -1077,7 +1206,7 @@ class GLUTContext(Observer):
         GLUTContext.run_glcode(lambda : self.resize2d_gl())
 
     def resize2d_gl(self):
-        glViewport(0, 0, self.width, self.height)
+        GL.glViewport(0, 0, self.width, self.height)
         for collection in itertools.chain( self.simple_object_collections,
                                            self.curve_collections ):
             collection.shader.set_perspective(self._fov, self.width/self.height,
@@ -1093,9 +1222,9 @@ class GLUTContext(Observer):
     def draw(self):
         global rater
         
-        glClearColor(0., 0., 0., 0.)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-        glEnable(GL_DEPTH_TEST)
+        GL.glClearColor(0., 0., 0., 0.)
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
+        GL.glEnable(GL.GL_DEPTH_TEST)
 
         with GLUTContext._threadlock:
             # sys.stderr.write("About to draw collections\n")
@@ -1104,16 +1233,15 @@ class GLUTContext(Observer):
                 
                 collection.draw()
 
-                err = glGetError()
-                if err != GL_NO_ERROR:
+                err = GL.glGetError()
+                if err != GL.GL_NO_ERROR:
                     sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
                     sys.exit(-1)
 
-            glutSwapBuffers()
+            GLUT.glutSwapBuffers()
             # sys.stderr.write("Done drawing collections.\n")
 
-            if rater is not None:
-                rater.set()
+            Rater.get().set()
             
         self.framecount += 1
 
@@ -1136,11 +1264,26 @@ class GLUTContext(Observer):
 # for each GLObjectCollection subclass.
 
 class Shader(object):
+    """The base class for shader objects.
+
+    Get shaders by asking for one with Shader.get().
+    """
+
     _basic_shader = {}
     _curvetube_shader = {}
 
     @staticmethod
     def get(name, context):
+        """Factory method for giving shader instances.
+
+        There will only be one shader instance of a given type for each context. 
+
+        name — The type of shader you want:
+                  "Basic Shader" to render a SimpleObjectCollection (stack of triangles)
+                  "Curve Tube Shader" to render a CurveCollection (round tubes around the curve)
+        context — The context for the sader.
+        """
+        
         if name == "Basic Shader":
             with GLUTContext._threadlock:
                 # sys.stderr.write("Asking for a BasicShader\n")
@@ -1186,24 +1329,24 @@ class Shader(object):
 
     def destroy_shaders(self):
         sys.stderr.write("Shader destroy_shaders\n")
-        err = glGetError()
+        err = GL.glGetError()
 
-        glUseProgram(0)
+        GL.glUseProgram(0)
 
-        glDetachShader(self.progid, self.vtxshdrid)
-        glDetachShader(self.progid, self.fragshdrid)
+        GL.glDetachShader(self.progid, self.vtxshdrid)
+        GL.glDetachShader(self.progid, self.fragshdrid)
         if self.geomshdrid is not None:
-            glDetachShader(self.progid, self.geomshdrid)
+            GL.glDetachShader(self.progid, self.geomshdrid)
         
-        glDeleteShader(self.fragshdrid)
-        glDeleteShader(self.vtxshdrid)
+        GL.glDeleteShader(self.fragshdrid)
+        GL.glDeleteShader(self.vtxshdrid)
         if self.geomshdrid is not None:
-            glDetachShader(self.progid, self.geomshdrid)
+            GL.glDetachShader(self.progid, self.geomshdrid)
         
-        glDeleteProgram(self.progid)
+        GL.glDeleteProgram(self.progid)
 
-        err = glGetError()
-        if err != GL_NO_ERROR:
+        err = GL.glGetError()
+        if err != GL.GL_NO_ERROR:
             sys.stderr.write("Error {} destroying shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
@@ -1233,16 +1376,16 @@ class Shader(object):
 
     def init_lights_and_camera(self):
         # sys.stderr.write("Shader: init_lights_and_camera\n")
-        loc = glGetUniformLocation(self.progid, "ambientcolor")
-        glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
-        loc = glGetUniformLocation(self.progid, "light1color")
-        glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
-        loc = glGetUniformLocation(self.progid, "light1dir")
-        glUniform3fv(loc, 1, numpy.array([0.22, 0.44, 0.88]))
-        loc = glGetUniformLocation(self.progid, "light2color")
-        glUniform3fv(loc, 1, numpy.array([0.3, 0.3, 0.3]))
-        loc = glGetUniformLocation(self.progid, "light2dir")
-        glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
+        loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
+        GL.glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
+        loc = GL.glGetUniformLocation(self.progid, "light1color")
+        GL.glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
+        loc = GL.glGetUniformLocation(self.progid, "light1dir")
+        GL.glUniform3fv(loc, 1, numpy.array([0.22, 0.44, 0.88]))
+        loc = GL.glGetUniformLocation(self.progid, "light2color")
+        GL.glUniform3fv(loc, 1, numpy.array([0.3, 0.3, 0.3]))
+        loc = GL.glGetUniformLocation(self.progid, "light2dir")
+        GL.glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
 
         self.set_perspective(self.context._fov, self.context.width/self.context.height,
                              self.context._clipnear, self.context._clipfar)
@@ -1253,10 +1396,10 @@ class Shader(object):
         # sys.stderr.write("Shader: set_perspective\n")
         matrix = self.perspective_matrix(fov, aspect, near,far)
         # sys.stderr.write("Perspective matrix:\n{}\n".format(matrix))
-        glUseProgram(self.progid)
-        projection_location = glGetUniformLocation(self.progid, "projection")
-        glUniformMatrix4fv(projection_location, 1, GL_FALSE, matrix)
-        glutPostRedisplay()
+        GL.glUseProgram(self.progid)
+        projection_location = GL.glGetUniformLocation(self.progid, "projection")
+        GL.glUniformMatrix4fv(projection_location, 1, GL.GL_FALSE, matrix)
+        GLUT.glutPostRedisplay()
         
     def set_camera_posrot(self, x, y, z, theta, phi):
         # sys.stderr.write("Shader: set_camera_posrot\n")
@@ -1274,22 +1417,24 @@ class Shader(object):
                                [ -sp*ct  , -st   , cp*ct ,  -z ],
                                [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
         # sys.stderr.write("Viewrot matrix:\n{}\n".format(matrix.T))
-        glUseProgram(self.progid)
-        viewrot_location = glGetUniformLocation(self.progid, "viewrot")
-        glUniformMatrix4fv(viewrot_location, 1, GL_FALSE, matrix.T)
+        GL.glUseProgram(self.progid)
+        viewrot_location = GL.glGetUniformLocation(self.progid, "viewrot")
+        GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, matrix.T)
         matrix = numpy.matrix([[    1.   ,   0.  ,   0.  , -x  ],
                                [    0.   ,   1.  ,   0.  , -y  ],
                                [    0.   ,   0.  ,   1.  ,  0.  ],
                                [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
         # sys.stderr.write("Viewshift matrix:\n{}\n".format(matrix.T))
-        viewshift_location = glGetUniformLocation(self.progid, "viewshift")
-        glUniformMatrix4fv(viewshift_location, 1, GL_FALSE, matrix.T)
-        glutPostRedisplay()
+        viewshift_location = GL.glGetUniformLocation(self.progid, "viewshift")
+        GL.glUniformMatrix4fv(viewshift_location, 1, GL.GL_FALSE, matrix.T)
+        GLUT.glutPostRedisplay()
 
 # ======================================================================
  # This shader goes with _OBJ_TYPE_SIMPLE and SimpleObjectCollection
 
 class BasicShader(Shader):
+    """Shader class for SimpleObjectCollection.  (Render lots of triangles.)"""
+    
     def __init__(self, context, *args, **kwargs):
         # sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(context, *args, **kwargs)
@@ -1297,7 +1442,7 @@ class BasicShader(Shader):
         GLUTContext.run_glcode(lambda : self.create_shaders())
 
     def create_shaders(self):
-        err = glGetError()
+        err = GL.glGetError()
 
         vertex_shader = """
 #version 330
@@ -1358,33 +1503,33 @@ void main(void)
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
 
-        self.vtxshdrid = glCreateShader(GL_VERTEX_SHADER)
-        glShaderSource(self.vtxshdrid, vertex_shader)
-        glCompileShader(self.vtxshdrid)
+        self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)
+        GL.glShaderSource(self.vtxshdrid, vertex_shader)
+        GL.glCompileShader(self.vtxshdrid)
 
-        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.vtxshdrid)))
 
-        self.fragshdrid = glCreateShader(GL_FRAGMENT_SHADER)
-        glShaderSource(self.fragshdrid, fragment_shader)
-        glCompileShader(self.fragshdrid)
+        self.fragshdrid = GL.glCreateShader(GL.GL_FRAGMENT_SHADER)
+        GL.glShaderSource(self.fragshdrid, fragment_shader)
+        GL.glCompileShader(self.fragshdrid)
 
-        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.fragshdrid)))
         
-        self.progid = glCreateProgram()
-        glAttachShader(self.progid, self.vtxshdrid)
-        glAttachShader(self.progid, self.fragshdrid)
-        glLinkProgram(self.progid)
+        self.progid = GL.glCreateProgram()
+        GL.glAttachShader(self.progid, self.vtxshdrid)
+        GL.glAttachShader(self.progid, self.fragshdrid)
+        GL.glLinkProgram(self.progid)
 
-        if glGetProgramiv(self.progid, GL_LINK_STATUS) != GL_TRUE:
-            sys.stderr.write("{}\n".format(glGetProgramInfoLog(self.progid)))
+        if GL.glGetProgramiv(self.progid, GL.GL_LINK_STATUS) != GL.GL_TRUE:
+            sys.stderr.write("{}\n".format(GL.glGetProgramInfoLog(self.progid)))
             sys.exit(-1)
 
-        glUseProgram(self.progid)
+        GL.glUseProgram(self.progid)
 
         if _debug_shaders: sys.stderr.write("Basic Shader created with progid {}\n".format(self.progid))
         
-        err = glGetError()
-        if err != GL_NO_ERROR:
+        err = GL.glGetError()
+        if err != GL.GL_NO_ERROR:
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
@@ -1395,6 +1540,8 @@ void main(void)
 # This goes with _OBJ_TYPE_CURVE and CurveCollection
 
 class CurveTubeShader(Shader):
+    """Shader class for CurveCollection.  Renders the object as a round tube around a given curve."""
+    
     def __init__(self, context, *args, **kwargs):
         super().__init__(context, *args, **kwargs)
         # sys.stderr.write("Initializing a CurveTubeShader")
@@ -1403,7 +1550,7 @@ class CurveTubeShader(Shader):
         GLUTContext.run_glcode(lambda : self.create_shaders())
 
     def create_shaders(self):
-        err = glGetError()
+        err = GL.glGetError()
       
         vertex_shader = """
 #version 330
@@ -1610,42 +1757,42 @@ void main(void)
 }"""
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile vertex shader....\n")
-        self.vtxshdrid = glCreateShader(GL_VERTEX_SHADER)
-        glShaderSource(self.vtxshdrid, vertex_shader)
-        glCompileShader(self.vtxshdrid)
-        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.vtxshdrid)))
+        self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)
+        GL.glShaderSource(self.vtxshdrid, vertex_shader)
+        GL.glCompileShader(self.vtxshdrid)
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.vtxshdrid)))
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile geometry shader....\n")
-        self.geomshdrid = glCreateShader(GL_GEOMETRY_SHADER)
-        glShaderSource(self.geomshdrid, geometry_shader)
-        # glShaderSource(self.geomshdrid, skeleton_geometry_shader)
-        glCompileShader(self.geomshdrid)
-        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.geomshdrid)))
+        self.geomshdrid = GL.glCreateShader(GL.GL_GEOMETRY_SHADER)
+        GL.glShaderSource(self.geomshdrid, geometry_shader)
+        # GL.glShaderSource(self.geomshdrid, skeleton_geometry_shader)
+        GL.glCompileShader(self.geomshdrid)
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.geomshdrid)))
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile fragment shader....\n")
-        self.fragshdrid = glCreateShader(GL_FRAGMENT_SHADER)
-        glShaderSource(self.fragshdrid, fragment_shader)
-        glCompileShader(self.fragshdrid)
-        if _debug_shaders: sys.stderr.write("{}\n".format(glGetShaderInfoLog(self.fragshdrid)))
+        self.fragshdrid = GL.glCreateShader(GL.GL_FRAGMENT_SHADER)
+        GL.glShaderSource(self.fragshdrid, fragment_shader)
+        GL.glCompileShader(self.fragshdrid)
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.fragshdrid)))
 
         if _debug_shaders: sys.stderr.write("About to create shader program...\n")
-        self.progid = glCreateProgram()
-        glAttachShader(self.progid, self.vtxshdrid)
-        glAttachShader(self.progid, self.geomshdrid)
-        glAttachShader(self.progid, self.fragshdrid)
-        glLinkProgram(self.progid)
+        self.progid = GL.glCreateProgram()
+        GL.glAttachShader(self.progid, self.vtxshdrid)
+        GL.glAttachShader(self.progid, self.geomshdrid)
+        GL.glAttachShader(self.progid, self.fragshdrid)
+        GL.glLinkProgram(self.progid)
         if _debug_shaders: sys.stderr.write("Shader program linked.\n")
 
-        if glGetProgramiv(self.progid, GL_LINK_STATUS) != GL_TRUE:
-            sys.stderr.write("{}\n".format(glGetProgramInfoLog(self.progid)))
+        if GL.glGetProgramiv(self.progid, GL.GL_LINK_STATUS) != GL.GL_TRUE:
+            sys.stderr.write("{}\n".format(GL.glGetProgramInfoLog(self.progid)))
             sys.exit(-1)
 
-        glUseProgram(self.progid)
+        GL.glUseProgram(self.progid)
 
         if _debug_shaders: sys.stderr.write("Curve Tube Shader created with progid {}\n".format(self.progid))
 
-        err = glGetError()
-        if err != GL_NO_ERROR:
+        err = GL.glGetError()
+        if err != GL.GL_NO_ERROR:
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
 
@@ -1657,9 +1804,24 @@ void main(void)
 # ======================================================================
 
 class GrObject(Subject):
+    """Base class for all graphical objects (Box, Sphere, etc.)"""
+    
     def __init__(self, context=None, pos=None, axis=None, up=None, scale=None,
                  color=None, opacity=None, make_trail=False, interval=10, retain=50,
                  *args, **kwargs):
+        """Parameters:
+        
+        context — the context in which this object will exist
+        pos — The position of the object (vector)
+        axis — The orientation of the object, and, if it's not normalized, the scale along its standard axis
+        up — not implemented
+        scale — How much to scale the object (interactis with the amgnitude of axis)
+        color — The color of the object (r, g, b) or (r, g, b, a)
+        make_trail — True to leave behind a trail
+        interval — Only add a trail segment after the object has moved this many times (default: 10)
+        retain — Only keep this many trail segments (the most recent ones) (Default: 50)
+        """
+
         super().__init__(*args, **kwargs)
 
         self._object_type = _OBJ_TYPE_SIMPLE
@@ -1734,8 +1896,9 @@ class GrObject(Subject):
         self.update_model_matrix()
         self.context.add_object(self)
 
-    @property
+    @property    
     def pos(self):
+        """The position of the object (a vector).  Set this to move the object."""
         return self._pos
 
     @pos.setter
@@ -1746,6 +1909,7 @@ class GrObject(Subject):
 
     @property
     def x(self):
+        """The x-component of object position."""
         return self._pos[0]
 
     @x.setter
@@ -1756,6 +1920,7 @@ class GrObject(Subject):
 
     @property
     def y(self):
+        """The y-component of object position."""
         return self._pos[1]
 
     @y.setter
@@ -1766,6 +1931,7 @@ class GrObject(Subject):
 
     @property
     def z(self):
+        """The z-component of object position."""
         return self._pos[2]
 
     @z.setter
@@ -1785,6 +1951,7 @@ class GrObject(Subject):
             sys.exit(20)
         self._scale = numpy.array(value)
         self.update_model_matrix()
+
     @property
     def sx(self):
         return self._scale[0]
@@ -1814,6 +1981,15 @@ class GrObject(Subject):
 
     @property
     def axis(self):
+        """The orientation of the object.  Set this to rotate (and maybe stretch) the object.
+
+        Objects by default have an axis along the x-axis, so if you pass
+        [1,0,0], you'll get the default object orientation.  The
+        magnitude of axis scales the object along it's primary axis.
+        (The meaning of the primary axis depends on the type of object.)
+
+        """
+        
         return self._axis
         # return quaternion_rotate([self._scale[0], 0., 0.], self._rotation)
         # v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
@@ -1822,6 +1998,16 @@ class GrObject(Subject):
         # qinv /= (q*q).sum()
         # return quaternion_multiply(q, quaternion_multiply(v, qinv))[0:3]
 
+    # I'm not completely happy with this, because if you rotate an
+    # object a lot small errors can build up.
+    #
+    # I figure out the rotation by building on top of the exiting
+    # rotation, rather than just purely from the axis (and figuring out
+    # the rotation to get to the axis from [1, 0, 0], so that the
+    # object's orientation doesn't suddenly change if you make a small
+    # rotation that would go past a (θ, φ) coordinate singularity.
+    #
+    # (Really, I should figure out how I want to deal with "up".)
     @axis.setter
     def axis(self, value):
         magaxis = numpy.sqrt(numpy.square(self._axis).sum())
@@ -1853,6 +2039,7 @@ class GrObject(Subject):
 
     @property
     def up(self):
+        """Not implemendted!!!!!!"""
         # return self._up
         raise Exception("up not implemented")
 
@@ -1866,6 +2053,7 @@ class GrObject(Subject):
 
     @property
     def rotation(self):
+        """Returns (for now) a quaternion representing the rotation of the object away from [1, 0, 0]"""
         return self._rotation
 
     @rotation.setter
@@ -1877,6 +2065,7 @@ class GrObject(Subject):
         self.update_model_matrix()
 
     def rotate(self, angle, axis=None, origin=None):
+        """Rotate the object by angle angle about axis axis."""
         if axis is None:
             axis = self.axis
         axis = numpy.array(axis)
@@ -1894,6 +2083,7 @@ class GrObject(Subject):
         self.rotation = quaternion_multiply(q, self.rotation)
 
     def update_model_matrix(self):
+        """(Internal function to update stuff needed by OpenGL.)"""
         q = self._rotation
         s = 1./( (q*q).sum() )
         rot = numpy.matrix(
@@ -1918,6 +2108,7 @@ class GrObject(Subject):
 
     @property
     def visible(self):
+        """Set to False to remove an object from the display, True to put it back."""
         return self._visible
 
     @visible.setter
@@ -1934,6 +2125,7 @@ class GrObject(Subject):
 
     @property
     def color(self):
+        """The color of an object: (red, green, blue)"""
         return self._color[0:3]
 
     @color.setter
@@ -1946,6 +2138,7 @@ class GrObject(Subject):
 
     @property
     def opacity(self):
+        """Opacity is not implemented."""
         return self.color[3]
 
     @opacity.setter
@@ -1956,6 +2149,7 @@ class GrObject(Subject):
 
     @property
     def make_trail(self):
+        """Set this to True to start leaving a thin trail behind the object as you move it."""
         return self._make_trail
 
     @make_trail.setter
@@ -1971,6 +2165,7 @@ class GrObject(Subject):
 
     @property
     def interval(self):
+        """Only add a new trail segment after the object has been moved this many times."""
         return self._interval
 
     @interval.setter
@@ -1981,6 +2176,7 @@ class GrObject(Subject):
 
     @property
     def retain(self):
+        """Number of trail segments to keep."""
         return self._retain
 
     @retain.setter
@@ -1991,11 +2187,13 @@ class GrObject(Subject):
                 self.initialize_trail()
                 
     def kill_trail(self):
+        """(Internal, do not call.)"""
         if self._trail is not None:
             self._trail.visible = False
         self._trail = None
 
     def initialize_trail(self):
+        """(Internal, do not call.)"""
         self.kill_trail()
         # sys.stderr.write("Initializing trail at pos {} with color {}.\n".format(self._pos, self._color))
         self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
@@ -2006,6 +2204,7 @@ class GrObject(Subject):
         self._nexttrail = self._interval
 
     def update_trail(self):
+        """(Internal, do not call.)"""
         if not self._make_trail: return
         self._nexttrail -= 1
         if self._nexttrail <= 0:
@@ -2025,7 +2224,8 @@ class GrObject(Subject):
 # ======================================================================
 
 class Box(GrObject):
-
+    """A rectangular solid with dimenions (x,y,z) = (length,height,width)"""
+    
     @staticmethod
     def make_box_buffers(context):
         with GLUTContext._threadlock:
@@ -2094,6 +2294,15 @@ class Box(GrObject):
 
 
     def __init__(self, length=1., width=1., height=1., *args, **kwargs):
+        """Parameters:
+
+        length — The size of the box along the x-axis (left-right with default camera orientation)
+        height — The size of the box along the y-axis (up-down with default camera orientation)
+        width — The size of the box along the z-axis (in-out with default camera orientatino)
+
+        Plus standard GrObject parameters: context, pos, axis, up, scale, color, make_trail, interval, retain
+        """
+
         super().__init__(*args, **kwargs)
 
         Box.make_box_buffers(self.context)
@@ -2143,9 +2352,11 @@ class Box(GrObject):
 # VAO, I don't use indexed buffers.
 
 class Icosahedron(GrObject):
-
+    """An icosahedron or subdivided icosahedron, with flat or smooth shading (for spheres)."""
+    
     @staticmethod
     def make_icosahedron_vertices(subdivisions=0):
+        """Internal, do not call."""
         with GLUTContext._threadlock:
             if not hasattr(Icosahedron, "_vertices"):
                 Icosahedron._vertices = [None, None, None, None, None]
@@ -2275,6 +2486,7 @@ class Icosahedron(GrObject):
 
     @staticmethod
     def subdivide(vertices, edges, faces, r=1.0):
+        """Internal, do not call."""
         newverts = numpy.zeros( len(vertices) + 4*edges.shape[0], dtype=numpy.float32 )
         newverts[0:len(vertices)] = vertices
         numoldverts = len(vertices) // 4
@@ -2347,6 +2559,16 @@ class Icosahedron(GrObject):
 
 
     def __init__(self, radius=1., flat=False, subdivisions=0, *args, **kwargs):
+        """Parameters:
+
+        radius — The radius of the icosahedron (to the points) or sphere (default: 1)
+        flat — If True, render faces flat; otherwise, smooth shade them to approximate a sphere. (default: False)
+        subdivisions — How many times to subdivide the icosahedron; each subdivision increases number of faces 4×
+                       (default 0)
+
+        Plus the usual GrObject parameters.
+        """
+
         super().__init__(*args, **kwargs)
 
         if subdivisions > 4.:
@@ -2369,6 +2591,7 @@ class Icosahedron(GrObject):
 
     @property
     def radius(self):
+        """The radius of the icosahedron or sphere."""
         return self.scale.sum()/3.
 
     @radius.setter
@@ -2377,12 +2600,31 @@ class Icosahedron(GrObject):
 
 
 class Sphere(Icosahedron):
+    """A sphere, modelled by default as a 2x subdivided icosahedron (320 faces)."""
     def __init__(self, subdivisions=2, *args, **kwargs):
+        """Parameters:
+
+        subdivisions — higher = more faces (default: 2) (More than 3 is excessive, even 3 is probably excessive.)
+        radius — radius of the sphere (default 1)
+
+        Plus the usual GrObject parameters
+        """
         super().__init__(subdivisions=subdivisions, *args, **kwargs)
 
 
 class Ellipsoid(Icosahedron):
+    """An ellipsoid."""
+
     def __init__(self, subdivisions=2, length=1., width=1., height=1., *args, **kwargs):
+        """Parameters:
+
+        subdivisions — higher = more faces (default: 2, which is probably always good)
+        length — diameter along x-axis (for unrotated object)
+        width — diameter along z-axis (for unrotated object)
+        height — diameter along y-axis (for unrotated object)
+
+        Plus the usual GrObject parameters.
+        """
         super().__init__(subdivisions=subdivisions, *args, **kwargs)
 
         self.length = length
@@ -2391,6 +2633,7 @@ class Ellipsoid(Icosahedron):
         
     @property
     def length(self):
+        """The diameter along the object's local x-axis."""
         return self.sx/2.
 
     @length.setter
@@ -2399,6 +2642,7 @@ class Ellipsoid(Icosahedron):
 
     @property
     def width(self):
+        """The diameter along the object's local z-axis."""
         return self.sz/2.
 
     @width.setter
@@ -2407,6 +2651,7 @@ class Ellipsoid(Icosahedron):
 
     @property
     def height(self):
+        """The diameter along the object's local y-axis."""
         return self.sy/2.
 
     @height.setter
@@ -2416,9 +2661,11 @@ class Ellipsoid(Icosahedron):
 # # ======================================================================
 
 class Cylinder(GrObject):
-
+    """A cylinder, oriented by default along the x-axis."""
+    
     @staticmethod
     def make_cylinder_vertices(num_edge_points=16):
+        """Internal, do not call."""
         with GLUTContext._threadlock:
             if not hasattr(Cylinder, "_vertices"):
                 Cylinder._vertices = {}
@@ -2493,6 +2740,15 @@ class Cylinder(GrObject):
 
 
     def __init__(self, radius=1., num_edge_points=16, *args, **kwargs):
+        """Parameters:
+
+        radius — The transverse radius of the cylinder.
+        num_edge_points — How many faces the end polygons have (default: 16)
+        (Use axis to set both the orientation and length of the cylinder.)
+
+        Plus the usual GrObject parameters.
+        """
+
         super().__init__(*args, **kwargs)
 
         Cylinder.make_cylinder_vertices(num_edge_points)
@@ -2509,6 +2765,7 @@ class Cylinder(GrObject):
 
     @property
     def radius(self):
+        """Transverse radius of the cylinder."""
         return self._radius
 
     @radius.setter
@@ -2519,9 +2776,11 @@ class Cylinder(GrObject):
 # ======================================================================
 
 class Cone(GrObject):
-
+    """A cone with its base at the origin and its tip at 1,0,0"""
+    
     @staticmethod
     def make_cone_vertices():
+        """Internal, do not call."""
         with GLUTContext._threadlock:
             if not hasattr(Cone, "_vertices"):
                 num_edge_points = 16
@@ -2572,6 +2831,15 @@ class Cone(GrObject):
 
 
     def __init__(self, radius=1., *args, **kwargs):
+        """Parameters:
+
+        radius — the radius of the circle that makes the base of the cone.  (Really a 12-sided polygon, smooth shaded.)
+
+        Use the axis parmaeter to adjust the orientation and length of the cone.
+
+        Plus the usual GrObject parameters.
+        """
+        
         super().__init__(*args, **kwargs)
 
         Cone.make_cone_vertices()
@@ -2588,6 +2856,7 @@ class Cone(GrObject):
 
     @property
     def radius(self):
+        """The radius of the base of the cone."""
         return self._radius
 
     @radius.setter
@@ -2598,7 +2867,22 @@ class Cone(GrObject):
 # ======================================================================
 
 class Arrow(GrObject):
+    """An arrow with a square cross-section shaft."""
+
     def __init__(self, shaftwidth=None, headwidth=None, headlength=None, fixedwidth=False, *args, **kwargs):
+        """Parmaeters:
+        
+        shaftwidth — The width of the shaft (default: 0.1 * length)
+        headwidth — The width of the head (default: 2 * shaftwidth)
+        headlength — The length of the head (default: 3 * shaftidth)
+        fixedwidth — If False (default), all of the dimensions scale when you change the length of the arrow.
+                     If True then shaftwidth, headwidth, and headlength stays fixed.
+        
+        Control the orientation and length of the arrow with axis.
+
+        Plus the usual GrObject parameters.
+        """
+
         super().__init__(*args, **kwargs)
 
         length = self.sx
@@ -2624,6 +2908,7 @@ class Arrow(GrObject):
         self.finish_init()
 
     def make_arrow(self):
+        """Internal, do not use."""
         # 16 triangles:
         #   2 for the base
         #   2 for each side (8 total)
@@ -2729,6 +3014,10 @@ class Arrow(GrObject):
 
     @GrObject.axis.setter
     def axis(self, value):
+        """Orient and scale the overall length of arrow.
+
+        Its other dimenions change based on whether or not you specified fixedwidth=True when creating the arrow.
+        """
         GrObject.axis.fset(self, value)
         if hasattr(self, 'fixedwidth') and self.fixedwidth:
             self.make_arrow()
@@ -2755,7 +3044,23 @@ class Arrow(GrObject):
 # terms of any actual physical dimension.
 
 class FixedLengthCurve(GrObject):
+    """A curved tube around a path.  The path is specified by a series of points.
+
+    It's "Fixed Length" because once you create it, you cannot change the number
+    of points in the curve.  You may still change the physical dimensions by using
+    axis, as with any other object.
+    """
+    
     def __init__(self, radius=0.05, points=None, *args, **kwargs):
+        """Parameters:
+
+        points — A n×3 array that specifies the position of n points.
+                 This is the path that is the center of the tube.
+        radius — The radius of the tube that will be drawn around the path.
+
+        Plus the other standard GrObject parameters.
+        """
+        
         super().__init__(*args, **kwargs)
 
         self._object_type = _OBJ_TYPE_CURVE
@@ -2777,6 +3082,10 @@ class FixedLengthCurve(GrObject):
     # Adds a point to the end of the curve
     #   and removes the first point.
     def push_point(self, pos):
+        """Add a new point to the end of the curve, and remove the first point from the curve.
+
+        pos — The position of the new point.
+        """
         self._points[:-1, :] = self._points[1:, :]
         # error check pos?
         self._points[-1, :] = pos
@@ -2790,6 +3099,7 @@ class FixedLengthCurve(GrObject):
         
     @property
     def points(self):
+        """The array of points on the curve.  Returned by reference, so be careful."""
         return self._points
 
     @points.setter
@@ -2802,10 +3112,12 @@ class FixedLengthCurve(GrObject):
 
     @property
     def trans(self):
+        """The array of transverse vectors that were generated for the curve."""
         return self._transverse
         
     @property
     def radius(self):
+        """The radius of the tube around the path."""
         return self._radius
 
     @radius.setter
@@ -2816,6 +3128,7 @@ class FixedLengthCurve(GrObject):
             self.broadcast("update vertices")
 
     def make_transverse(self):
+        """Internal, do not call."""
         self._transverse = numpy.empty( self._points.shape , dtype=numpy.float32)
         axes = self._points[1:, :] - self.points[:-1, :]
         axesmag = numpy.sqrt(numpy.square(axes).sum(axis=1))
@@ -2846,9 +3159,26 @@ class FixedLengthCurve(GrObject):
 # ======================================================================
 
 class Helix(FixedLengthCurve):
+    """A helix (spring), rendered as a tube around a helical path.
+
+    Initially oriented along the x-axis, with the first point at +z, and
+    winding left-handed.  The object's position is at one end of the
+    center line of the spring.
+    """
+
     def __init__(self, radius=1., coils=5., length=1., thickness=None,
                  num_circ_points=12, *args, **kwargs):
+        """Parameters:
+        
+        radius — The radius of the whole spring
+        coils — The number of coils in the spring (can be fractional, but you'll get an approximation)
+        length — The length of the spring (redundant with the length of axis)
+        num_circ_points — The number of points on the path in one winding of the spring (default: 12)
+        thickness — The thickness of the actual spring wire (default: 0.05 * radius)
 
+        Plus the usual GrObject paramters.
+        """
+        
         self._helixradius = radius
         if thickness is None:
             self._thickness = 0.05 * self._helixradius
@@ -2875,6 +3205,7 @@ class Helix(FixedLengthCurve):
         
     @property
     def length(self):
+        """The length of the spring (same as magnitude of axis)."""
         self._axis.mag
 
     @length.setter
@@ -2883,6 +3214,7 @@ class Helix(FixedLengthCurve):
 
     @property
     def radius(self):
+        """The radius of the coils of the spring."""
         return self._helixradius
 
     @radius.setter
@@ -2893,6 +3225,7 @@ class Helix(FixedLengthCurve):
 
     @property
     def thickness(self):
+        """The thickness of the actual spring wire."""
         return self._thickness
     
     @thickness.setter
@@ -2905,7 +3238,21 @@ class Helix(FixedLengthCurve):
 # A CylindarStack is not a GrObject, even though some of the interface is the same
 
 class CylindarStack(object):
+    """A collection of cylinders whose endpoints aling.  Used to make a trail."""
+    
     def __init__(self, radius=0.01, maxpoints=50, color=color, points=None, num_edge_points=6, *args, **kwargs):
+        """Parameters:
+
+        radius — The radius of each cylinder
+        maxpoints — The number of points in the line.  A cylindar will be drawn between each adjacent pair of points.
+                    If you add more points than maxpoints, the first points get removed.
+        points — A n×3 vector of points specifying the path covered by cylinders.  Must have n < maxpoints
+        num_edge_points — The number of sides in the polygon that makes the end of each cylinder (default: 6)
+        color — The color of the stack of cylinders.  (They're all the same color.)
+
+        This object is *not* a GrObject, so the other usual GrObject parameters won't work with it.
+        """
+
         self._pos = vector( [0., 0., 0.] )
         if points is not None:
             self._pos = vector(points[0])
@@ -2933,6 +3280,8 @@ class CylindarStack(object):
         self._visible = True
         
     def add_point(self, point, *args, **kwargs):
+        """Add a point to the path.  If this exceeds the maximum number of points, the first point is removed."""
+
         self.pointbuffer[self.nextpoint, :] = point[:]
         lastpoint = self.nextpoint - 1
         if lastpoint < 0 : lastpoint = self.maxpoints-1
@@ -2953,6 +3302,7 @@ class CylindarStack(object):
 
     @property
     def pos(self):
+        """The position of the object.  This is not necessarily the same as any of the points in the path."""
         return self._pos
 
     @pos.setter
@@ -2971,6 +3321,7 @@ class CylindarStack(object):
     
     @property
     def visible(self):
+        """Set to False to remove an object from the display, True to put it back."""
         return self._visible
 
     @visible.setter

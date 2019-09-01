@@ -127,7 +127,21 @@ def quaternion_rotate(p, q):
 #   find out.
 
 class vector(numpy.ndarray):
-    """A 3-element vector of floats that represents a physical vector quantity (displacement, velocity, etc.)"""
+    """A 3-element vector of floats that represents a physical vector quantity (displacement, velocity, etc.).
+
+    Create a new vector with just:
+
+          v = vector()
+
+    (which initializes it to (0, 0, 0)), or with:
+
+          v = vector( (0, 1, 0) )
+
+    The argument you pass to vector() must be a sequence, i.e. a tuple,
+    list, numpy array, vector, or something else that has three
+    elements.
+
+    """
     
     def __new__(subtype, vals=(0., 0., 0.), copyvector=None):
         if copyvector is not None:

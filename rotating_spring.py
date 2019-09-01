@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+# A demo program for physvis
+#
+# rotating_spring.py is public domain
+#
+# physvis is (c) 2019 by Rob Knop and available under the GPL; see
+# physvis.py and COPYING for more information.
+
 import math
 from physvis import *
 

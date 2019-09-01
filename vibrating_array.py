@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+# A demo program for physvis
+#
+# vibrating_array.py is public domain
+#
+# physvis is (c) 2019 by Rob Knop and available under the GPL; see
+# physvis.py and COPYING for more information.
+
 import sys
 import math
 import numpy

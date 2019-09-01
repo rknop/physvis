@@ -1,0 +1,296 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module physvis</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>physvis</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/rknop/cjstuff/pyopengl/physvis.py">/home/rknop/cjstuff/pyopengl/physvis.py</a></font></td></tr></table>
+    <p><tt>A&nbsp;module&nbsp;for&nbsp;visualizing&nbsp;simple&nbsp;physics&nbsp;constructions&nbsp;in&nbsp;3D.<br>
+&nbsp;<br>
+Desgined&nbsp;to&nbsp;reimplement&nbsp;a&nbsp;subset&nbsp;of&nbsp;VPython&nbsp;6&nbsp;for&nbsp;Python&nbsp;3,&nbsp;with&nbsp;a&nbsp;standalone&nbsp;display<br>
+(i.e.&nbsp;not&nbsp;requiring&nbsp;a&nbsp;web&nbsp;browser&nbsp;for&nbsp;display).&nbsp;&nbsp;Implemented&nbsp;in&nbsp;pure&nbsp;Python,&nbsp;using<br>
+PyOpenGL&nbsp;(specifically,&nbsp;the&nbsp;GL&nbsp;and&nbsp;GLUT&nbsp;modules).<br>
+&nbsp;<br>
+This&nbsp;module&nbsp;is&nbsp;really&nbsp;just&nbsp;a&nbsp;front-end&nbsp;for&nbsp;visual_base.py;&nbsp;this&nbsp;module&nbsp;has&nbsp;the&nbsp;more&nbsp;direct<br>
+VPython-like&nbsp;interface.<br>
+&nbsp;<br>
+USING&nbsp;OBJECTS:<br>
+&nbsp;<br>
+You&nbsp;must&nbsp;be&nbsp;running&nbsp;pyhon3.&nbsp;&nbsp;physvis&nbsp;is&nbsp;not&nbsp;compatible&nbsp;with&nbsp;python2.<br>
+&nbsp;<br>
+See&nbsp;"bouncing_ball.py"&nbsp;or&nbsp;"rotating_spring.py"&nbsp;as&nbsp;an&nbsp;example.<br>
+&nbsp;<br>
+At&nbsp;the&nbsp;top&nbsp;of&nbsp;your&nbsp;code,&nbsp;include:<br>
+&nbsp;<br>
+&nbsp;&nbsp;from&nbsp;physvis&nbsp;import&nbsp;*<br>
+&nbsp;<br>
+(If&nbsp;you&nbsp;know&nbsp;what&nbsp;you're&nbsp;doing,&nbsp;you&nbsp;may&nbsp;prefer&nbsp;something&nbsp;like&nbsp;"import&nbsp;physvis&nbsp;as&nbsp;vis".)<br>
+&nbsp;<br>
+Create&nbsp;objects&nbsp;just&nbsp;by&nbsp;calling&nbsp;the&nbsp;appropriate&nbsp;function.&nbsp;&nbsp;For&nbsp;instance,&nbsp;if&nbsp;you&nbsp;write&nbsp;in&nbsp;your&nbsp;code:<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;mycube&nbsp;=&nbsp;<a href="#-box">box</a>()<br>
+&nbsp;<br>
+it&nbsp;will&nbsp;open&nbsp;up&nbsp;a&nbsp;window&nbsp;with&nbsp;a&nbsp;3d&nbsp;cube&nbsp;that&nbsp;is&nbsp;1&nbsp;unit&nbsp;on&nbsp;a&nbsp;side,&nbsp;colored&nbsp;white.&nbsp;&nbsp;If&nbsp;later<br>
+you&nbsp;change&nbsp;an&nbsp;object's&nbsp;parameters,&nbsp;e.g.:<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;mycube.color&nbsp;=&nbsp;color.red<br>
+&nbsp;<br>
+the&nbsp;display&nbsp;will&nbsp;update&nbsp;accordingly.&nbsp;&nbsp;See&nbsp;example&nbsp;"rotating_springs.py"&nbsp;for&nbsp;an&nbsp;example.<br>
+(See&nbsp;"vibrating_array.py"&nbsp;for&nbsp;a&nbsp;more&nbsp;complicated&nbsp;example&nbsp;that&nbsp;uses&nbsp;scipy&nbsp;to&nbsp;solve&nbsp;the<br>
+equations&nbsp;of&nbsp;motion.)<br>
+&nbsp;<br>
+In&nbsp;your&nbsp;code,&nbsp;you&nbsp;will&nbsp;need&nbsp;to&nbsp;have&nbsp;a&nbsp;loop&nbsp;(e.g.&nbsp;a&nbsp;"while&nbsp;True:"&nbsp;loop)&nbsp;that&nbsp;does&nbsp;whatever<br>
+you&nbsp;want&nbsp;to&nbsp;do&nbsp;(updating&nbsp;object&nbsp;positions,&nbsp;colors,&nbsp;doing&nbsp;other&nbsp;calculations).&nbsp;&nbsp;Inside&nbsp;this<br>
+loop,&nbsp;put&nbsp;the&nbsp;statement<br>
+&nbsp;<br>
+&nbsp;&nbsp;<a href="#-rate">rate</a>(30)<br>
+&nbsp;<br>
+This&nbsp;does&nbsp;two&nbsp;things.&nbsp;&nbsp;First,&nbsp;it&nbsp;allows&nbsp;the&nbsp;display&nbsp;to&nbsp;update.&nbsp;&nbsp;Second,&nbsp;it&nbsp;limits&nbsp;your<br>
+loop&nbsp;to&nbsp;run&nbsp;no&nbsp;more&nbsp;than&nbsp;30&nbsp;times&nbsp;a&nbsp;second.&nbsp;&nbsp;(You&nbsp;can&nbsp;replace&nbsp;30&nbsp;with&nbsp;a&nbsp;different&nbsp;number,<br>
+of&nbsp;course.&nbsp;&nbsp;It&nbsp;doesn't&nbsp;make&nbsp;sense&nbsp;to&nbsp;do&nbsp;more&nbsp;than&nbsp;30&nbsp;or&nbsp;60&nbsp;frames&nbsp;per&nbsp;second.&nbsp;&nbsp;If&nbsp;you&nbsp;want<br>
+to&nbsp;do&nbsp;calculations&nbsp;more&nbsp;often&nbsp;than&nbsp;that,&nbsp;do&nbsp;multiple&nbsp;calculations&nbsp;in&nbsp;your&nbsp;loop,&nbsp;and&nbsp;only<br>
+update&nbsp;object&nbsp;properties&nbsp;once&nbsp;per&nbsp;loop.)&nbsp;&nbsp;Your&nbsp;loop&nbsp;may&nbsp;run&nbsp;slower&nbsp;than&nbsp;that&nbsp;if&nbsp;the<br>
+computer&nbsp;takes&nbsp;more&nbsp;than&nbsp;1/30&nbsp;seconds&nbsp;to&nbsp;process&nbsp;everything&nbsp;in&nbsp;your&nbsp;loop.<br>
+&nbsp;<br>
+The&nbsp;user&nbsp;can&nbsp;rotate&nbsp;the&nbsp;orientation&nbsp;of&nbsp;the&nbsp;display&nbsp;by&nbsp;holding&nbsp;down&nbsp;the&nbsp;right&nbsp;mouse&nbsp;button<br>
+and&nbsp;moving&nbsp;the&nbsp;mouse.&nbsp;&nbsp;Roll&nbsp;the&nbsp;mouse&nbsp;wheel,&nbsp;or&nbsp;hold&nbsp;down&nbsp;the&nbsp;middle&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move<br>
+the&nbsp;mouse&nbsp;to&nbsp;zoom&nbsp;the&nbsp;display&nbsp;(really,&nbsp;just&nbsp;move&nbsp;the&nbsp;camera&nbsp;forwards&nbsp;and&nbsp;backwards).&nbsp;&nbsp;Hold<br>
+down&nbsp;the&nbsp;left&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move&nbsp;the&nbsp;mouse&nbsp;to&nbsp;move&nbsp;the&nbsp;display&nbsp;in&nbsp;a&nbsp;slightly<br>
+complicated&nbsp;way.&nbsp;&nbsp;(If&nbsp;you&nbsp;haven't&nbsp;rotated&nbsp;the&nbsp;camera,&nbsp;then&nbsp;the&nbsp;plane&nbsp;of&nbsp;the&nbsp;screen&nbsp;is&nbsp;the<br>
+x-y&nbsp;plane,&nbsp;and&nbsp;it&nbsp;moves&nbsp;the&nbsp;display&nbsp;in&nbsp;an&nbsp;obvious&nbsp;way.&nbsp;&nbsp;If&nbsp;you&nbsp;have,&nbsp;really&nbsp;it&nbsp;moves&nbsp;the<br>
+whole&nbsp;world&nbsp;in&nbsp;the&nbsp;x-y&nbsp;plane.)<br>
+&nbsp;<br>
+The&nbsp;following&nbsp;ojects&nbsp;are&nbsp;available<br>
+&nbsp;<br>
+&nbsp;&nbsp;—&nbsp;arrow<br>
+&nbsp;&nbsp;—&nbsp;box<br>
+&nbsp;&nbsp;—&nbsp;cylinder<br>
+&nbsp;&nbsp;—&nbsp;cone<br>
+&nbsp;&nbsp;—&nbsp;ellipsoid<br>
+&nbsp;&nbsp;—&nbsp;helix<br>
+&nbsp;&nbsp;—&nbsp;sphere<br>
+&nbsp;&nbsp;—&nbsp;xaxis<br>
+&nbsp;&nbsp;—&nbsp;yaxis<br>
+&nbsp;&nbsp;—&nbsp;zaxis<br>
+&nbsp;&nbsp;—&nbsp;axes&nbsp;&nbsp;(actually&nbsp;returns&nbsp;a&nbsp;tuple&nbsp;of&nbsp;3&nbsp;objects,&nbsp;not&nbsp;just&nbsp;one&nbsp;object)<br>
+&nbsp;<br>
+&nbsp;<br>
+OBJECT&nbsp;PROPERTIES&nbsp;AND&nbsp;METHODS:<br>
+&nbsp;<br>
+Objects&nbsp;(box,&nbsp;cylinder,&nbsp;etc)&nbsp;all&nbsp;(or&nbsp;at&nbsp;least&nbsp;most)&nbsp;have&nbsp;the&nbsp;following&nbsp;properties&nbsp;and<br>
+methods.&nbsp;&nbsp;Each&nbsp;individual&nbsp;type&nbsp;of&nbsp;object&nbsp;will&nbsp;have&nbsp;additional&nbsp;properties&nbsp;you&nbsp;can&nbsp;specify<br>
+when&nbsp;creating&nbsp;the&nbsp;object,&nbsp;and&nbsp;that&nbsp;you&nbsp;can&nbsp;change&nbsp;later.&nbsp;&nbsp;See&nbsp;the&nbsp;documentation&nbsp;below&nbsp;on<br>
+each&nbsp;object&nbsp;for&nbsp;more&nbsp;information.<br>
+&nbsp;<br>
+&nbsp;&nbsp;Properties.&nbsp;&nbsp;You&nbsp;can&nbsp;set&nbsp;these&nbsp;when&nbsp;you&nbsp;create&nbsp;the&nbsp;object,&nbsp;e.g.:<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mycube&nbsp;=&nbsp;<a href="#-box">box</a>(&nbsp;pos=(0,&nbsp;1,&nbsp;0),&nbsp;color=color.red&nbsp;)<br>
+&nbsp;<br>
+&nbsp;&nbsp;or&nbsp;you&nbsp;can&nbsp;set&nbsp;them&nbsp;later&nbsp;by&nbsp;changing&nbsp;the&nbsp;property,&nbsp;e.g.:<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mycube.pos&nbsp;=&nbsp;(0,&nbsp;1.1,&nbsp;0)<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;pos&nbsp;—&nbsp;The&nbsp;position&nbsp;of&nbsp;the&nbsp;object&nbsp;(vector)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;axis&nbsp;—&nbsp;The&nbsp;orientation&nbsp;of&nbsp;the&nbsp;object,&nbsp;and,&nbsp;if&nbsp;it's&nbsp;not&nbsp;normalized,&nbsp;the&nbsp;scale&nbsp;along&nbsp;its&nbsp;standard&nbsp;axis<br>
+&nbsp;&nbsp;&nbsp;&nbsp;up&nbsp;—&nbsp;not&nbsp;implemented<br>
+&nbsp;&nbsp;&nbsp;&nbsp;scale&nbsp;—&nbsp;How&nbsp;much&nbsp;to&nbsp;scale&nbsp;the&nbsp;object&nbsp;(interactis&nbsp;with&nbsp;the&nbsp;amgnitude&nbsp;of&nbsp;axis)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;color&nbsp;—&nbsp;The&nbsp;color&nbsp;of&nbsp;the&nbsp;object&nbsp;(r,&nbsp;g,&nbsp;b)&nbsp;or&nbsp;(r,&nbsp;g,&nbsp;b,&nbsp;a)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;make_trail&nbsp;—&nbsp;True&nbsp;to&nbsp;leave&nbsp;behind&nbsp;a&nbsp;trail<br>
+&nbsp;&nbsp;&nbsp;&nbsp;interval&nbsp;—&nbsp;Only&nbsp;add&nbsp;a&nbsp;trail&nbsp;segment&nbsp;after&nbsp;the&nbsp;object&nbsp;has&nbsp;moved&nbsp;this&nbsp;many&nbsp;times&nbsp;(default:&nbsp;10)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;retain&nbsp;—&nbsp;Only&nbsp;keep&nbsp;this&nbsp;many&nbsp;trail&nbsp;segments&nbsp;(the&nbsp;most&nbsp;recent&nbsp;ones)&nbsp;(Default:&nbsp;50)<br>
+&nbsp;<br>
+&nbsp;&nbsp;The&nbsp;following&nbsp;properties&nbsp;you&nbsp;can't&nbsp;specify&nbsp;when&nbsp;you&nbsp;make&nbsp;the&nbsp;object,&nbsp;but&nbsp;you&nbsp;can&nbsp;change<br>
+&nbsp;&nbsp;later&nbsp;(e.g.&nbsp;with&nbsp;"mycube.x&nbsp;=&nbsp;0.1):<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;—&nbsp;The&nbsp;x&nbsp;position&nbsp;of&nbsp;the&nbsp;object<br>
+&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;—&nbsp;The&nbsp;y&nbsp;position&nbsp;of&nbsp;the&nbsp;object<br>
+&nbsp;&nbsp;&nbsp;&nbsp;z&nbsp;—&nbsp;The&nbsp;z&nbsp;position&nbsp;of&nbsp;the&nbsp;object<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;—&nbsp;The&nbsp;x&nbsp;scale&nbsp;of&nbsp;the&nbsp;object&nbsp;(this&nbsp;is&nbsp;usually&nbsp;the&nbsp;object's&nbsp;"length"&nbsp;where&nbsp;that&nbsp;makes&nbsp;sense)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;—&nbsp;The&nbsp;y&nbsp;scale&nbsp;of&nbsp;the&nbsp;object<br>
+&nbsp;&nbsp;&nbsp;&nbsp;sz&nbsp;—&nbsp;The&nbsp;z&nbsp;scale&nbsp;of&nbsp;the&nbsp;object<br>
+&nbsp;&nbsp;&nbsp;&nbsp;visible&nbsp;—&nbsp;Set&nbsp;to&nbsp;False&nbsp;to&nbsp;remove&nbsp;an&nbsp;object&nbsp;from&nbsp;the&nbsp;display,&nbsp;True&nbsp;to&nbsp;put&nbsp;it&nbsp;back&nbsp;in<br>
+&nbsp;<br>
+&nbsp;&nbsp;Methods.&nbsp;&nbsp;These&nbsp;are&nbsp;functions&nbsp;on&nbsp;an&nbsp;object&nbsp;you&nbsp;can&nbsp;call&nbsp;to&nbsp;do&nbsp;things&nbsp;to&nbsp;the&nbsp;object,,&nbsp;e.g.<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mycube.<a href="#-rotate">rotate</a>(&nbsp;0.785,&nbsp;(0,&nbsp;1,&nbsp;0)&nbsp;)<br>
+&nbsp;<br>
+&nbsp;&nbsp;to&nbsp;rotate&nbsp;the&nbsp;object&nbsp;mycube&nbsp;by&nbsp;~45⁰&nbsp;(0.785,rougly&nbsp;π/4,&nbsp;radians)&nbsp;about&nbsp;an&nbsp;axis&nbsp;pointing<br>
+&nbsp;&nbsp;in&nbsp;the&nbsp;+y&nbsp;direction&nbsp;and&nbsp;going&nbsp;through&nbsp;the&nbsp;object's&nbsp;origin.<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<a href="#-rotate">rotate</a>(angle,&nbsp;axis,&nbsp;origin)&nbsp;—&nbsp;Rotate&nbsp;object&nbsp;by&nbsp;angle&nbsp;about&nbsp;an&nbsp;axis&nbsp;that&nbsp;goes&nbsp;through<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;origin&nbsp;and&nbsp;is&nbsp;oriented&nbsp;along&nbsp;the&nbsp;parameter&nbsp;axis.&nbsp;&nbsp;A<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;right-handed&nbsp;rotation.&nbsp;&nbsp;If&nbsp;you&nbsp;don't&nbsp;specify&nbsp;axis,&nbsp;it<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotates&nbsp;around&nbsp;the&nbsp;object's&nbsp;own&nbsp;axis&nbsp;(it's&nbsp;"local"<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x-axis);&nbsp;if&nbsp;you&nbsp;dont'&nbsp;specify&nbsp;origin,&nbsp;it&nbsp;rotates&nbsp;about<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;objects&nbsp;origin.&nbsp;&nbsp;(For&nbsp;boxes&nbsp;and&nbsp;spheres,&nbsp;the<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;object's&nbsp;origin&nbsp;is&nbsp;the&nbsp;center;&nbsp;for&nbsp;most&nbsp;other&nbsp;objects,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;it's&nbsp;the&nbsp;center&nbsp;of&nbsp;the&nbsp;object's&nbsp;base.<br>
+&nbsp;<br>
+VECTOR&nbsp;OBJECTS<br>
+&nbsp;<br>
+For&nbsp;convenience,&nbsp;there's&nbsp;also&nbsp;a&nbsp;vector()&nbsp;class&nbsp;to&nbsp;represent&nbsp;a&nbsp;three-dimensional&nbsp;vector.<br>
+You&nbsp;can&nbsp;make&nbsp;a&nbsp;vector&nbsp;with,&nbsp;for&nbsp;example:<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;v&nbsp;=&nbsp;vector(&nbsp;(1,&nbsp;0.5,&nbsp;0)&nbsp;)<br>
+&nbsp;<br>
+The&nbsp;"pos"&nbsp;property&nbsp;of&nbsp;physvis&nbsp;objects&nbsp;are&nbsp;of&nbsp;this&nbsp;vector&nbsp;type.<br>
+&nbsp;<br>
+Many&nbsp;standard&nbsp;operations&nbsp;work&nbsp;with&nbsp;vectors.&nbsp;&nbsp;You&nbsp;can&nbsp;add&nbsp;and&nbsp;subtract&nbsp;them.&nbsp;&nbsp;You&nbsp;can<br>
+multiply&nbsp;or&nbsp;divide&nbsp;them&nbsp;by&nbsp;a&nbsp;scalar.&nbsp;&nbsp;Plus,&nbsp;vectors&nbsp;have&nbsp;the&nbsp;following&nbsp;properties&nbsp;and&nbsp;methods:<br>
+&nbsp;<br>
+&nbsp;&nbsp;v.mag&nbsp;—&nbsp;returns&nbsp;the&nbsp;magnitude&nbsp;of&nbsp;vector&nbsp;v<br>
+&nbsp;&nbsp;v.mag2&nbsp;—&nbsp;returns&nbsp;the&nbsp;magnitude&nbsp;squared&nbsp;of&nbsp;vector&nbsp;v<br>
+&nbsp;&nbsp;v.norm&nbsp;—&nbsp;returns&nbsp;a&nbsp;unit&nbsp;vector&nbsp;in&nbsp;the&nbsp;same&nbsp;direction&nbsp;as&nbsp;vector&nbsp;v<br>
+&nbsp;&nbsp;v.<a href="#-cross">cross</a>(u)&nbsp;—&nbsp;returns&nbsp;the&nbsp;cross&nbsp;product&nbsp;v&nbsp;×&nbsp;u<br>
+&nbsp;&nbsp;v.<a href="#-dot">dot</a>(u)&nbsp;—&nbsp;returns&nbsp;the&nbsp;dot&nbsp;product&nbsp;v&nbsp;·&nbsp;u<br>
+&nbsp;&nbsp;v.<a href="#-proj">proj</a>(u)&nbsp;—&nbsp;returns&nbsp;v&nbsp;projected&nbsp;along&nbsp;u,&nbsp;or&nbsp;(&nbsp;v·u&nbsp;/&nbsp;|u|&nbsp;)&nbsp;u<br>
+&nbsp;&nbsp;v.<a href="#-comp">comp</a>(u)&nbsp;—&nbsp;returns&nbsp;the&nbsp;component&nbsp;of&nbsp;v&nbsp;along&nbsp;u,&nbsp;or&nbsp;(&nbsp;v·u&nbsp;/&nbsp;|u|&nbsp;)<br>
+&nbsp;&nbsp;v.<a href="#-diff_angle">diff_angle</a>(u)&nbsp;—&nbsp;returns&nbsp;the&nbsp;angle&nbsp;between&nbsp;v&nbsp;and&nbsp;u&nbsp;(in&nbsp;radians)<br>
+&nbsp;&nbsp;v.<a href="#-rotate">rotate</a>(theta,&nbsp;u)&nbsp;—&nbsp;returns&nbsp;a&nbsp;new&nbsp;vector&nbsp;rotated&nbsp;by&nbsp;angle&nbsp;theta&nbsp;about&nbsp;u<br>
+&nbsp;<br>
+There&nbsp;are&nbsp;also&nbsp;functions&nbsp;corresponding&nbsp;to&nbsp;each&nbsp;of&nbsp;the&nbsp;properties&nbsp;and&nbsp;methods&nbsp;above,&nbsp;e.g.<br>
+&nbsp;<br>
+&nbsp;&nbsp;<a href="#-cross">cross</a>(v,&nbsp;u)<br>
+&nbsp;<br>
+returns&nbsp;v.<a href="#-cross">cross</a>(u).<br>
+&nbsp;<br>
+(ASIDE:&nbsp;Internally,&nbsp;vector&nbsp;is&nbsp;implemented&nbsp;as&nbsp;a&nbsp;few&nbsp;things&nbsp;on&nbsp;top&nbsp;of&nbsp;a&nbsp;3-element&nbsp;numpy<br>
+array,&nbsp;so&nbsp;you&nbsp;can&nbsp;use&nbsp;them&nbsp;wherever&nbsp;you'd&nbsp;use&nbsp;a&nbsp;numpy&nbsp;array.&nbsp;&nbsp;However,&nbsp;some&nbsp;things&nbsp;are&nbsp;a<br>
+bit&nbsp;wonky;&nbsp;for&nbsp;instance,&nbsp;try&nbsp;making&nbsp;two&nbsp;vectors&nbsp;v1&nbsp;and&nbsp;v2,&nbsp;and&nbsp;doing&nbsp;(v1*v2).sum().<br>
+You'll&nbsp;get&nbsp;back&nbsp;a&nbsp;vector&nbsp;object&nbsp;with&nbsp;one&nbsp;element,&nbsp;which&nbsp;is&nbsp;broken,&nbsp;and&nbsp;probably&nbsp;means&nbsp;I<br>
+didn't&nbsp;subclass&nbsp;properly.&nbsp;&nbsp;You&nbsp;can&nbsp;fix&nbsp;this&nbsp;by&nbsp;just&nbsp;typecasting&nbsp;the&nbsp;result&nbsp;to&nbsp;a&nbsp;float.<br>
+Really,&nbsp;you're&nbsp;probably&nbsp;better&nbsp;off&nbsp;treating&nbsp;the&nbsp;vector&nbsp;class&nbsp;as&nbsp;its&nbsp;own&nbsp;thing&nbsp;and&nbsp;not<br>
+relying&nbsp;too&nbsp;muich&nbsp;on&nbsp;the&nbsp;fact&nbsp;that&nbsp;it's&nbsp;a&nbsp;numpy&nbsp;array.)<br>
+&nbsp;<br>
+&nbsp;<br>
+DIFFERENCES&nbsp;FROM&nbsp;VPYTHON&nbsp;6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;<br>
+Many&nbsp;objects&nbsp;are&nbsp;not&nbsp;implemented.&nbsp;physvis&nbsp;includes&nbsp;some&nbsp;objects&nbsp;not&nbsp;in&nbsp;VPython&nbsp;6<br>
+(e.g.&nbsp;*axis).&nbsp;&nbsp;(There&nbsp;are&nbsp;also&nbsp;some&nbsp;visual_base.py,&nbsp;e.g.&nbsp;FixedLengthCurve&nbsp;and&nbsp;Icosahedron.<br>
+There&nbsp;may&nbsp;be&nbsp;some&nbsp;parameters&nbsp;some&nbsp;objects&nbsp;take&nbsp;which&nbsp;weren't&nbsp;there&nbsp;in&nbsp;VPython.)<br>
+&nbsp;<br>
+An&nbsp;incomplete&nbsp;list&nbsp;things&nbsp;not&nbsp;implemented:<br>
+&nbsp;<br>
+Objects&nbsp;missing:<br>
+&nbsp;&nbsp;*&nbsp;curve&nbsp;(but&nbsp;see&nbsp;visual_base.CylindarStack&nbsp;&amp;&nbsp;visual_base.FixedLengthCurve)<br>
+&nbsp;&nbsp;*&nbsp;extrusion<br>
+&nbsp;&nbsp;*&nbsp;faces<br>
+&nbsp;&nbsp;*&nbsp;label<br>
+&nbsp;&nbsp;*&nbsp;local&nbsp;lights<br>
+&nbsp;&nbsp;*&nbsp;points<br>
+&nbsp;&nbsp;*&nbsp;pyramid<br>
+&nbsp;&nbsp;*&nbsp;ring<br>
+&nbsp;&nbsp;*&nbsp;text<br>
+&nbsp;<br>
+Object&nbsp;properties&nbsp;missing&nbsp;or&nbsp;not&nbsp;working:<br>
+&nbsp;&nbsp;*&nbsp;up&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(It's&nbsp;there,&nbsp;but&nbsp;doesn't&nbsp;do&nbsp;anything,&nbsp;and&nbsp;throws&nbsp;errors)<br>
+&nbsp;&nbsp;*&nbsp;opacity&nbsp;&nbsp;&nbsp;(Doing&nbsp;this&nbsp;at&nbsp;all&nbsp;well&nbsp;is&nbsp;quite&nbsp;hard.&nbsp;&nbsp;The&nbsp;variable&nbsp;is&nbsp;there,&nbsp;but&nbsp;ignored)<br>
+&nbsp;&nbsp;*&nbsp;materials&nbsp;(Maybe&nbsp;someday)<br>
+&nbsp;&nbsp;*&nbsp;composite&nbsp;objects&nbsp;with&nbsp;frame<br>
+&nbsp;<br>
+Global&nbsp;features&nbsp;missing:<br>
+&nbsp;&nbsp;*&nbsp;More&nbsp;than&nbsp;one&nbsp;display&nbsp;window<br>
+&nbsp;&nbsp;*&nbsp;Automatic&nbsp;zoom&nbsp;updating&nbsp;to&nbsp;make&nbsp;all&nbsp;objects&nbsp;visible<br>
+&nbsp;&nbsp;*&nbsp;custom&nbsp;lighting<br>
+&nbsp;&nbsp;*&nbsp;Widgets,&nbsp;embedding&nbsp;display&nbsp;in&nbsp;a&nbsp;UI&nbsp;library&nbsp;(see&nbsp;below&nbsp;re:&nbsp;wxPython)<br>
+&nbsp;&nbsp;*&nbsp;Graphs&nbsp;(I'll&nbsp;probably&nbsp;never&nbsp;do&nbsp;this;&nbsp;just&nbsp;use&nbsp;matplotlib)<br>
+&nbsp;&nbsp;*&nbsp;Custom&nbsp;mouse&nbsp;and&nbsp;keyboard&nbsp;events<br>
+&nbsp;&nbsp;*&nbsp;Shapes&nbsp;library<br>
+&nbsp;&nbsp;*&nbsp;Paths&nbsp;library<br>
+&nbsp;<br>
+wxPython&nbsp;interaction&nbsp;is&nbsp;not&nbsp;implemented;&nbsp;for&nbsp;a&nbsp;very&nbsp;long&nbsp;time,&nbsp;it&nbsp;looked&nbsp;like&nbsp;wxPython&nbsp;was<br>
+dead&nbsp;and&nbsp;would&nbsp;not&nbsp;support&nbsp;Python&nbsp;3.&nbsp;&nbsp;That's&nbsp;no&nbsp;longer&nbsp;true,&nbsp;but&nbsp;PyQt&nbsp;may&nbsp;still&nbsp;be&nbsp;a<br>
+better&nbsp;choice.&nbsp;&nbsp;For&nbsp;now,&nbsp;it&nbsp;uses&nbsp;GLUT&nbsp;to&nbsp;open&nbsp;the&nbsp;one&nbsp;default&nbsp;window&nbsp;for&nbsp;display.&nbsp;&nbsp;In&nbsp;the<br>
+future,&nbsp;I&nbsp;hope&nbsp;to&nbsp;integrate&nbsp;it&nbsp;with&nbsp;some&nbsp;standard&nbsp;Python&nbsp;widget&nbsp;library.</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="math.html">math</a><br>
+</td><td width="25%" valign=top><a href="numpy.html">numpy</a><br>
+</td><td width="25%" valign=top><a href="visual_base.html">visual_base</a><br>
+</td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#eeaa77">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl><dt><a name="-arrow"><strong>arrow</strong></a>(*args, **kwargs)</dt><dd><tt>An&nbsp;arrow&nbsp;with&nbsp;a&nbsp;square&nbsp;cross-section&nbsp;shaft.<br>
+&nbsp;<br>
+Oriented&nbsp;along&nbsp;the&nbsp;x-axis&nbsp;by&nbsp;default.<br>
+&nbsp;<br>
+shaftwidth&nbsp;—&nbsp;The&nbsp;width&nbsp;of&nbsp;the&nbsp;shaft&nbsp;(default:&nbsp;0.1&nbsp;*&nbsp;length)<br>
+headwidth&nbsp;—&nbsp;The&nbsp;width&nbsp;of&nbsp;the&nbsp;head&nbsp;(default:&nbsp;2&nbsp;*&nbsp;shaftwidth)<br>
+headlength&nbsp;—&nbsp;The&nbsp;length&nbsp;of&nbsp;the&nbsp;head&nbsp;(default:&nbsp;3&nbsp;*&nbsp;shaftidth)<br>
+fixedwidth&nbsp;—&nbsp;If&nbsp;False&nbsp;(default),&nbsp;all&nbsp;of&nbsp;the&nbsp;dimensions&nbsp;scale&nbsp;when&nbsp;you&nbsp;change&nbsp;the&nbsp;length&nbsp;of&nbsp;the&nbsp;arrow.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If&nbsp;True&nbsp;then&nbsp;shaftwidth,&nbsp;headwidth,&nbsp;and&nbsp;headlength&nbsp;stays&nbsp;fixed.</tt></dd></dl>
+ <dl><dt><a name="-astuple"><strong>astuple</strong></a>(A)</dt><dd><tt>Return&nbsp;a&nbsp;3-element&nbsp;tuple&nbsp;with&nbsp;the&nbsp;components&nbsp;of&nbsp;a&nbsp;vector.</tt></dd></dl>
+ <dl><dt><a name="-axes"><strong>axes</strong></a>(*args, **kwargs)</dt><dd><tt>Returns&nbsp;a&nbsp;tuple&nbsp;of&nbsp;three&nbsp;objects,&nbsp;an&nbsp;x-axis,&nbsp;a&nbsp;y-axis,&nbsp;and&nbsp;a&nbsp;z-axis.&nbsp;&nbsp;Call&nbsp;this&nbsp;to&nbsp;quickly&nbsp;generate&nbsp;axes.</tt></dd></dl>
+ <dl><dt><a name="-box"><strong>box</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;rectangular&nbsp;solid&nbsp;with&nbsp;dimenions&nbsp;(x,y,z)&nbsp;=&nbsp;(length,height,width)<br>
+&nbsp;<br>
+length&nbsp;—&nbsp;The&nbsp;size&nbsp;of&nbsp;the&nbsp;box&nbsp;along&nbsp;the&nbsp;x-axis&nbsp;(left-right&nbsp;with&nbsp;default&nbsp;camera&nbsp;orientation)<br>
+height&nbsp;—&nbsp;The&nbsp;size&nbsp;of&nbsp;the&nbsp;box&nbsp;along&nbsp;the&nbsp;y-axis&nbsp;(up-down&nbsp;with&nbsp;default&nbsp;camera&nbsp;orientation)<br>
+width&nbsp;—&nbsp;The&nbsp;size&nbsp;of&nbsp;the&nbsp;box&nbsp;along&nbsp;the&nbsp;z-axis&nbsp;(in-out&nbsp;with&nbsp;default&nbsp;camera&nbsp;orientatino)</tt></dd></dl>
+ <dl><dt><a name="-comp"><strong>comp</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;component&nbsp;of&nbsp;the&nbsp;first&nbsp;vector&nbsp;along&nbsp;the&nbsp;second&nbsp;(A·B&nbsp;/&nbsp;|B|)</tt></dd></dl>
+ <dl><dt><a name="-cone"><strong>cone</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;cone&nbsp;with&nbsp;its&nbsp;base&nbsp;at&nbsp;the&nbsp;origin&nbsp;and&nbsp;its&nbsp;tip&nbsp;at&nbsp;1,0,0<br>
+&nbsp;<br>
+radius&nbsp;—&nbsp;the&nbsp;radius&nbsp;of&nbsp;the&nbsp;circle&nbsp;that&nbsp;makes&nbsp;the&nbsp;base&nbsp;of&nbsp;the&nbsp;cone.&nbsp;&nbsp;(Really&nbsp;a&nbsp;12-sided&nbsp;polygon,&nbsp;smooth&nbsp;shaded.)</tt></dd></dl>
+ <dl><dt><a name="-cross"><strong>cross</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;cross&nbsp;product&nbsp;of&nbsp;two&nbsp;vectors.</tt></dd></dl>
+ <dl><dt><a name="-cylinder"><strong>cylinder</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;cylinder,&nbsp;oriented&nbsp;by&nbsp;default&nbsp;along&nbsp;the&nbsp;x-axis.<br>
+&nbsp;<br>
+radius&nbsp;—&nbsp;The&nbsp;transverse&nbsp;radius&nbsp;of&nbsp;the&nbsp;cylinder.<br>
+num_edge_points&nbsp;—&nbsp;How&nbsp;many&nbsp;faces&nbsp;the&nbsp;end&nbsp;polygons&nbsp;have&nbsp;(default:&nbsp;16)</tt></dd></dl>
+ <dl><dt><a name="-degrees"><strong>degrees</strong></a>(rad)</dt><dd><tt>Pass&nbsp;radians,&nbsp;get&nbsp;back&nbsp;degrees.</tt></dd></dl>
+ <dl><dt><a name="-diff_angle"><strong>diff_angle</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;angle&nbsp;between&nbsp;two&nbsp;vectors&nbsp;(radians).</tt></dd></dl>
+ <dl><dt><a name="-dot"><strong>dot</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;dot&nbsp;product&nbsp;of&nbsp;the&nbsp;two&nbsp;vectors.</tt></dd></dl>
+ <dl><dt><a name="-ellipsoid"><strong>ellipsoid</strong></a>(*args, **kwargs)</dt><dd><tt>An&nbsp;ellipsoidal&nbsp;solid.<br>
+&nbsp;<br>
+subdivisions&nbsp;—&nbsp;higher&nbsp;=&nbsp;more&nbsp;faces&nbsp;(default:&nbsp;2,&nbsp;which&nbsp;is&nbsp;probably&nbsp;always&nbsp;good)<br>
+length&nbsp;—&nbsp;diameter&nbsp;along&nbsp;x-axis&nbsp;(for&nbsp;unrotated&nbsp;object)<br>
+width&nbsp;—&nbsp;diameter&nbsp;along&nbsp;z-axis&nbsp;(for&nbsp;unrotated&nbsp;object)<br>
+height&nbsp;—&nbsp;diameter&nbsp;along&nbsp;y-axis&nbsp;(for&nbsp;unrotated&nbsp;object)</tt></dd></dl>
+ <dl><dt><a name="-helix"><strong>helix</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;helix&nbsp;(spring),&nbsp;rendered&nbsp;as&nbsp;a&nbsp;tube&nbsp;around&nbsp;a&nbsp;helical&nbsp;path.<br>
+&nbsp;<br>
+Initially&nbsp;oriented&nbsp;along&nbsp;the&nbsp;x-axis,&nbsp;with&nbsp;the&nbsp;first&nbsp;point&nbsp;at&nbsp;+z,&nbsp;and<br>
+winding&nbsp;left-handed.&nbsp;&nbsp;The&nbsp;object's&nbsp;position&nbsp;is&nbsp;at&nbsp;one&nbsp;end&nbsp;of&nbsp;the<br>
+center&nbsp;line&nbsp;of&nbsp;the&nbsp;spring.<br>
+&nbsp;<br>
+radius&nbsp;—&nbsp;The&nbsp;radius&nbsp;of&nbsp;the&nbsp;whole&nbsp;spring<br>
+coils&nbsp;—&nbsp;The&nbsp;number&nbsp;of&nbsp;coils&nbsp;in&nbsp;the&nbsp;spring&nbsp;(can&nbsp;be&nbsp;fractional,&nbsp;but&nbsp;you'll&nbsp;get&nbsp;an&nbsp;approximation)<br>
+length&nbsp;—&nbsp;The&nbsp;length&nbsp;of&nbsp;the&nbsp;spring&nbsp;(redundant&nbsp;with&nbsp;the&nbsp;length&nbsp;of&nbsp;axis)<br>
+num_circ_points&nbsp;—&nbsp;The&nbsp;number&nbsp;of&nbsp;points&nbsp;on&nbsp;the&nbsp;path&nbsp;in&nbsp;one&nbsp;winding&nbsp;of&nbsp;the&nbsp;spring&nbsp;(default:&nbsp;12)<br>
+thickness&nbsp;—&nbsp;The&nbsp;thickness&nbsp;of&nbsp;the&nbsp;actual&nbsp;spring&nbsp;wire&nbsp;(default:&nbsp;0.05&nbsp;*&nbsp;radius)</tt></dd></dl>
+ <dl><dt><a name="-mag"><strong>mag</strong></a>(A)</dt><dd><tt>Return&nbsp;the&nbsp;magnitude&nbsp;of&nbsp;the&nbsp;passed&nbsp;vector.</tt></dd></dl>
+ <dl><dt><a name="-mag2"><strong>mag2</strong></a>(A)</dt><dd><tt>Return&nbsp;the&nbsp;magnitude&nbsp;squared&nbsp;of&nbsp;the&nbsp;passed&nbsp;vector.<br>
+&nbsp;<br>
+This&nbsp;is&nbsp;more&nbsp;efficient&nbsp;than&nbsp;doing&nbsp;<a href="#-mag">mag</a>(A)**2</tt></dd></dl>
+ <dl><dt><a name="-norm"><strong>norm</strong></a>(A)</dt><dd><tt>Return&nbsp;a&nbsp;unit&nbsp;vector&nbsp;along&nbsp;the&nbsp;passed&nbsp;vector.</tt></dd></dl>
+ <dl><dt><a name="-proj"><strong>proj</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;projection&nbsp;of&nbsp;the&nbsp;first&nbsp;vector&nbsp;along&nbsp;the&nbsp;second.<br>
+&nbsp;<br>
+<a href="#-proj">proj</a>(A,&nbsp;B)&nbsp;=&nbsp;<a href="#-dot">dot</a>(A,&nbsp;<a href="#-norm">norm</a>(B))&nbsp;*&nbsp;<a href="#-norm">norm</a>(B)</tt></dd></dl>
+ <dl><dt><a name="-radians"><strong>radians</strong></a>(deg)</dt><dd><tt>Pass&nbsp;degrees,&nbsp;get&nbsp;back&nbsp;radians.</tt></dd></dl>
+ <dl><dt><a name="-rate"><strong>rate</strong></a>(fps)</dt><dd><tt>Call&nbsp;this&nbsp;e.g.&nbsp;in&nbsp;a&nbsp;while&nbsp;loop&nbsp;in&nbsp;your&nbsp;program&nbsp;to&nbsp;limit&nbsp;the&nbsp;animation&nbsp;speed.<br>
+&nbsp;<br>
+The&nbsp;while&nbsp;loop&nbsp;will&nbsp;run&nbsp;at&nbsp;most&nbsp;this&nbsp;many&nbsp;times&nbsp;each&nbsp;second.&nbsp;&nbsp;If&nbsp;the<br>
+computations&nbsp;in&nbsp;the&nbsp;loop&nbsp;take&nbsp;longer&nbsp;than&nbsp;1/fps&nbsp;seconds,&nbsp;then&nbsp;the<br>
+animation&nbsp;will&nbsp;run&nbsp;slower.</tt></dd></dl>
+ <dl><dt><a name="-rotate"><strong>rotate</strong></a>(A, theta, B)</dt><dd><tt>Return&nbsp;vector&nbsp;A&nbsp;rotated&nbsp;by&nbsp;theta&nbsp;around&nbsp;vector&nbsp;B.</tt></dd></dl>
+ <dl><dt><a name="-sphere"><strong>sphere</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;sphere,&nbsp;modelled&nbsp;by&nbsp;default&nbsp;as&nbsp;a&nbsp;2x&nbsp;subdivided&nbsp;icosahedron&nbsp;(320&nbsp;faces).<br>
+&nbsp;<br>
+radius&nbsp;—&nbsp;radius&nbsp;of&nbsp;the&nbsp;sphere&nbsp;(default&nbsp;1)<br>
+subdivisions&nbsp;—&nbsp;higher&nbsp;=&nbsp;more&nbsp;faces&nbsp;(default:&nbsp;2)&nbsp;(More&nbsp;than&nbsp;3&nbsp;is&nbsp;excessive,&nbsp;even&nbsp;3&nbsp;is&nbsp;probably&nbsp;excessive.)<br>
+flat&nbsp;—&nbsp;Set&nbsp;to&nbsp;true&nbsp;for&nbsp;flat&nbsp;face&nbsp;shading&nbsp;rather&nbsp;than&nbsp;smooth&nbsp;shading&nbsp;(default:&nbsp;False)<br>
+subdivisions&nbsp;—&nbsp;Control&nbsp;how&nbsp;smooth&nbsp;the&nbsp;underlying&nbsp;geometry&nbsp;is.&nbsp;&nbsp;Default:&nbsp;2.&nbsp;&nbsp;0&nbsp;=&nbsp;icosahedron.&nbsp;&nbsp;&gt;3&nbsp;=&nbsp;unreasonable.</tt></dd></dl>
+ <dl><dt><a name="-xaxis"><strong>xaxis</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;red&nbsp;arrow&nbsp;at&nbsp;the&nbsp;origin&nbsp;of&nbsp;length&nbsp;1&nbsp;pointing&nbsp;in&nbsp;the&nbsp;x-direction</tt></dd></dl>
+ <dl><dt><a name="-yaxis"><strong>yaxis</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;green&nbsp;arrow&nbsp;at&nbsp;the&nbsp;origin&nbsp;of&nbsp;length&nbsp;1&nbsp;pointing&nbsp;in&nbsp;the&nbsp;y-direction</tt></dd></dl>
+ <dl><dt><a name="-zaxis"><strong>zaxis</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;blue&nbsp;arrow&nbsp;at&nbsp;the&nbsp;origin&nbsp;of&nbsp;length&nbsp;1&nbsp;pointing&nbsp;in&nbsp;the&nbsp;z-direction</tt></dd></dl>
+</td></tr></table>
+</body></html>

@@ -110,7 +110,7 @@ def dvals(t, vals, size, num):
     
 def main():
     fps = 30.
-    num = 5                        # of balls per axis (total = this cubed)
+    num = 3                        # of balls per axis (total = this cubed)
     size = 3                       # total size of array per axis
     l0 = size / (num-1)            # equil. length of most springs
     ldiag0 = math.sqrt(2) * l0     # equil. length of diagonal spring

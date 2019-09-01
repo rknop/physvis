@@ -1,6 +1,10 @@
 #/usr/bin/python3
 # -*- coding: utf-8 -*-
 
+"""visual_base is a basic framework and scene graph for easily creating,
+displaying, and updating simple 3d objects useful for visualization of physics.
+"""
+
 import sys
 import math
 import time

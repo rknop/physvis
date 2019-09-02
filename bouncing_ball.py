@@ -42,9 +42,9 @@ def main():
     dt = 1./fps
     while True:
         ballv -= g * dt
+        ball.y += ballv * dt
         if ball.y <= groundpos:
             ballv = math.fabs(ballv)
-        ball.y += ballv * dt
 
         rate(fps)
         

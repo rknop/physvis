@@ -2050,7 +2050,7 @@ class GrObject(Subject):
         newaxis = vector(value)
         magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
         cosang = (self._axis * newaxis).sum() / ( magaxis * magnewaxis )
-        if math.fabs(1.-cosang) > 1e-7:
+        if math.fabs(1.-cosang) > 0.:
             rotaxis = numpy.cross(self._axis, newaxis)
             rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
             cosang_2 = math.sqrt((1+cosang)/2.)

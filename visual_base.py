@@ -720,8 +720,7 @@ class SimpleObjectCollection(GLObjectCollection):
             self.bind_vertex_attribs()
             self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
                                         self.context._clipnear, self.context._clipfar)
-            self.shader.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
-                                          self.context._camtheta, self.context._camphi)
+            self.shader.set_camera_posrot()
 
             if self.draw_as_lines:
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
@@ -921,9 +920,7 @@ class CurveCollection(GLObjectCollection):
             self.bind_vertex_attribs()
             self.shader.set_perspective(self.context._fov, self.context.width/self.context.height,
                                         self.context._clipnear, self.context._clipfar)
-            self.shader.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
-                                          self.context._camtheta, self.context._camphi)
-
+            self.shader.set_camera_posrot()
             if self.draw_as_lines:
                 GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
             else:
@@ -973,10 +970,22 @@ class GrContext(Observer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         self.default_color = numpy.array([1., 1., 1., 1.])
         self.background_color = numpy.array([0., 0., 0., 0.])
+
+        self._center = numpy.array( (0., 0., 0.) )    # What the camera looks at
+        self._forward = numpy.array( (0., 0., -1.) )  # direction camera is facing
+        self._fov = math.pi/3.0                       # camera field of view
+        self._up = numpy.array( (0., 1., 0.) )        # a vector that will point up on the screen
+        self._range = [1., 1., 1.]                    # Object of this radius will have angular size _fov
+
+        self._clipnear = 0.1
+        self._clipfar = 1000.
+        
         self.simple_object_collections = []
         self.curve_collections = []
+
         with GrContext._threadlock:
             if GrContext._default_instance is None:
                 # sys.stderr.write("Setting GrContext._default_instance to {}\n".format(self))
@@ -1060,7 +1069,7 @@ class GrContext(Observer):
         #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
         for collection in itertools.chain( self.simple_object_collections,
                                            self.curve_collections ):
-            collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
+            collection.shader.set_camera_posrot()
 
 
     def gl_version_info(self):
@@ -1180,16 +1189,6 @@ class GLUTContext(GrContext):
         self.vboarr = None
         self.colorbuffer = None
 
-        self._camx = 0.
-        self._camy = 0.
-        self._camz = 5.
-        self._camtheta = math.pi/2.
-        self._camphi = 0.
-
-        self._fov = math.pi/4.
-        self._clipnear = 0.1
-        self._clipfar = 1000.
-
         self._mousex0 = 0.
         self._mousey0 = 0.
         self._origtheta = 0.
@@ -1288,20 +1287,12 @@ class GLUTContext(GrContext):
 
             if state == GLUT.GLUT_UP:
                 GLUT.glutMotionFunc(None)
-                if self._camtheta > math.pi:
-                    self._camtheta = math.pi
-                if self._camtheta < 0.:
-                    self._camtheta = 0.
-                if self._camphi > 2.*math.pi:
-                    self._camphi -= 2.*math.pi
-                if self._camphi < 0.:
-                    self._camphi += 2.*math.pi
 
             elif state == GLUT.GLUT_DOWN:
                 self._mousex0 = x
                 self._mousey0 = y
-                self._origtheta = self._camtheta
-                self._origphi = self._camphi
+                self._origtheta = math.acos(-self._forward[2] / math.sqrt( numpy.square(self._forward).sum() ) )
+                self._origphi = math.atan2(-self._forward[0], -self._forward[3])
                 GLUT.glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
 
         if button == GLUT.GLUT_MIDDLE_BUTTON:
@@ -1348,8 +1339,11 @@ class GLUTContext(GrContext):
     def rmb_moved(self, x, y):
         dx = x - self._mousex0
         dy = y - self._mousey0
-        self._camtheta = self._origtheta - dy * math.pi / self._height
-        self._camphi = self._origphi + dx * 2.*math.pi / self._width
+        theta = self._origtheta - dy * math.pi / self._height
+        phi = self._origphi + dx * 2.*math.pi / self._width
+        self._forward = numpy.array( [ math.sin(theta) * math.sin(phi),
+                                       math.cos(theta),
+                                       math.sin(theta) * math.cos(phi) ] )
         self.update_cam_posrot_gl()
 
 
@@ -1542,8 +1536,7 @@ class Shader(object):
         self.update_lights()
         self.set_perspective(self.context._fov, self.context.width/self.context.height,
                              self.context._clipnear, self.context._clipfar)
-        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
-                               self.context._camtheta, self.context._camphi)
+        self.set_camera_posrot()
 
     def update_lights(self):
         loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
@@ -1567,32 +1560,85 @@ class Shader(object):
         GL.glUniformMatrix4fv(projection_location, 1, GL.GL_FALSE, matrix)
         self.context.update()
         
-    def set_camera_posrot(self, x, y, z, theta, phi):
-        # sys.stderr.write("Shader: set_camera_posrot\n")
-        theta -= math.pi/2.
-        if (theta >  math.pi/2): theta =  math.pi/2.
-        if (theta < -math.pi/2): theta = -math.pi/2.
-        if (phi > 2.*math.pi): phi -= 2.*math.pi
-        if (phi < 0.): phi += 2.*math.pi
-        ct = math.cos(theta)
-        st = math.sin(theta)
-        cp = math.cos(phi)
-        sp = math.sin(phi)
-        matrix = numpy.matrix([[    cp   ,   0.  ,   sp  ,  0. ],
-                               [ -sp*st  ,  ct   , cp*st ,  0. ],
-                               [ -sp*ct  , -st   , cp*ct ,  -z ],
-                               [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
-        # sys.stderr.write("Viewrot matrix:\n{}\n".format(matrix.T))
+    def set_camera_posrot(self):
+
+        center = self.context._center
+        forward = numpy.array( self.context._forward )
+        forward /= math.sqrt( numpy.square(forward).sum() )
+        fov = self.context._fov
+        up = numpy.array( self.context._up )
+        up /= math.sqrt( numpy.square(up).sum() )
+        rng = numpy.array( self.context._range )
+
+        # I'm not dealing with non-equal range properly
+        distback = rng[0] * math.tan(fov)
+        
+        camtranslate = numpy.matrix([[ 1., 0., 0., center[0] ] ,
+                                     [ 0., 1., 0., center[1] ] ,
+                                     [ 0., 0., 1., center[2] + distback ] ,
+                                     [ 0., 0., 0., 1. ] ] )
+                                       
+
+        # Figure out if the camera needs to point in another direction
+
+        costheta = -forward[2]
+        if costheta < 1.-1e-8:
+            rotabout = numpy.array( [ -forward[1], forward[0], 0. ] )
+            rotabout /= math.sqrt( numpy.square(rotabout).sum() )
+            costheta_2 = math.sqrt( (1+costheta) / 2. )
+            sintheta_2 = math.sqrt( (1-costheta) / 2. )
+            q = numpy.array( [ sintheta_2 * rotabout[0], sintheta_2 * rotabout[1],
+                               sintheta_2 * rotabout[2], costheta_2 ] )
+        else:
+            q = numpy.array( [0., 0., 0., 1.] )
+
+        # For up, rotate +y by the camera's rotation
+
+        roty = quaternion_rotate( numpy.array( [0., 1., 0.] ), q )
+
+        # Get the component of the "up" vector in the camera view plane
+
+        up -= forward * ( (up*forward).sum() )
+        upmag = math.sqrt(numpy.square(up).sum())
+        if upmag >= 1e-12:
+            # punt if too small angle
+            up / math.sqrt(numpy.square(up).sum())
+
+            # Get the rotation to move the up vector to the camera's rotated y
+            
+            upxy = numpy.array( [ up[1]*roty[2] - up[2]*roty[1],
+                                  up[2]*roty[0] - up[0]*roty[2],
+                                  up[0]*roty[1] - up[1]*roty[0] ] )
+            sinphi = math.sqrt( numpy.square(upxy).sum() )
+            if sinphi >= 1e-12:
+                upxy /= sinphi
+                cosphi = math.sqrt( 1. - sinphi*sinphi )
+                cosphi_2 = math.sqrt( (1+cosphi) / 2 )
+                sinphi_2 = math.sqrt( (1-cosphi) / 2 )
+                q = quaternion_multiply( [ sinphi_2 * upxy[0], sinphi_2 * upxy[1],
+                                           sinphi_2 * upxy[2], cosphi_2, ] , q )
+
+
+        camrotate = numpy.array([[1 - 2*q[1]**2 - 2*q[2]**2, 2*q[0]*q[1] - 2*q[2]*q[3], 2*q[0]*q[2] + 2*q[1]*q[3], 0.],
+                                 [2*q[0]*q[1] + 2*q[2]*q[3], 1 - 2*q[0]**2 - 2*q[2]**2, 2*q[1]*q[2] - 2*q[0]*q[3], 0.],
+                                 [2*q[0]*q[2] - 2*q[1]*q[3], 2*q[1]*q[2] + 2*q[0]*q[3], 1 - 2*q[0]**2 - 2*q[1]**2, 0.],
+                                 [ 0., 0., 0., 1.]])
+
+
+        camtransform = numpy.matmul(camrotate, camtranslate)
+        
+        # sys.stderr.write("_center = {}, _forward = {}, _up = {}\n".format(self.context._center,
+        #                                                                   self.context._forward,
+        #                                                                   self.context._up))
+        # sys.stderr.write("_fov = {}, _range = {}\n".format(self.context._fov, self.context._range))
+        # sys.stderr.write("distback = {}\n".format(distback))
+        # sys.stderr.write("camrotate:\n{}\n".format(camrotate))
+        # sys.stderr.write("camtransform:\n{}\n".format(camtransform))
+        
         GL.glUseProgram(self.progid)
         viewrot_location = GL.glGetUniformLocation(self.progid, "viewrot")
-        GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, matrix.T)
-        matrix = numpy.matrix([[    1.   ,   0.  ,   0.  , -x  ],
-                               [    0.   ,   1.  ,   0.  , -y  ],
-                               [    0.   ,   0.  ,   1.  ,  0.  ],
-                               [    0.   ,   0.  ,   0.  ,  1. ]], dtype=numpy.float32)
-        # sys.stderr.write("Viewshift matrix:\n{}\n".format(matrix.T))
-        viewshift_location = GL.glGetUniformLocation(self.progid, "viewshift")
-        GL.glUniformMatrix4fv(viewshift_location, 1, GL.GL_FALSE, matrix.T)
+        GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, camtransform.T)
+
         self.context.update()
 
 # ======================================================================
@@ -1613,7 +1659,7 @@ class BasicShader(Shader):
         vertex_shader = """
 #version 330
 
-uniform mat4 viewshift;
+// uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1640,7 +1686,7 @@ out vec4 aColor;
 
 void main(void)
 {
-  gl_Position =  projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
+  gl_Position =  projection * viewrot * model_matrix[in_Index] * in_Position;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
 }"""
@@ -1721,7 +1767,7 @@ class CurveTubeShader(Shader):
         vertex_shader = """
 #version 330
 
-uniform mat4 viewshift;
+// uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1797,7 +1843,7 @@ void main(void)
 
 const float PI = 3.14159265359;
 
-uniform mat4 viewshift;
+// uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1874,24 +1920,24 @@ void main(void)
         topnormal[i] = tmp.xyz / length(tmp.xyz);
     }
 
-    gl_Position = projection * viewrot * viewshift * toppoints[7];
+    gl_Position = projection * viewrot * toppoints[7];
     bColor = aColor[1];
     aNormal = topnormal[7];
     EmitVertex();
 
     for (int i = 0 ; i < 8 ; ++i)
     {
-        gl_Position = projection * viewrot * viewshift * toppoints[i];
+        gl_Position = projection * viewrot * toppoints[i];
         bColor = aColor[1];
         aNormal = topnormal[i];
         EmitVertex();
-        gl_Position = projection * viewrot * viewshift * bottompoints[i];
+        gl_Position = projection * viewrot * bottompoints[i];
         bColor = aColor[0];
         aNormal = bottomnormal[i];
         EmitVertex();
     }
 
-    gl_Position = projection * viewrot * viewshift * bottompoints[0];
+    gl_Position = projection * viewrot * bottompoints[0];
     bColor = aColor[0];
     aNormal = bottomnormal[0];
     EmitVertex();

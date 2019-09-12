@@ -301,7 +301,7 @@ class Subject(object):
 
     def broadcast(self, message):
         """Call this on yourself to broadcast message to all listeners."""
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             for listener in self.listeners:
                 listener.receive_message(message, self)
 
@@ -438,7 +438,7 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_matrix(obj))
 
     def do_update_object_matrix(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects:
                 return
             dex = self.object_index[obj._id]
@@ -446,10 +446,10 @@ class GLObjectCollection(Observer):
             GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
             GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
             GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
-            GLUT.glutPostRedisplay()
+            self.context.update()
 
     def do_remove_object_uniform_buffer_data(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects: return
             dex = self.object_index[obj._id]
             # sys.stderr.write("Removing uniform buffer data at dex={}\n".format(dex))
@@ -474,14 +474,14 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_color(obj))
 
     def do_update_object_color(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects:
                 return
             # sys.stderr.write("Updating an object color.\n")
             dex = self.object_index[obj._id]
             GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
             GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, obj._color)
-            GLUT.glutPostRedisplay()
+            self.context.update()
             
     def receive_message(self, message, subject):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
@@ -608,7 +608,7 @@ class SimpleObjectCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_add_object(obj))
 
     def do_add_object(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if obj._id in self.objects:
                 return
             self.object_triangle_index[obj._id] = self.curnumtris
@@ -620,7 +620,7 @@ class SimpleObjectCollection(GLObjectCollection):
             # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
     def do_remove_object(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects:
                 return
             dex = self.object_index[obj._id]
@@ -656,7 +656,7 @@ class SimpleObjectCollection(GLObjectCollection):
             del self.object_triangle_index[obj._id]
             obj.remove_listener(self)
             
-            GLUT.glutPostRedisplay()
+            self.context.update()
                 
     # Updates positions of verticies and directions of normals.
     # Can NOT change the number of vertices
@@ -666,14 +666,14 @@ class SimpleObjectCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_update_object_vertex(obj))
 
     def do_update_object_vertex(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects:
                 return
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
-            GLUT.glutPostRedisplay()
+            self.context.update()
 
 
     def push_all_object_info(self, obj):
@@ -708,12 +708,12 @@ class SimpleObjectCollection(GLObjectCollection):
         self.do_update_object_matrix(obj)
         self.do_update_object_color(obj)
 
-        GLUT.glutPostRedisplay()    # Redundant... it just happened in the last two function calls
+        self.context.update()    # Redundant... it just happened in the last two function calls
 
     # Never call this directly!  It should only be called from within the
-    #   draw method of a GLUTContext
+    #   draw method of a GrContext
     def draw(self):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             # sys.stderr.write("Drawing Simple Object Collection with shader progid {}\n".format(self.shader.progid))
             GL.glUseProgram(self.shader.progid)
             self.bind_uniform_buffers()
@@ -808,7 +808,7 @@ class CurveCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_add_object(obj))
 
     def do_add_object(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             self.objects[obj._id] = obj
             self.line_index[obj._id] = self.curnumlines
             obj.add_listener(self)
@@ -820,7 +820,7 @@ class CurveCollection(GLObjectCollection):
             self.push_all_object_info(obj)
         
     def do_remove_object(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not obj._id in self.objects: return
             dex = self.object_index[obj._id]
             if dex < len(self.objects)-1:
@@ -855,7 +855,7 @@ class CurveCollection(GLObjectCollection):
             del self.line_index[obj._id]
             obj.remove_listener(self)
             
-            GLUT.glutPostRedisplay()
+            self.context.update()
 
     def update_object_vertices(self, obj):
         if not obj.visible: return
@@ -865,7 +865,7 @@ class CurveCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_update_object_points(obj))
 
     def do_update_object_points(self, obj):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if obj.points.shape[0] == 0:
                 return
             if not obj._id in self.objects:
@@ -890,7 +890,7 @@ class CurveCollection(GLObjectCollection):
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
-            GLUT.glutPostRedisplay()
+            self.context.update()
         
     def push_all_object_info(self, obj):
         if not obj._id in self.objects:
@@ -907,14 +907,14 @@ class CurveCollection(GLObjectCollection):
         self.do_update_object_matrix(obj)
         self.do_update_object_color(obj)
 
-        GLUT.glutPostRedisplay()
+        self.context.update()
             
     # Never call this directly!  It should only be called from within the
-    #   draw method of a GLUTContext
+    #   draw method of a GrContext
     #
     # (This has a lot of redundant code with the same method in SimpleObjectCollection.)
     def draw(self):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             # sys.stderr.write("Drawing Curve Tube Collection with shader progid {}\n".format(self.shader.progid))
             GL.glUseProgram(self.shader.progid)
             self.bind_uniform_buffers()
@@ -934,33 +934,56 @@ class CurveCollection(GLObjectCollection):
             # sys.stderr.write("...done drawing lines\n");
         
 # ======================================================================
+# Context in which we could put objects.
 #
-# AK.  It's been a while, and I didn't comment.
-#
-# I think I was trying to set this up so taht you couold have more
-# than one GLUTContext object... but then the class stuff seems
-# to be setting things up so there's only one GLUT.GLUT Context, and I'm
-# not 100% clear on what a GLUT.GLUT Context fully means.
-#
-# I added passing "instance" to class_init_2, as it seemed that
-# I had to initialize GLUT.GLUT in the same therad as the mainloop.  I suspect
-# that the whole setup of the thing is now more complicated than it
-# needs to be, and it certainly won't work with more than one window
-# now.  Rethinking is needed.
 
-class GLUTContext(Observer):
-    """Encapsulates a window and OpenGL context in which to draw.
+class GrContext(Observer):
+    """Encapsulates a window (or widget) and OpenGL context in which to draw.
 
-    Will break if you make more than one.  If you need the context
-    instance, use the _default_context static class member.  That sounds
-    like kind of a messy implementation.  I should make it better.
+    Right now, the only safe way to get a context is to call
+    GrContext.get_default_instance().  It will give you a GLUT window.
+    Future plans: allow more than one context, and also allow a context
+    that would be a QWidget rather than a GLUT window.
     """
     
     _threadlock = threading.RLock()
+
+    _default_instance = None
+
+    def get_default_instance(*args, **kwargs):
+        if GrContext._default_instance is None:
+            GrContext._default_instance = GLUTContext(*args, **kwargs)
+        return GrContext._default_instance
+
+    def update(self):
+        """Call this to flag the OpenGL renderer that things need to be redrawn."""
+        raise Exception("GrContext subclasses need to implement update().")
+
+    def run_glcode(self, func):
+        """Call this to give a function that should be run in the GUI context."""
+        raise Exception("GrContext subclasses need to implement run_glcode().")
+    
+    def gl_version_info(self):
+        self.run_glcode(lambda : GrContext.do_gl_version_info())
+
+    # It seems to be unhappy if you call this outside
+    #  of a proper OpenGL Context.  Instead call
+    #  the gl_version_info method of a GrContext instance.
+    @staticmethod
+    def do_gl_version_info():
+        sys.stderr.write("OpenGL version: {}\n".format(GL.glGetString(GL.GL_VERSION)))
+        sys.stderr.write("OpenGL renderer: {}\n".format(GL.glGetString(GL.GL_RENDERER)))
+        sys.stderr.write("OpenGL vendor: {}\n".format(GL.glGetString(GL.GL_VENDOR)))
+        sys.stderr.write("OpenGL shading language version: {}\n"
+                         .format(GL.glGetString(GL.GL_SHADING_LANGUAGE_VERSION)))
+
+# ======================================================================
+
+class GLUTContext(GrContext):
+
     _class_init_1 = False
     _class_init_2 = False
 
-    _instance = None       # Is GLUTContext a singleton?  Geez, dunno.
     
     # ======================================================================
     # Class methods
@@ -969,12 +992,9 @@ class GLUTContext(Observer):
     def class_init(object):
         # sys.stderr.write("Starting class_init\n")
 
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if GLUTContext._class_init_1:
                 return
-
-            if not hasattr(GLUTContext, '_default_context') or GLUTContext._default_context is None:
-                GLUTContext._default_context = object
 
             GLUT.glutInit(len(sys.argv), sys.argv)
             GLUT.glutInitContextVersion(3, 3)
@@ -991,8 +1011,8 @@ class GLUTContext(Observer):
     @staticmethod
     def class_init_2(instance):
         # sys.stderr.write("Starting class_init_2\n")
-        GLUTContext._instance = instance
-        with GLUTContext._threadlock:
+        GrContext._default_instance = instance
+        with GrContext._threadlock:
             if not GLUTContext._class_init_1:
                 raise Exception("class_init_2() called with _class_init_1 False")
 
@@ -1003,11 +1023,11 @@ class GLUTContext(Observer):
             GLUTContext.things_to_run = queue.Queue()
 
             # sys.stderr.write("Starting GLUT.GLUT thread...\n")
-            # GLUTContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
+            # GrContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
             GLUTContext.thread = threading.Thread(target=GLUTContext.thread_main, args=(instance,))
             GLUTContext.thread.daemon = True
             GLUTContext.thread.start()
-            # sys.stderr.write("GLUTContext.thread.ident = {}\n".format(GLUTContext.thread.ident))
+            # sys.stderr.write("GrContext.thread.ident = {}\n".format(GrContext.thread.ident))
             # sys.stderr.write("Current thread ident = {}\n".format(threading.get_ident()))
             # sys.stderr.write("Main thread ident = {}\n".format(threading.main_thread().ident))
 
@@ -1034,13 +1054,8 @@ class GLUTContext(Observer):
         GLUTContext.idle_funcs = [x for x in GLUTContext.idle_funcs if x != func]
 
     @staticmethod
-    def run_glcode(func):
-        # sys.stderr.write("Starting run_glcode\n")
-        GLUTContext.things_to_run.put(func)
-
-    @staticmethod
     def idle():
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             try:
                 while not GLUTContext.things_to_run.empty():
                     func = GLUTContext.things_to_run.get()
@@ -1051,16 +1066,6 @@ class GLUTContext(Observer):
             for func in GLUTContext.idle_funcs:
                 func()
 
-    # It seems to be unhappy if you call this outside
-    #  of a proper OpenGL Context.  Instead call
-    #  the gl_version_info method of a GLUTContext instance.
-    @staticmethod
-    def do_gl_version_info():
-        sys.stderr.write("OpenGL version: {}\n".format(GL.glGetString(GL.GL_VERSION)))
-        sys.stderr.write("OpenGL renderer: {}\n".format(GL.glGetString(GL.GL_RENDERER)))
-        sys.stderr.write("OpenGL vendor: {}\n".format(GL.glGetString(GL.GL_VENDOR)))
-        sys.stderr.write("OpenGL shading language version: {}\n"
-                         .format(GL.glGetString(GL.GL_SHADING_LANGUAGE_VERSION)))
 
     # ======================================================================
     # Instance methods
@@ -1100,7 +1105,7 @@ class GLUTContext(Observer):
 
         GLUTContext.class_init_2(self)
 
-        GLUTContext.run_glcode(lambda : self.gl_init())
+        GLUTContext.things_to_run.put(lambda : self.gl_init())
 
         while not self.window_is_initialized:
             time.sleep(0.1)
@@ -1123,15 +1128,19 @@ class GLUTContext(Observer):
         self.window_is_initialized = True
         # sys.stderr.write("Exiting gl_init\n")
 
-    def gl_version_info(self):
-        GLUTContext.run_glcode(lambda : GLUTContext.do_gl_version_info())
-
+    def update(self):
+        GLUT.glutPostRedisplay()
+        
+    def run_glcode(self, func):
+        # sys.stderr.write("Starting run_glcode\n")
+        GLUTContext.things_to_run.put(func)
+        
     def window_visibility_handler(self, state):
         if state != GLUT.GLUT_VISIBLE:
             return
         GLUT.glutSetWindow(self.window)
-        with GLUTContext._threadlock:
-            GLUTContext._full_init = True
+        with GrContext._threadlock:
+            GrContext._full_init = True
         GLUT.glutVisibilityFunc(None)
 
     def mouse_button_handler(self, button, state, x, y):
@@ -1239,7 +1248,7 @@ class GLUTContext(Observer):
         # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
         self.width = width
         self.height = height
-        GLUTContext.run_glcode(lambda : self.resize2d_gl())
+        self.run_glcode(lambda : self.resize2d_gl())
 
     def resize2d_gl(self):
         GL.glViewport(0, 0, self.width, self.height)
@@ -1256,13 +1265,11 @@ class GLUTContext(Observer):
             collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
 
     def draw(self):
-        global rater
-        
         GL.glClearColor(0., 0., 0., 0.)
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             # sys.stderr.write("About to draw collections\n")
             for collection in itertools.chain( self.simple_object_collections,
                                                self.curve_collections ):
@@ -1321,7 +1328,7 @@ class Shader(object):
         """
         
         if name == "Basic Shader":
-            with GLUTContext._threadlock:
+            with GrContext._threadlock:
                 # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._basic_shader) or
                      (Shader._basic_shader[context] == None) ):
@@ -1330,7 +1337,7 @@ class Shader(object):
             return Shader._basic_shader[context]
 
         elif name == "Curve Tube Shader":
-            with GLUTContext._threadlock:
+            with GrContext._threadlock:
                 # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._curvetube_shader) or
                      (Shader._curvetube_shader[context] == None) ):
@@ -1358,7 +1365,7 @@ class Shader(object):
     #   a single thread.  So... hurm.
     def __del__(self):
         sys.stderr.write("Shader __del__\n")
-        GLUTContext.run_glcode(lambda : self.destroy_shaders())
+        self.context.run_glcode(lambda : self.destroy_shaders())
         while not self._shaders_destroyed:
             time.sleep(0.1)
         sys.stderr.write("...BasicShader __del__ completed\n")
@@ -1435,7 +1442,7 @@ class Shader(object):
         GL.glUseProgram(self.progid)
         projection_location = GL.glGetUniformLocation(self.progid, "projection")
         GL.glUniformMatrix4fv(projection_location, 1, GL.GL_FALSE, matrix)
-        GLUT.glutPostRedisplay()
+        self.context.update()
         
     def set_camera_posrot(self, x, y, z, theta, phi):
         # sys.stderr.write("Shader: set_camera_posrot\n")
@@ -1463,7 +1470,7 @@ class Shader(object):
         # sys.stderr.write("Viewshift matrix:\n{}\n".format(matrix.T))
         viewshift_location = GL.glGetUniformLocation(self.progid, "viewshift")
         GL.glUniformMatrix4fv(viewshift_location, 1, GL.GL_FALSE, matrix.T)
-        GLUT.glutPostRedisplay()
+        self.context.update()
 
 # ======================================================================
  # This shader goes with _OBJ_TYPE_SIMPLE and SimpleObjectCollection
@@ -1475,7 +1482,7 @@ class BasicShader(Shader):
         # sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(context, *args, **kwargs)
         self._name = "Basic Shader"
-        GLUTContext.run_glcode(lambda : self.create_shaders())
+        self.context.run_glcode(lambda : self.create_shaders())
 
     def create_shaders(self):
         err = GL.glGetError()
@@ -1583,7 +1590,7 @@ class CurveTubeShader(Shader):
         # sys.stderr.write("Initializing a CurveTubeShader")
         self._name = "Curve Tube Shader"
 
-        GLUTContext.run_glcode(lambda : self.create_shaders())
+        self.context.run_glcode(lambda : self.create_shaders())
 
     def create_shaders(self):
         err = GL.glGetError()
@@ -1869,9 +1876,7 @@ class GrObject(Subject):
         # sys.stderr.write("Starting GrObject.__init__")
 
         if context is None:
-            if not hasattr(GLUTContext, "_default_context") or GLUTContext._default_context is None:
-                GLUTContext._default_context = GLUTContext()
-            self.context = GLUTContext._default_context
+            self.context = GrContext.get_default_instance()
         else:
             self.context = context
 
@@ -2264,7 +2269,7 @@ class Box(GrObject):
     
     @staticmethod
     def make_box_buffers(context):
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not hasattr(Box, "_box_vertices"):
                 Box._box_vertices = numpy.array( [ -0.5, -0.5,  0.5, 1.,
                                                    -0.5, -0.5, -0.5, 1.,
@@ -2393,7 +2398,7 @@ class Icosahedron(GrObject):
     @staticmethod
     def make_icosahedron_vertices(subdivisions=0):
         """Internal, do not call."""
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not hasattr(Icosahedron, "_vertices"):
                 Icosahedron._vertices = [None, None, None, None, None]
                 Icosahedron._normals = [None, None, None, None, None]
@@ -2702,12 +2707,12 @@ class Cylinder(GrObject):
     @staticmethod
     def make_cylinder_vertices(num_edge_points=16):
         """Internal, do not call."""
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not hasattr(Cylinder, "_vertices"):
                 Cylinder._vertices = {}
                 Cylinder._normals = {}
 
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not num_edge_points in Cylinder._vertices:
                 
                 # Number of triangles = 4 * num_edge_points
@@ -2817,7 +2822,7 @@ class Cone(GrObject):
     @staticmethod
     def make_cone_vertices():
         """Internal, do not call."""
-        with GLUTContext._threadlock:
+        with GrContext._threadlock:
             if not hasattr(Cone, "_vertices"):
                 num_edge_points = 16
 
@@ -3458,7 +3463,7 @@ def main():
     printfpsevery = 30
     dphi = 2*math.pi/(4.*fps)
 
-    GLUTContext._default_context.gl_version_info()
+    GrContext.get_default_instance().gl_version_info()
 
     lasttime = time.perf_counter()
     nextprint = printfpsevery

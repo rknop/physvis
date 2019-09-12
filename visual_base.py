@@ -957,14 +957,46 @@ class GrContext(Observer):
             win = GLUTContext(*args, **kwargs)
         return GrContext._default_instance
 
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.default_color = numpy.array([1., 1., 1., 1.])
+        self.background_color = numpy.array([0., 0., 0., 0.])
+        self.simple_object_collections = []
+        self.curve_collections = []
         with GrContext._threadlock:
             if GrContext._default_instance is None:
                 # sys.stderr.write("Setting GrContext._default_instance to {}\n".format(self))
                 GrContext._default_instance = self
+
+    @property
+    def foreground(self):
+        return self.default_color
+
+    @foreground.setter
+    def foreground(self, val):
+        if len(val) == 1 or len(val) == 3:
+            self.default_color[0:3] = val
+            self.default_color[3] = 1.
+        elif len(val) == 4:
+            self.default_color[:] = val
+        else:
+            raise Exception("foreground must have 1, 3, or 4 values")
         
+    @property
+    def background(self):
+        return self.background_color
+
+    @background.setter
+    def foreground(self, val):
+        if len(val) == 1 or len(val) == 3:
+            self.background_color[0:3] = val
+            self.background_color[3] = 1.
+        elif len(val) == 4:
+            self.background_color[:] = val
+        else:
+            raise Exception("foreground must have 1, 3, or 4 values")
+                
     def update(self):
         """Call this to flag the OpenGL renderer that things need to be redrawn."""
         raise Exception("GrContext subclasses need to implement update().")
@@ -973,6 +1005,31 @@ class GrContext(Observer):
         """Call this to give a function that should be run in the GUI context."""
         raise Exception("GrContext subclasses need to implement run_glcode().")
     
+    def select(self):
+        """Makes this context the default context."""
+        GrContext._default_instance = self
+    
+    def resize2d(self, width, height):
+        # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
+        self.width = width
+        self.height = height
+        self.run_glcode(lambda : self.resize2d_gl())
+
+    def resize2d_gl(self):
+        GL.glViewport(0, 0, self.width, self.height)
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
+            collection.shader.set_perspective(self._fov, self.width/self.height,
+                                              self._clipnear, self._clipfar)
+
+    def update_cam_posrot_gl(self):
+        # sys.stderr.write("Moving camera to [{:.2f}, {:.2f}, {:.2f}], setting rotation to [{:.3f}, {:.3f}]\n"
+        #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
+        for collection in itertools.chain( self.simple_object_collections,
+                                           self.curve_collections ):
+            collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
+
+
     def gl_version_info(self):
         self.run_glcode(lambda : GrContext.do_gl_version_info())
 
@@ -1104,9 +1161,6 @@ class GLUTContext(GrContext):
         self._origtheta = 0.
         self._origphi = 0.
         self._origcamz = 0.
-
-        self.simple_object_collections = []
-        self.curve_collections = []
 
         self.idle_funcs = []
         self.things_to_run = queue.Queue()
@@ -1260,28 +1314,9 @@ class GLUTContext(GrContext):
         self.framecount = 0
         GLUT.glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
-    def resize2d(self, width, height):
-        # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
-        self.width = width
-        self.height = height
-        self.run_glcode(lambda : self.resize2d_gl())
-
-    def resize2d_gl(self):
-        GL.glViewport(0, 0, self.width, self.height)
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
-            collection.shader.set_perspective(self._fov, self.width/self.height,
-                                              self._clipnear, self._clipfar)
-
-    def update_cam_posrot_gl(self):
-        # sys.stderr.write("Moving camera to [{:.2f}, {:.2f}, {:.2f}], setting rotation to [{:.3f}, {:.3f}]\n"
-        #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
-            collection.shader.set_camera_posrot(self._camx, self._camy, self._camz, self._camtheta, self._camphi)
-
     def draw(self):
-        GL.glClearColor(0., 0., 0., 0.)
+        GL.glClearColor(self.background_color[0], self.background_color[1],
+                        self.background_color[2], self.background_color[3])
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
@@ -1913,9 +1948,11 @@ class GrObject(Subject):
         self.colordata = None
 
         if color is None and opacity is None:
-            self._color = numpy.array( [1., 1., 1., 1.], dtype=numpy.float32 )
+            self._color = numpy.array( context.default_color, dtype=numpy.float32 )
         elif color is None:
-            self._color = numpy.array( [1., 1., 1., opacity], dtype=numpy.float32 )
+            self._color = numpy.empty(4, dtype=numpy.float32)
+            self._color[0:3] = context.default_color[0:3]
+            self._color[3] = opacity
         else:
             self._color = numpy.empty(4, dtype=numpy.float32)
             self._color[0:3] = numpy.array(color)[0:3]

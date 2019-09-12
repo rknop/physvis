@@ -19,6 +19,8 @@
 # along with physvis.  If not, see <https://www.gnu.org/licenses/>.
 
 
+# Make documentation with pydoc3 -w ./physvis.py
+
 """A module for visualizing simple physics constructions in 3D.
 
 Desgined to reimplement a subset of VPython 6 for Python 3, with a standalone display
@@ -112,6 +114,7 @@ each object for more information.
     make_trail — True to leave behind a trail
     interval — Only add a trail segment after the object has moved this many times (default: 10)
     retain — Only keep this many trail segments (the most recent ones) (Default: 50)
+    context — The context (window or widget) to put this object in
 
   The following properties you can't specify when you make the object, but you can change
   later (e.g. with "mycube.x = 0.1):
@@ -203,7 +206,7 @@ Object properties missing or not working:
   * composite objects with frame
 
 Global features missing:
-  * More than one display window
+  * More than one display window  (implemented in visual_base, not in physvis)
   * Automatic zoom updating to make all objects visible
   * custom lighting
   * Widgets, embedding display in a UI library (see below re: wxPython)
@@ -403,3 +406,8 @@ def astuple(A):
         return A.astuple()
     else:
         return tuple(A)
+
+# ======================================================================
+
+
+    

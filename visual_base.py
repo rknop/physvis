@@ -978,7 +978,7 @@ class GrContext(Observer):
         self._forward = numpy.array( (0., 0., -1.) )  # direction camera is facing
         self._fov = math.pi/3.0                       # camera field of view
         self._up = numpy.array( (0., 1., 0.) )        # a vector that will point up on the screen
-        self._range = [1., 1., 1.]                    # Object of this radius will have angular size _fov
+        self._range = [3., 3., 3.]                    # Object of this radius will have angular size _fov
 
         self._clipnear = 0.1
         self._clipfar = 1000.
@@ -1627,13 +1627,13 @@ class Shader(object):
 
         camtransform = numpy.matmul(camrotate, camtranslate)
         
-        # sys.stderr.write("_center = {}, _forward = {}, _up = {}\n".format(self.context._center,
-        #                                                                   self.context._forward,
-        #                                                                   self.context._up))
-        # sys.stderr.write("_fov = {}, _range = {}\n".format(self.context._fov, self.context._range))
-        # sys.stderr.write("distback = {}\n".format(distback))
-        # sys.stderr.write("camrotate:\n{}\n".format(camrotate))
-        # sys.stderr.write("camtransform:\n{}\n".format(camtransform))
+        sys.stderr.write("_center = {}, _forward = {}, _up = {}\n".format(self.context._center,
+                                                                          self.context._forward,
+                                                                          self.context._up))
+        sys.stderr.write("_fov = {}, _range = {}\n".format(self.context._fov, self.context._range))
+        sys.stderr.write("distback = {}\n".format(distback))
+        sys.stderr.write("camrotate:\n{}\n".format(camrotate))
+        sys.stderr.write("camtransform:\n{}\n".format(camtransform))
         
         GL.glUseProgram(self.progid)
         viewrot_location = GL.glGetUniformLocation(self.progid, "viewrot")

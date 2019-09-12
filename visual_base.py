@@ -950,11 +950,21 @@ class GrContext(Observer):
 
     _default_instance = None
 
+    @staticmethod
     def get_default_instance(*args, **kwargs):
         if GrContext._default_instance is None:
-            GrContext._default_instance = GLUTContext(*args, **kwargs)
+            # First one created makes itself default
+            win = GLUTContext(*args, **kwargs)
         return GrContext._default_instance
 
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        with GrContext._threadlock:
+            if GrContext._default_instance is None:
+                # sys.stderr.write("Setting GrContext._default_instance to {}\n".format(self))
+                GrContext._default_instance = self
+        
     def update(self):
         """Call this to flag the OpenGL renderer that things need to be redrawn."""
         raise Exception("GrContext subclasses need to implement update().")
@@ -981,21 +991,26 @@ class GrContext(Observer):
 
 class GLUTContext(GrContext):
 
-    _class_init_1 = False
-    _class_init_2 = False
+    _class_init = False
 
+    _instances = []
+
+    _global_things_to_run = None
     
     # ======================================================================
     # Class methods
 
     @staticmethod
-    def class_init(object):
-        # sys.stderr.write("Starting class_init\n")
+    def class_init(instance):
 
         with GrContext._threadlock:
-            if GLUTContext._class_init_1:
+            if GLUTContext._class_init:
                 return
 
+            # sys.stderr.write("Doing GLUTContext class_init\n")
+
+            GLUTContext._global_things_to_run = queue.Queue()
+            
             GLUT.glutInit(len(sys.argv), sys.argv)
             GLUT.glutInitContextVersion(3, 3)
             GLUT.glutInitContextFlags(GLUT.GLUT_FORWARD_COMPATIBLE)
@@ -1003,27 +1018,14 @@ class GLUTContext(GrContext):
             GLUT.glutSetOption(GLUT.GLUT_ACTION_ON_WINDOW_CLOSE, GLUT.GLUT_ACTION_GLUTMAINLOOP_RETURNS)
             GLUT.glutInitDisplayMode(GLUT.GLUT_RGBA | GLUT.GLUT_DOUBLE | GLUT.GLUT_DEPTH)
 
-            ### res = GL.glInitSeparateShaderObjectsARB() # ROB check error return
-            ### GL.glEnable(res)
+            # sys.stderr.write("Making default GLUT window.\n")
+            GLUT.glutInitWindowSize(instance.width, instance.height)
+            GLUT.glutInitWindowPosition(0, 0)
+            instance.window = GLUT.glutCreateWindow(instance.title)
 
-            GLUTContext._class_init_1 = True
-
-    @staticmethod
-    def class_init_2(instance):
-        # sys.stderr.write("Starting class_init_2\n")
-        GrContext._default_instance = instance
-        with GrContext._threadlock:
-            if not GLUTContext._class_init_1:
-                raise Exception("class_init_2() called with _class_init_1 False")
-
-            if GLUTContext._class_init_2:
-                return
-
-            GLUTContext.idle_funcs = []
-            GLUTContext.things_to_run = queue.Queue()
+            GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
 
             # sys.stderr.write("Starting GLUT.GLUT thread...\n")
-            # GrContext.thread = threading.Thread(target = lambda : GLUTContext.thread_main(instance) )
             GLUTContext.thread = threading.Thread(target=GLUTContext.thread_main, args=(instance,))
             GLUTContext.thread.daemon = True
             GLUTContext.thread.start()
@@ -1031,50 +1033,53 @@ class GLUTContext(GrContext):
             # sys.stderr.write("Current thread ident = {}\n".format(threading.get_ident()))
             # sys.stderr.write("Main thread ident = {}\n".format(threading.main_thread().ident))
 
-            GLUTContext._class_init_2 = True
-
-    # There's a race condition here on idle_funcs and things_to_run
-    @staticmethod
-    def thread_main(instance):
-        sys.stderr.write("Starting thread_main\n")
-        GLUT.glutInitWindowSize(instance.width, instance.height)
-        GLUT.glutInitWindowPosition(0, 0)
-        instance.window = GLUT.glutCreateWindow(instance.title)
-        GLUT.glutSetWindow(instance.window)
-        GLUT.glutIdleFunc(lambda: GLUTContext.idle())
-        sys.stderr.write("Going into GLUT.GLUT main loop.\n")
-        GLUT.glutMainLoop()
+            GLUTContext._class_init = True
 
     @staticmethod
-    def add_idle_func(func):
-        GLUTContext.idle_funcs.append(func)
-
-    @staticmethod
-    def remove_idle_func(func):
-        GLUTContext.idle_funcs = [x for x in GLUTContext.idle_funcs if x != func]
-
-    @staticmethod
-    def idle():
+    def class_idle():
         with GrContext._threadlock:
             try:
-                while not GLUTContext.things_to_run.empty():
-                    func = GLUTContext.things_to_run.get()
+                while not GLUTContext._global_things_to_run.empty():
+                    func = GLUTContext._global_things_to_run.get()
                     func()
             except queue.Empty:
                 pass
+            for instance in GLUTContext._instances:
+                instance.idle()
+            
+    @staticmethod
+    def thread_main(instance):
+        # sys.stderr.write("Starting thread_main\n")
+        # sys.stderr.write("Going into GLUT.GLUT main loop.\n")
+        GLUT.glutMainLoop()
 
-            for func in GLUTContext.idle_funcs:
-                func()
+    def add_idle_func(func):
+        self.idle_funcs.append(func)
+
+    def remove_idle_func(func):
+        self.idle_funcs = [x for x in GLUTContext.idle_funcs if x != func]
+
+    def idle(self):
+        if hasattr(self, "window") and self.window is not None:
+            GLUT.glutSetWindow(self.window)
+            with GrContext._threadlock:
+                try:
+                    while not self.things_to_run.empty():
+                        func = self.things_to_run.get()
+                        func()
+                except queue.Empty:
+                    pass
+
+                for func in self.idle_funcs:
+                    func()
 
 
     # ======================================================================
     # Instance methods
 
-    def __init__(self, width=500, height=400, title="GLUT.GLUT", *args, **kwargs):
+    def __init__(self, width=500, height=400, title="PhysVis", *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # sys.stderr.write("Starting __init__")
-        GLUTContext.class_init(self)
-
+        # sys.stderr.write("Starting GLUTContext.__init__\n")
         self.window_is_initialized = False
         self.width = width
         self.height = height
@@ -1103,20 +1108,31 @@ class GLUTContext(GrContext):
         self.simple_object_collections = []
         self.curve_collections = []
 
-        GLUTContext.class_init_2(self)
+        self.idle_funcs = []
+        self.things_to_run = queue.Queue()
 
-        GLUTContext.things_to_run.put(lambda : self.gl_init())
+        GLUTContext.class_init(self)
 
+        # self.things_to_run.put(lambda : self.gl_init())
+        GLUTContext._global_things_to_run.put(lambda : self.gl_init())
+
+        GLUTContext._instances.append(self)
+        
         while not self.window_is_initialized:
             time.sleep(0.1)
 
         self.simple_object_collections.append(SimpleObjectCollection(self))
         self.curve_collections.append(CurveCollection(self))
 
-        # sys.stderr.write("Exiting __init__\n")
+        # sys.stderr.write("Exiting GLUTContext.__init__\n")
 
     def gl_init(self):
-        # sys.stderr.write("Starting gl_init\n")
+        # sys.stderr.write("Starting GLUTContext.gl_init\n")
+        if self is not GLUTContext._default_instance:
+            # sys.stderr.write("Making a GLUT window.\n")
+            GLUT.glutInitWindowSize(self.width, self.height)
+            GLUT.glutInitWindowPosition(0, 0)
+            self.window = GLUT.glutCreateWindow(self.title)
         GLUT.glutSetWindow(self.window)
         GLUT.glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         GLUT.glutReshapeFunc(lambda width, height : self.resize2d(width, height))
@@ -1133,7 +1149,7 @@ class GLUTContext(GrContext):
         
     def run_glcode(self, func):
         # sys.stderr.write("Starting run_glcode\n")
-        GLUTContext.things_to_run.put(func)
+        self.things_to_run.put(func)
         
     def window_visibility_handler(self, state):
         if state != GLUT.GLUT_VISIBLE:
@@ -1240,7 +1256,7 @@ class GLUTContext(GrContext):
     def timer(self, val):
         global _print_fps
         if _print_fps:
-            sys.stderr.write("Display fps: {}\n".format(self.framecount/2.))
+            sys.stderr.write("{} display fps: {}\n".format(self.title, self.framecount/2.))
         self.framecount = 0
         GLUT.glutTimerFunc(2000, lambda val : self.timer(val), 0)
 

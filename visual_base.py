@@ -944,6 +944,19 @@ class GrContext(Observer):
     GrContext.get_default_instance().  It will give you a GLUT window.
     Future plans: allow more than one context, and also allow a context
     that would be a QWidget rather than a GLUT window.
+
+    There are several methods subclasses must implement:
+      @property width
+      @property height
+      @property title
+      update(self)
+      run_glcode(self)
+
+    Subclasses must set the following self variables before calligng super().__init__:
+      _width
+      _height
+      _title
+      (maybe some others?)
     """
     
     _threadlock = threading.RLock()
@@ -996,7 +1009,23 @@ class GrContext(Observer):
             self.background_color[:] = val
         else:
             raise Exception("foreground must have 1, 3, or 4 values")
-                
+
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def height(self):
+        return self._height
+
+    @width.setter
+    def width(self, val):
+        raise Exception("Subclasses must implement width property setter.")
+
+    @height.setter
+    def height(self, val):
+        raise Exception("Subclasses must implement height property setter.")
+        
     def update(self):
         """Call this to flag the OpenGL renderer that things need to be redrawn."""
         raise Exception("GrContext subclasses need to implement update().")
@@ -1008,18 +1037,22 @@ class GrContext(Observer):
     def select(self):
         """Makes this context the default context."""
         GrContext._default_instance = self
-    
+
+    def objects(self):
+        return itertools.chain( self.simple_object_collections, self.curve_collections )
+        
     def resize2d(self, width, height):
+        """Callback that is called when window is resized."""
         # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
-        self.width = width
-        self.height = height
+        self._width = width
+        self._height = height
         self.run_glcode(lambda : self.resize2d_gl())
 
     def resize2d_gl(self):
-        GL.glViewport(0, 0, self.width, self.height)
+        GL.glViewport(0, 0, self._width, self._height)
         for collection in itertools.chain( self.simple_object_collections,
                                            self.curve_collections ):
-            collection.shader.set_perspective(self._fov, self.width/self.height,
+            collection.shader.set_perspective(self._fov, self._width/self._height,
                                               self._clipnear, self._clipfar)
 
     def update_cam_posrot_gl(self):
@@ -1103,7 +1136,7 @@ class GLUTContext(GrContext):
         # sys.stderr.write("Making default GLUT window.\n")
         GLUT.glutInitWindowSize(instance.width, instance.height)
         GLUT.glutInitWindowPosition(0, 0)
-        instance.window = GLUT.glutCreateWindow(instance.title)
+        instance.window = GLUT.glutCreateWindow(instance._title)
 
         GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
         # sys.stderr.write("Going into GLUT.GLUT main loop.\n")
@@ -1139,9 +1172,9 @@ class GLUTContext(GrContext):
         super().__init__(*args, **kwargs)
         # sys.stderr.write("Starting GLUTContext.__init__\n")
         self.window_is_initialized = False
-        self.width = width
-        self.height = height
-        self.title = title
+        self._width = width
+        self._height = height
+        self._title = title
         self.framecount = 0
         self.vtxarr = None
         self.vboarr = None
@@ -1183,9 +1216,9 @@ class GLUTContext(GrContext):
         # sys.stderr.write("Starting GLUTContext.gl_init\n")
         if self is not GLUTContext._default_instance:
             # sys.stderr.write("Making a GLUT window.\n")
-            GLUT.glutInitWindowSize(self.width, self.height)
+            GLUT.glutInitWindowSize(self._width, self._height)
             GLUT.glutInitWindowPosition(0, 0)
-            self.window = GLUT.glutCreateWindow(self.title)
+            self.window = GLUT.glutCreateWindow(self._title)
         GLUT.glutSetWindow(self.window)
         GLUT.glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         GLUT.glutReshapeFunc(lambda width, height : self.resize2d(width, height))
@@ -1206,6 +1239,41 @@ class GLUTContext(GrContext):
         # sys.stderr.write("Starting run_glcode\n")
         self.things_to_run.put(func)
         
+    @property
+    def width(self):
+        return self._width
+
+    @property
+    def height(self):
+        return self._height
+
+    @width.setter
+    def width(self, val):
+        self._width = val
+        self.run_glcode(lambda : self.gottaresize())
+
+    @height.setter
+    def height(self, val):
+        self._height = val
+        self.run_glcode(lambda : self.gottaresize())
+
+    @property
+    def title(self):
+        return self._title
+
+    @title.setter
+    def title(self, val):
+        self._title = val
+        self.run_glcode(lambda : self.gottasettitle())
+
+    def gottaresize(self):
+        GLUT.glutSetWindow(self.window)
+        GLUT.glutReshapeWindow(self._width, self._height)
+
+    def gottasettitle(self):
+        GLUT.glutSetWindow(self.window)
+        GLUT.glutSetWindowTitle(self._title)
+                        
     def window_visibility_handler(self, state):
         if state != GLUT.GLUT_VISIBLE:
             return
@@ -1280,14 +1348,14 @@ class GLUTContext(GrContext):
     def rmb_moved(self, x, y):
         dx = x - self._mousex0
         dy = y - self._mousey0
-        self._camtheta = self._origtheta - dy * math.pi / self.height
-        self._camphi = self._origphi + dx * 2.*math.pi / self.width
+        self._camtheta = self._origtheta - dy * math.pi / self._height
+        self._camphi = self._origphi + dx * 2.*math.pi / self._width
         self.update_cam_posrot_gl()
 
 
     def mmb_moved(self, x, y):
         dy = y - self._mousey0
-        self._camz = self._origcamz * 10.**(dy/self.width)
+        self._camz = self._origcamz * 10.**(dy/self._width)
         self.update_cam_posrot_gl()
 
     def lmb_moved(self, x, y):
@@ -1311,7 +1379,7 @@ class GLUTContext(GrContext):
     def timer(self, val):
         global _print_fps
         if _print_fps:
-            sys.stderr.write("{} display fps: {}\n".format(self.title, self.framecount/2.))
+            sys.stderr.write("{} display fps: {}\n".format(self._title, self.framecount/2.))
         self.framecount = 0
         GLUT.glutTimerFunc(2000, lambda val : self.timer(val), 0)
 
@@ -1471,6 +1539,13 @@ class Shader(object):
 
     def init_lights_and_camera(self):
         # sys.stderr.write("Shader: init_lights_and_camera\n")
+        self.update_lights()
+        self.set_perspective(self.context._fov, self.context.width/self.context.height,
+                             self.context._clipnear, self.context._clipfar)
+        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
+                               self.context._camtheta, self.context._camphi)
+
+    def update_lights(self):
         loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
         GL.glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
         loc = GL.glGetUniformLocation(self.progid, "light1color")
@@ -1482,11 +1557,7 @@ class Shader(object):
         loc = GL.glGetUniformLocation(self.progid, "light2dir")
         GL.glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
 
-        self.set_perspective(self.context._fov, self.context.width/self.context.height,
-                             self.context._clipnear, self.context._clipfar)
-        self.set_camera_posrot(self.context._camx, self.context._camy, self.context._camz,
-                               self.context._camtheta, self.context._camphi)
-
+        
     def set_perspective(self, fov, aspect, near, far):
         # sys.stderr.write("Shader: set_perspective\n")
         matrix = self.perspective_matrix(fov, aspect, near,far)

@@ -16,8 +16,13 @@ def main():
     cube2 = box(width=1., height=0.175, length=0.5, color=color.green, context=ctx2)
     cyl = cylinder(radius=0.5, axis=(1.5, 1.5, -0.25), color=color.blue, context=ctx2)
     
-    
+    counter = 0
     while True:
+        counter +=1
+        if (counter == 60):
+            ctx1.width = 600
+            ctx1.height = 600
+            ctx1.title = "has been resized"
         rate(fps)
         
 

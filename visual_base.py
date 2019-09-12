@@ -1068,20 +1068,6 @@ class GLUTContext(GrContext):
 
             GLUTContext._global_things_to_run = queue.Queue()
             
-            GLUT.glutInit(len(sys.argv), sys.argv)
-            GLUT.glutInitContextVersion(3, 3)
-            GLUT.glutInitContextFlags(GLUT.GLUT_FORWARD_COMPATIBLE)
-            GLUT.glutInitContextProfile(GLUT.GLUT_CORE_PROFILE)
-            GLUT.glutSetOption(GLUT.GLUT_ACTION_ON_WINDOW_CLOSE, GLUT.GLUT_ACTION_GLUTMAINLOOP_RETURNS)
-            GLUT.glutInitDisplayMode(GLUT.GLUT_RGBA | GLUT.GLUT_DOUBLE | GLUT.GLUT_DEPTH)
-
-            # sys.stderr.write("Making default GLUT window.\n")
-            GLUT.glutInitWindowSize(instance.width, instance.height)
-            GLUT.glutInitWindowPosition(0, 0)
-            instance.window = GLUT.glutCreateWindow(instance.title)
-
-            GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
-
             # sys.stderr.write("Starting GLUT.GLUT thread...\n")
             GLUTContext.thread = threading.Thread(target=GLUTContext.thread_main, args=(instance,))
             GLUTContext.thread.daemon = True
@@ -1090,8 +1076,8 @@ class GLUTContext(GrContext):
             # sys.stderr.write("Current thread ident = {}\n".format(threading.get_ident()))
             # sys.stderr.write("Main thread ident = {}\n".format(threading.main_thread().ident))
 
-            GLUTContext._class_init = True
-
+            # Class init finishes in thread_main(), and that's where it sets _class_init to True
+            
     @staticmethod
     def class_idle():
         with GrContext._threadlock:
@@ -1107,7 +1093,22 @@ class GLUTContext(GrContext):
     @staticmethod
     def thread_main(instance):
         # sys.stderr.write("Starting thread_main\n")
+        GLUT.glutInit(len(sys.argv), sys.argv)
+        GLUT.glutInitContextVersion(3, 3)
+        GLUT.glutInitContextFlags(GLUT.GLUT_FORWARD_COMPATIBLE)
+        GLUT.glutInitContextProfile(GLUT.GLUT_CORE_PROFILE)
+        GLUT.glutSetOption(GLUT.GLUT_ACTION_ON_WINDOW_CLOSE, GLUT.GLUT_ACTION_GLUTMAINLOOP_RETURNS)
+        GLUT.glutInitDisplayMode(GLUT.GLUT_RGBA | GLUT.GLUT_DOUBLE | GLUT.GLUT_DEPTH)
+
+        # sys.stderr.write("Making default GLUT window.\n")
+        GLUT.glutInitWindowSize(instance.width, instance.height)
+        GLUT.glutInitWindowPosition(0, 0)
+        instance.window = GLUT.glutCreateWindow(instance.title)
+
+        GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
         # sys.stderr.write("Going into GLUT.GLUT main loop.\n")
+        GLUTContext._class_init = True
+
         GLUT.glutMainLoop()
 
     def add_idle_func(func):
@@ -1170,8 +1171,6 @@ class GLUTContext(GrContext):
         # self.things_to_run.put(lambda : self.gl_init())
         GLUTContext._global_things_to_run.put(lambda : self.gl_init())
 
-        GLUTContext._instances.append(self)
-        
         while not self.window_is_initialized:
             time.sleep(0.1)
 
@@ -1195,7 +1194,9 @@ class GLUTContext(GrContext):
         # Right now, the timer just prints FPS
         GLUT.glutTimerFunc(0, lambda val : self.timer(val), 0)
         GLUT.glutCloseFunc(lambda : self.cleanup())
+
         self.window_is_initialized = True
+        GLUTContext._instances.append(self)
         # sys.stderr.write("Exiting gl_init\n")
 
     def update(self):

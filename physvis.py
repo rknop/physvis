@@ -71,10 +71,7 @@ computer takes more than 1/30 seconds to process everything in your loop.
 The user can rotate the orientation of the display by holding down the right mouse button
 and moving the mouse.  Roll the mouse wheel, or hold down the middle mouse button and move
 the mouse to zoom the display (really, just move the camera forwards and backwards).  Hold
-down the left mouse button and move the mouse to move the display in a slightly
-complicated way.  (If you haven't rotated the camera, then the plane of the screen is the
-x-y plane, and it moves the display in an obvious way.  If you have, really it moves the
-whole world in the x-y plane.)
+down the left mouse button and move the mouse to move the point the display looks at.
 
 The following ojects are available
 
@@ -114,7 +111,7 @@ each object for more information.
     make_trail — True to leave behind a trail
     interval — Only add a trail segment after the object has moved this many times (default: 10)
     retain — Only keep this many trail segments (the most recent ones) (Default: 50)
-    context — The context (window or widget) to put this object in
+    context — The display (window or widget) to put this object in.
 
   The following properties you can't specify when you make the object, but you can change
   later (e.g. with "mycube.x = 0.1):
@@ -125,7 +122,7 @@ each object for more information.
     sx — The x scale of the object (this is usually the object's "length" where that makes sense)
     sy — The y scale of the object
     sz — The z scale of the object
-    visible — Set to False to remove an object from the display, True to put it back in
+    visible — Set to False to remove an object from the display, True to put it back in.
 
   Methods.  These are functions on an object you can call to do things to the object,, e.g.
 
@@ -171,13 +168,76 @@ There are also functions corresponding to each of the properties and methods abo
 
 returns v.cross(u).
 
-(ASIDE: Internally, vector is implemented as a few things on top of a 3-element numpy
-array, so you can use them wherever you'd use a numpy array.  However, some things are a
-bit wonky; for instance, try making two vectors v1 and v2, and doing (v1*v2).sum().
-You'll get back a vector object with one element, which is broken, and probably means I
-didn't subclass properly.  You can fix this by just typecasting the result to a float.
-Really, you're probably better off treating the vector class as its own thing and not
-relying too muich on the fact that it's a numpy array.)
+(ASIDE: Internally, vector is implemented as a few things on top of a
+3-element numpy array, so you can use them wherever you'd use a numpy
+array.  However, some things are a bit wonky; for instance, try making
+two vectors v1 and v2, and doing (v1*v2).sum().  You'll get back a
+vector object with one element, which is broken, and probably means I
+didn't subclass properly.  You can fix this by just typecasting the
+result to a float.  Really, you're probably better off treating the
+vector class as its own thing and not relying too muich on the fact that
+it's a numpy array.  For instance, in this example, it's better just to
+do v1.dot(v2).)
+
+
+CONTROLLING DISPLAYS (WINDOWS)
+
+You can get a new display with the function "display()", e.g.:
+
+  disp = display()
+
+That will open a new window; disp is a handle to it.  If you want a
+handle to the first display created (which may have been created
+automatically when you created a graphic object), the function "scene()"
+returns that.
+
+You can get and set various display properties:
+
+  * width — width of the window
+  * height — height of the window
+  * background — the background color of the display.  Three numbers
+                    (rgb) between 0 and 1, where 0 is black.  You can
+                    also use color.red, etc.
+  * foreground — the default color of newly-created objects.
+  * center — (a vector, or a list or tuple of 3 objects) the coordinates
+                of the point the camera is looking at.  If the user
+                rotates the display, this point will stay centered.
+                Default: (0, 0, 0)
+  * forward — the direction the camera looks.  The camera will always look
+                at the "center" position.  If you set forward, it will move
+                the camera to the right place so that looking in the forward
+                direction it's looking at center.
+                Default: (0, 0, -1)
+  * up — A vector in world that will (as best possible) be up on the screen
+  * fov — the field of view of the camera.  Default: π/3
+
+  * range — the range of the dispay in world coordinates. For
+              historical reasons, it's a three-element vector, but all
+              three values have to be the same.  You can set it with a
+              single value.  An object of radius range at center will
+              have angular size fov (i.e. it will just fill the screen).
+              Change this to zoom the display.
+              Default: (3, 3, 3)
+
+  * scale — 1/range.  If you set this, it changes range, and vice versa.
+              Bigger scale means smaller objects on the screen.
+
+Many of these properties will be overridden if the user uses the mouse.
+In particular, whenever the user adjusts the display rotation with the
+mouse, "up" will be adjusted so that the +y-axis is (as best possible)
+up on the screen.
+
+You can make objects go into the a display by adding "context=disp"
+when you make the object, where disp is the value returned from a
+display() function call.  Alternatively, if you call "disp.select()",
+that will make that display the default for newly created objects.  If
+you want to get to the first (probably automatically created) display,
+the function "scene()" returns a handle to that first display, so you
+can call ".select()" on it and pass it to objects to put them in that
+first display.
+
+Currently, all displays are GLUT windows.  In the future, I'm hoping
+that you will be able to get a display as a Qt OpenGL widget
 
 
 DIFFERENCES FROM VPYTHON 6           
@@ -206,7 +266,6 @@ Object properties missing or not working:
   * composite objects with frame
 
 Global features missing:
-  * More than one display window  (implemented in visual_base, not in physvis)
   * Automatic zoom updating to make all objects visible
   * custom lighting
   * Widgets, embedding display in a UI library (see below re: wxPython)
@@ -215,10 +274,18 @@ Global features missing:
   * Shapes library
   * Paths library
 
-wxPython interaction is not implemented; for a very long time, it looked like wxPython was
-dead and would not support Python 3.  That's no longer true, but PyQt may still be a
-better choice.  For now, it uses GLUT to open the one default window for display.  In the
-future, I hope to integrate it with some standard Python widget library.
+Things Changed:
+  * There is no "scene" variable; the "scene()" function gets you the default display.
+  * I believe the default range of a display is different (bigger)
+  * axes() object is new
+  * context= parameter of objects is new (I think)
+
+wxPython interaction is not implemented; for a very long time, it looked
+like wxPython was dead and would not support Python 3.  That's no longer
+true, but PyQt (or PySide2, or, really, probably QtPy as a front-end to
+both) may still be a better choice.  For now, it uses GLUT to open the
+one default window for display.  In the future, I hope to integrate it
+with some standard Python widget library.
 
 """
 
@@ -322,12 +389,35 @@ def axes(*args, **kwargs):
 
 # ======================================================================
 
+def scene():
+    """Return the first display that was created (perhaps automatically).
+
+    Will be None if you haven't made any displays or graphic objects yet.
+    """
+    return vb._first_context
+
+def display(*args, **kwargs):
+    """Create a new display in which you can put objects.
+
+    If you get a display with "disp=display()", you can make that
+    display the default for new objects wiht "disp.select()".
+    Alternatively, you can explicitly put an object in a given display
+    by using the "context=disp" parameter in the functon that creates an
+    object.
+
+    See overall module documentation at the top for properties of displays.
+    """
+    return vb.GrContext.get_new(*args, **kwargs)
+
+# ======================================================================
+
 def rate(fps):
     """Call this e.g. in a while loop in your program to limit the animation speed.
 
     The while loop will run at most this many times each second.  If the
     computations in the loop take longer than 1/fps seconds, then the
-    animation will run slower."""
+    loop will run slower.
+    """
     vb.rate(fps)
 
 def radians(deg):

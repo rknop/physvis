@@ -3,18 +3,24 @@
 
 import math
 from physvis import *
-from visual_base import GLUTContext
 
 def main():
     fps = 30
     
-    ctx1 = GLUTContext(width=300, height=300, title="Context 1")
-    ctx2 = GLUTContext(width=500, height=500, title="Context 2")
-    # ctx2 = ctx1
+    ctx1 = display()
+    ctx2 = display()
 
-    cube = box(width=0.5, height=0.25, length=0.75, color=color.red, context=ctx1)
-    cube2 = box(width=1., height=0.175, length=0.5, color=color.green, context=ctx2)
-    cyl = cylinder(radius=0.5, axis=(1.5, 1.5, -0.25), color=color.blue, context=ctx2)
+    if (scene() is ctx1):
+        print("scene is ctx1")
+    if (scene() is ctx2):
+        print("scene is ctx2")
+
+    cube = box(width=0.5, height=0.25, length=0.75, color=color.red)
+    ctx2.select()
+    cube2 = box(width=1., height=0.175, length=0.5, color=color.green)
+    cyl = cylinder(radius=0.5, axis=(1.5, 1.5, -0.25), color=color.blue)
+    scene().select()
+    spring = helix(radius=0.5, pos=(0.5, 0.5, 0.5), axis=(-1, -1, -1), thickness=0.05, color=color.magenta)
     
     counter = 0
     while True:

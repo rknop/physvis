@@ -46,6 +46,8 @@ _print_fps = False
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
+_first_context = None
+
 def rate(fps):
     """Call this in the main loop of your program to have it run at most every 1/fps seconds."""
     rater = Rater.get()
@@ -967,8 +969,17 @@ class GrContext(Observer):
             win = GLUTContext(*args, **kwargs)
         return GrContext._default_instance
 
+    @staticmethod
+    def get_new(qt=False, *args, **kwargs):
+        if qt:
+            raise Exception("Qt contexts not yet implemented")
+        else:
+            return GLUTContext(*args, **kwargs)
+    
 
     def __init__(self, *args, **kwargs):
+        global _first_context
+
         super().__init__(*args, **kwargs)
 
         self.default_color = numpy.array([1., 1., 1., 1.])
@@ -992,6 +1003,7 @@ class GrContext(Observer):
             if GrContext._default_instance is None:
                 # sys.stderr.write("Setting GrContext._default_instance to {}\n".format(self))
                 GrContext._default_instance = self
+                _first_context = self
 
     @property
     def foreground(self):
@@ -999,6 +1011,7 @@ class GrContext(Observer):
 
     @foreground.setter
     def foreground(self, val):
+        val = numpy.array(val)
         if len(val) == 1 or len(val) == 3:
             self.default_color[0:3] = val
             self.default_color[3] = 1.
@@ -1013,6 +1026,7 @@ class GrContext(Observer):
 
     @background.setter
     def foreground(self, val):
+        val = numpy.array(val)
         if len(val) == 1 or len(val) == 3:
             self.background_color[0:3] = val
             self.background_color[3] = 1.

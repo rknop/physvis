@@ -102,7 +102,7 @@ class Rater(threading.Event):
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
 #
 # My quaternions are [ sin(θ/2)*ux, sin(θ/2)*uy, sin(θ/2)*uz, cos(θ/2) ]
-#  Representing a rotation of θ about a unit vector (ux, uy,u z)
+#  Representing a rotation of θ about a unit vector (ux, uy, uz)
 #
 # To rotate a vector v by quaterion q, do qvq¯¹, where q¯¹ can be
 #  simply composed by flipping the sign of the first 3 elements of
@@ -978,8 +978,10 @@ class GrContext(Observer):
         self._forward = numpy.array( (0., 0., -1.) )  # direction camera is facing
         self._fov = math.pi/3.0                       # camera field of view
         self._up = numpy.array( (0., 1., 0.) )        # a vector that will point up on the screen
-        self._range = [3., 3., 3.]                    # Object of this radius will have angular size _fov
+        self._range = numpy.array( [3., 3., 3.] )     # Object of this radius will have angular size _fov
 
+        self.determine_camera_matrices()
+        
         self._clipnear = 0.1
         self._clipfar = 1000.
         
@@ -1018,7 +1020,6 @@ class GrContext(Observer):
             self.background_color[:] = val
         else:
             raise Exception("foreground must have 1, 3, or 4 values")
-
     @property
     def width(self):
         return self._width
@@ -1034,7 +1035,84 @@ class GrContext(Observer):
     @height.setter
     def height(self, val):
         raise Exception("Subclasses must implement height property setter.")
+
+    @property
+    def center(self):
+        return self._center
+
+    @center.setter
+    def center(self, val):
+        if len(val) != 3:
+            raise Exception("center needs 3 elements")
+        self._center = numpy.array(val, dtype=float)
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
+
+    @property
+    def forward(self):
+        return self._forward
+
+    @forward.setter
+    def forward(self, val):
+        if len(val) != 3:
+            raise Exception("forward needs 3 elements")
+        self._forward = numpy.array(val, dtype=float)
+        self._forward /= math.sqrt( numpy.square(self._forward).sum() )
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
+
+    @property
+    def up(self):
+        return self._up
+
+    @up.setter
+    def up(self, val):
+        if len(val) != 3:
+            raise Exception("up needs 3 elements")
+        self._up = numpy.array(val, dtype=float)
+        self._up /= math.sqrt( numpy.square(self._up).sum() )
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
+
+    @property
+    def fov(self):
+        return self._fov
+
+    @fov.setter
+    def fov(self, val):
+        self._fov = float(val)
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
         
+    @property
+    def range(self):
+        return self._range
+
+    @range.setter
+    def range(self, val):
+        try:
+            val = float(val)
+            val = numpy.array( ( val, val, val ), dtype=float )
+        except TypeError:
+            val = numpy.array(val, dtype=float)
+        if val.shape[0] != 3:
+            raise Exception("range requires 1 or 3 values")
+        self._range = val
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
+
+    @property
+    def scale(self):
+        return 1./self._range
+
+    @scale.setter
+    def scale(self, val):
+        try:
+            val = float(val)
+            val = numpy.array( ( 1/val, 1/val, 1/val ), dtype=float )
+        except TypeError:
+            val = numpy.array( val, dtype=float )
+            val = 1./val
+        if val.shape[0] != 3:
+            raise Exception("scale requires 1 or 3 values")
+        self._range = val
+        self.run_glcode(lambda : self.update_cam_posrot_gl())
+            
     def update(self):
         """Call this to flag the OpenGL renderer that things need to be redrawn."""
         raise Exception("GrContext subclasses need to implement update().")
@@ -1064,9 +1142,85 @@ class GrContext(Observer):
             collection.shader.set_perspective(self._fov, self._width/self._height,
                                               self._clipnear, self._clipfar)
 
+    def determine_camera_matrices(self):
+        center = self._center
+        forward = numpy.array( self._forward )
+        forward /= math.sqrt( numpy.square(forward).sum() )
+        fov = self._fov
+        up = numpy.array( self._up )
+        up /= math.sqrt( numpy.square(up).sum() )
+        rng = numpy.array( self._range )
+
+        # I'm not dealing with non-equal range properly
+        distback = rng[0] * math.tan(fov)
+        
+        self._camtranslate = numpy.matrix([[ 1., 0., 0., -center[0] ] ,
+                                           [ 0., 1., 0., -center[1] ] ,
+                                           [ 0., 0., 1., -center[2] ] ,
+                                           [ 0., 0., 0., 1. ] ] )
+                                       
+
+        # Figure out if the camera needs to point in another direction
+
+        costheta = -forward[2]      # -ẑ · forward
+        if costheta < 1.-1e-8:
+            if costheta > -1.+1e-6:
+                rotabout = numpy.array( [ forward[1], -forward[0], 0. ] )   # -ẑ × forward
+                rotabout /= math.sqrt( numpy.square(rotabout).sum() )
+                costheta_2 = math.sqrt( (1+costheta) / 2. )
+                sintheta_2 = math.sqrt( (1-costheta) / 2. )
+                # Negative because we really rotate objects, not camera
+                q = numpy.array( [ -sintheta_2 * rotabout[0], -sintheta_2 * rotabout[1],
+                                   -sintheta_2 * rotabout[2], costheta_2 ] )
+            else:
+                # π about ŷ
+                q = numpy.array( [ 0., 1., 0., 0. ] )
+        else:
+            q = numpy.array( [0., 0., 0., 1.] )
+
+        # Rotate the up vector by this world rotation.  (up is a unit vector, so rotup will be too)
+
+        rotup = quaternion_rotate(up, q)
+
+        # Project it into the camera (x-y) plane.
+
+        rotup[2] = 0.
+        magrotup = math.sqrt( numpy.square(rotup).sum() )
+        cosphi = 0.
+        if magrotup > 1e-8:
+            # punt if the vector is too parallel to forward
+            rotup /= magrotup
+            if rotup[0] > 0:
+                phiaxis = 1.
+            else:
+                phiaxis = -1.
+            # Rotate this up projection to the y-axis
+            cosphi = rotup[1]
+            cosphi_2 = math.sqrt( (1+cosphi) / 2. )
+            sinphi_2 = math.sqrt( (1-cosphi) / 2. )
+            q = quaternion_multiply( [ 0., 0., sinphi_2 * phiaxis, cosphi_2 ] , q )
+            
+        
+        self._camrotate = numpy.array([[1 - 2*q[1]**2 - 2*q[2]**2, 2*q[0]*q[1] - 2*q[2]*q[3],
+                                                   2*q[0]*q[2] + 2*q[1]*q[3], 0.],
+                                       [2*q[0]*q[1] + 2*q[2]*q[3], 1 - 2*q[0]**2 - 2*q[2]**2,
+                                                   2*q[1]*q[2] - 2*q[0]*q[3], 0.],
+                                       [2*q[0]*q[2] - 2*q[1]*q[3], 2*q[1]*q[2] + 2*q[0]*q[3],
+                                                   1 - 2*q[0]**2 - 2*q[1]**2, -distback],
+                                       [ 0., 0., 0., 1.]], dtype=numpy.float32)
+
+        # sys.stderr.write("_center = {}, _forward = {}, _up = {}\n".format(self._center,
+        #                                                                   self._forward,
+        #                                                                   self._up))
+        # sys.stderr.write("_fov = {}, _range = {}\n".format(self._fov, self._range))
+        # sys.stderr.write("distback = {}\n".format(distback))
+        # sys.stderr.write("rotup = {}, costheta = {}, cosphi = {}\n".format(rotup, costheta, cosphi))
+        # sys.stderr.write("camrotate:\n{}\n".format(self._camrotate))
+        # sys.stderr.write("camtranslate:\n{}\n".format(self._camtranslate))
+        
+            
     def update_cam_posrot_gl(self):
-        # sys.stderr.write("Moving camera to [{:.2f}, {:.2f}, {:.2f}], setting rotation to [{:.3f}, {:.3f}]\n"
-        #                  .format(self._camx, self._camy, self._camz, self._camtheta, self._camphi))
+        self.determine_camera_matrices()
         for collection in itertools.chain( self.simple_object_collections,
                                            self.curve_collections ):
             collection.shader.set_camera_posrot()
@@ -1191,9 +1345,6 @@ class GLUTContext(GrContext):
 
         self._mousex0 = 0.
         self._mousey0 = 0.
-        self._origtheta = 0.
-        self._origphi = 0.
-        self._origcamz = 0.
 
         self.idle_funcs = []
         self.things_to_run = queue.Queue()
@@ -1286,13 +1437,18 @@ class GLUTContext(GrContext):
             GLUT.glutSetWindow(self.window)
 
             if state == GLUT.GLUT_UP:
+                # sys.stderr.write("RMB up:  forward={}\n  up={}\n".format(self._forward, self._up))
+                # sys.stderr.write("         θ={:.2f}, φ={:.2f}, upθ={:.2f}, upφ={:.2f}\n"
+                #                  .format(self._theta, self._phi, self._uptheta, self._upphi))
                 GLUT.glutMotionFunc(None)
 
             elif state == GLUT.GLUT_DOWN:
+                # sys.stderr.write("RMB down\n")
                 self._mousex0 = x
                 self._mousey0 = y
-                self._origtheta = math.acos(-self._forward[2] / math.sqrt( numpy.square(self._forward).sum() ) )
-                self._origphi = math.atan2(-self._forward[0], -self._forward[3])
+                self._origtheta = math.acos(-self._forward[1] / math.sqrt( numpy.square(self._forward).sum() ) )
+                self._origphi = math.atan2(-self._forward[0], -self._forward[2])
+                # sys.stderr.write("origθ = {:.2f}, origφ = {:.2f}\n".format(self._origtheta, self._origphi))
                 GLUT.glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
 
         if button == GLUT.GLUT_MIDDLE_BUTTON:
@@ -1306,14 +1462,14 @@ class GLUTContext(GrContext):
                 # sys.stderr.write("MMB down\n")
                 self._mousex0 = x
                 self._mousey0 = y
-                self._origcamz = self._camz
+                self._origrange = self._range
                 GLUT.glutMotionFunc(lambda x, y : self.mmb_moved(x, y))
 
         if button == GLUT.GLUT_LEFT_BUTTON:
             GLUT.glutSetWindow(self.window)
             
             if state == GLUT.GLUT_UP:
-                # sys.stderr.write("LMB up\n")
+                # sys.stderr.write("LMB up: self._center={}\n".format(self._center))
                 GLUT.glutMotionFunc(None)
 
             if state == GLUT.GLUT_DOWN:
@@ -1322,41 +1478,76 @@ class GLUTContext(GrContext):
                 if keys & GLUT.GLUT_ACTIVE_SHIFT:
                     self._mouseposx0 = x
                     self._mouseposy0 = y
-                    self._origcamx = self._camx
-                    self._origcamy = self._camy
+                    self._origcenter = self._center
+                    self._upinscreen = self._up - self._forward * ( numpy.sum(self._up*self._forward ) /
+                                                                    math.sqrt(numpy.square(self._up).sum()) )
+                    self._upinscreen /= math.sqrt(numpy.square(self._upinscreen).sum())
+                    self._rightinscreen = numpy.array( [ self._forward[1]*self._upinscreen[2] -
+                                                            self._forward[2]*self._upinscreen[1],
+                                                         self._forward[2]*self._upinscreen[0] -
+                                                            self._forward[0]*self._upinscreen[2],
+                                                         self._forward[0]*self._upinscreen[1] -
+                                                            self._forward[1]*self._upinscreen[0] ] )
+                    self._rightinscreen /= math.sqrt(numpy.square(self._rightinscreen).sum())
+                                                        
                     GLUT.glutMotionFunc(lambda x, y : self.lmb_moved(x, y))
             
         if (state == GLUT.GLUT_UP) and ( button == 3 or button == 4):   # wheel up/down
             GLUT.glutSetWindow(self.window)
 
             if button == 3:
-                self._camz *= 0.9
+                self._range *= 0.9
             else:
-                self._camz *= 1.1
+                self._range *= 1.1
             self.update_cam_posrot_gl()
 
 
     def rmb_moved(self, x, y):
         dx = x - self._mousex0
         dy = y - self._mousey0
-        theta = self._origtheta - dy * math.pi / self._height
-        phi = self._origphi + dx * 2.*math.pi / self._width
-        self._forward = numpy.array( [ math.sin(theta) * math.sin(phi),
-                                       math.cos(theta),
-                                       math.sin(theta) * math.cos(phi) ] )
+        theta = self._origtheta - dy * math.pi/2. / self._height
+        if theta > math.pi:
+            theta = math.pi
+        if theta < 0.:
+            theta = 0.
+        phi = self._origphi - dx * math.pi / self._width
+        # if phi < -math.pi:
+        #     phi += 2.*math.pi
+        # if phi > math.pi:
+        #     phi -= 2.*math.pi
+        self._forward = numpy.array( [ -math.sin(theta) * math.sin(phi),
+                                       -math.cos(theta),
+                                       -math.sin(theta) * math.cos(phi) ] )
+        uptheta = theta - math.pi/2.
+        upphi = phi
+        if uptheta < 0.:
+            uptheta = math.fabs(uptheta)
+            upphi += math.pi
+        self._up = numpy.array( [ math.sin(uptheta) * math.sin(upphi),
+                                  math.cos(uptheta),
+                                  math.sin(uptheta) * math.cos(upphi) ] )
+        # self._up = numpy.array( [0., 1., 0.] )
+        # sys.stderr.write("Moved from (θ,φ) = ({:.2f},{:.2f}) to ({:.2f},{:.2f})\n".
+        #                  format(self._origtheta, self._origphi, theta, phi))
+        # sys.stderr.write("Forward is now: {}\n".format(self._forward))
+        self._theta = theta
+        self._phi = phi
+        self._uptheta = uptheta
+        self._upphi = upphi
         self.update_cam_posrot_gl()
 
 
     def mmb_moved(self, x, y):
         dy = y - self._mousey0
-        self._camz = self._origcamz * 10.**(dy/self._width)
+        self._range = self._origrange * 10.**(dy/self._width)
         self.update_cam_posrot_gl()
 
     def lmb_moved(self, x, y):
         dx = x - self._mouseposx0
         dy = y - self._mouseposy0
-        self._camx = self._origcamx - dx / 256.
-        self._camy = self._origcamy + dy / 256.
+
+        self._center = self._origcenter - self._rightinscreen * dx / self._width * self._range[0]
+        self._center += self._upinscreen * dy / self._height * self._range[1]
         self.update_cam_posrot_gl()
         
     def receive_message(self, message, subject):
@@ -1561,83 +1752,11 @@ class Shader(object):
         self.context.update()
         
     def set_camera_posrot(self):
-
-        center = self.context._center
-        forward = numpy.array( self.context._forward )
-        forward /= math.sqrt( numpy.square(forward).sum() )
-        fov = self.context._fov
-        up = numpy.array( self.context._up )
-        up /= math.sqrt( numpy.square(up).sum() )
-        rng = numpy.array( self.context._range )
-
-        # I'm not dealing with non-equal range properly
-        distback = rng[0] * math.tan(fov)
-        
-        camtranslate = numpy.matrix([[ 1., 0., 0., center[0] ] ,
-                                     [ 0., 1., 0., center[1] ] ,
-                                     [ 0., 0., 1., center[2] + distback ] ,
-                                     [ 0., 0., 0., 1. ] ] )
-                                       
-
-        # Figure out if the camera needs to point in another direction
-
-        costheta = -forward[2]
-        if costheta < 1.-1e-8:
-            rotabout = numpy.array( [ -forward[1], forward[0], 0. ] )
-            rotabout /= math.sqrt( numpy.square(rotabout).sum() )
-            costheta_2 = math.sqrt( (1+costheta) / 2. )
-            sintheta_2 = math.sqrt( (1-costheta) / 2. )
-            q = numpy.array( [ sintheta_2 * rotabout[0], sintheta_2 * rotabout[1],
-                               sintheta_2 * rotabout[2], costheta_2 ] )
-        else:
-            q = numpy.array( [0., 0., 0., 1.] )
-
-        # For up, rotate +y by the camera's rotation
-
-        roty = quaternion_rotate( numpy.array( [0., 1., 0.] ), q )
-
-        # Get the component of the "up" vector in the camera view plane
-
-        up -= forward * ( (up*forward).sum() )
-        upmag = math.sqrt(numpy.square(up).sum())
-        if upmag >= 1e-12:
-            # punt if too small angle
-            up / math.sqrt(numpy.square(up).sum())
-
-            # Get the rotation to move the up vector to the camera's rotated y
-            
-            upxy = numpy.array( [ up[1]*roty[2] - up[2]*roty[1],
-                                  up[2]*roty[0] - up[0]*roty[2],
-                                  up[0]*roty[1] - up[1]*roty[0] ] )
-            sinphi = math.sqrt( numpy.square(upxy).sum() )
-            if sinphi >= 1e-12:
-                upxy /= sinphi
-                cosphi = math.sqrt( 1. - sinphi*sinphi )
-                cosphi_2 = math.sqrt( (1+cosphi) / 2 )
-                sinphi_2 = math.sqrt( (1-cosphi) / 2 )
-                q = quaternion_multiply( [ sinphi_2 * upxy[0], sinphi_2 * upxy[1],
-                                           sinphi_2 * upxy[2], cosphi_2, ] , q )
-
-
-        camrotate = numpy.array([[1 - 2*q[1]**2 - 2*q[2]**2, 2*q[0]*q[1] - 2*q[2]*q[3], 2*q[0]*q[2] + 2*q[1]*q[3], 0.],
-                                 [2*q[0]*q[1] + 2*q[2]*q[3], 1 - 2*q[0]**2 - 2*q[2]**2, 2*q[1]*q[2] - 2*q[0]*q[3], 0.],
-                                 [2*q[0]*q[2] - 2*q[1]*q[3], 2*q[1]*q[2] + 2*q[0]*q[3], 1 - 2*q[0]**2 - 2*q[1]**2, 0.],
-                                 [ 0., 0., 0., 1.]])
-
-
-        camtransform = numpy.matmul(camrotate, camtranslate)
-        
-        sys.stderr.write("_center = {}, _forward = {}, _up = {}\n".format(self.context._center,
-                                                                          self.context._forward,
-                                                                          self.context._up))
-        sys.stderr.write("_fov = {}, _range = {}\n".format(self.context._fov, self.context._range))
-        sys.stderr.write("distback = {}\n".format(distback))
-        sys.stderr.write("camrotate:\n{}\n".format(camrotate))
-        sys.stderr.write("camtransform:\n{}\n".format(camtransform))
-        
         GL.glUseProgram(self.progid)
         viewrot_location = GL.glGetUniformLocation(self.progid, "viewrot")
-        GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, camtransform.T)
+        GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, self.context._camrotate.T)
+        viewshift_location = GL.glGetUniformLocation(self.progid, "viewshift")
+        GL.glUniformMatrix4fv(viewshift_location, 1, GL.GL_FALSE, self.context._camtranslate.T)
 
         self.context.update()
 
@@ -1659,7 +1778,7 @@ class BasicShader(Shader):
         vertex_shader = """
 #version 330
 
-// uniform mat4 viewshift;
+uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1686,7 +1805,7 @@ out vec4 aColor;
 
 void main(void)
 {
-  gl_Position =  projection * viewrot * model_matrix[in_Index] * in_Position;
+  gl_Position =  projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
 }"""
@@ -1767,7 +1886,7 @@ class CurveTubeShader(Shader):
         vertex_shader = """
 #version 330
 
-// uniform mat4 viewshift;
+uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1843,7 +1962,7 @@ void main(void)
 
 const float PI = 3.14159265359;
 
-// uniform mat4 viewshift;
+uniform mat4 viewshift;
 uniform mat4 viewrot;
 uniform mat4 projection;
 
@@ -1920,24 +2039,24 @@ void main(void)
         topnormal[i] = tmp.xyz / length(tmp.xyz);
     }
 
-    gl_Position = projection * viewrot * toppoints[7];
+    gl_Position = projection * viewrot * viewshift * toppoints[7];
     bColor = aColor[1];
     aNormal = topnormal[7];
     EmitVertex();
 
     for (int i = 0 ; i < 8 ; ++i)
     {
-        gl_Position = projection * viewrot * toppoints[i];
+        gl_Position = projection * viewrot * viewshift * toppoints[i];
         bColor = aColor[1];
         aNormal = topnormal[i];
         EmitVertex();
-        gl_Position = projection * viewrot * bottompoints[i];
+        gl_Position = projection * viewrot * viewshift * bottompoints[i];
         bColor = aColor[0];
         aNormal = bottomnormal[i];
         EmitVertex();
     }
 
-    gl_Position = projection * viewrot * bottompoints[0];
+    gl_Position = projection * viewrot * viewshift * bottompoints[0];
     bColor = aColor[0];
     aNormal = bottomnormal[0];
     EmitVertex();

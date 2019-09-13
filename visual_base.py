@@ -43,10 +43,15 @@ import OpenGL.GLUT as GLUT
 _debug_shaders = False
 _print_fps = False
 
+_MAX_OBJS_PER_COLLECTION = 512
+
 _OBJ_TYPE_SIMPLE = 1
 _OBJ_TYPE_CURVE = 2
 
 _first_context = None
+
+# ======================================================================
+# rate()
 
 def rate(fps):
     """Call this in the main loop of your program to have it run at most every 1/fps seconds."""
@@ -100,6 +105,9 @@ class Rater(threading.Event):
         self.wait()
         self.clear()
         self._time_of_last_rate_call = time.perf_counter()
+
+# ======================================================================
+# quaternions
 
 # https://en.wikipedia.org/wiki/Quaternion#Hamilton_product
 #
@@ -287,6 +295,7 @@ class color(object):
         return gray(val)
     
 # ======================================================================
+# Observer pattern
 
 class Subject(object):
     """Subclass this to create something from which Observers will listen for messages."""
@@ -362,11 +371,15 @@ class GLObjectCollection(Observer):
        model_matrix — a 16-element float32 numpy array
        inverse_model_matrix — a 12-element float32 numpy array (3x3 plus std140 layout padding)
       
+    Subclasses must implement
+       — update_object_vertices(grobject) — update the OpenGL data for grobject's vertices
+       — probably other things
+
     """
     
     def __init__(self, context, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.maxnumobjs = 512       # Must match the array length in the shader!!!!  Rob, do better.
+        self.maxnumobjs = _MAX_OBJS_PER_COLLECTION
         self.objects = {}
         self.object_index = {}
         self.numobjects = 0
@@ -375,13 +388,11 @@ class GLObjectCollection(Observer):
 
     def initglstuff(self):
         self.modelmatrixbuffer = GL.glGenBuffers(1)
-        # sys.stderr.write("self.modelmatrixbuffer = {}\n".format(self.modelmatrixbuffer))
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         # 4 bytes per float * 16 floats per object
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 16 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
         self.modelnormalmatrixbuffer = GL.glGenBuffers(1)
-        # sys.stderr.write("self.modelnormalmatrixbuffer = {}\n".format(self.modelnormalmatrixbuffer))
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
         # 4 bytes per float * 9 floats per object
         #  BUT!  Because of std140 layout, there's actually 12 floats per object,
@@ -389,21 +400,17 @@ class GLObjectCollection(Observer):
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 12 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
         self.colorbuffer = GL.glGenBuffers(1)
-        # sys.stderr.write("self.colorbuffer = {}\n".format(self.colorbuffer))
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
         # 4 bytes per float * 4 floats per object
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
-        # sys.stderr.write("ModelMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
         GL.glUniformBlockBinding(self.shader.progid, dex, 0);
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
-        # sys.stderr.write("ModelNormalMatrix block index (progid={}): {}\n".format(self.shader.progid, dex))
         GL.glUniformBlockBinding(self.shader.progid, dex, 1);
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "Colors")
-        # sys.stderr.write("Colors block index (progid={}): {}\n".format(self.shader.progid, dex))
         GL.glUniformBlockBinding(self.shader.progid, dex, 2);
 
         self.bind_uniform_buffers()
@@ -425,17 +432,12 @@ class GLObjectCollection(Observer):
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 2, self.colorbuffer)
         
-        
     def update_object_matrix(self, obj):
         if not obj.visible: return
 
         if not obj._id in self.objects:
             sys.stderr.write("...object not found whose matrix was to be updated!!\n")
             return
-
-        # sys.stderr.write("...found at {}!\n".format(i))
-        # sys.stderr.write("\nmatrixdata:\n{}\n".format(obj.model_matrix))
-        # sys.stderr.write("\nnormalmatrixdata:\n{}\n".format(obj.inverse_model_matrix))
 
         self.context.run_glcode(lambda : self.do_update_object_matrix(obj))
 
@@ -498,9 +500,10 @@ class GLObjectCollection(Observer):
 # SimpleObjectCollection
 #
 # This is for objects that don't require a geometry shader (so no curves).
+# Objects are collections of triangles, and all have a single color.
 #
 # Shaders take as input for each vertex of each triangle
-#  location  (4 floats per vertex)
+#  location  (4 floats per vertex; 4th element should be 1)
 #  normal    (3 floats per vertex)
 #  index     (1 index per vertex)
 #
@@ -517,18 +520,12 @@ class GLObjectCollection(Observer):
 #
 #  model matrix  (16 floats per object)
 #  model normal matrix (something like an inverse)  (12* floats per object)
-#  color     (4 floats per vertex)
+#  color     (4 floats per vertex)  (4th is opacity, but is ignored)
 #
 #  * really, it's a mat3, so you'd think 9 floats per object.  However,
 #  The OpenGL std140 layout means that things are aligned on vec4
 #  bounadries, so there's an extra "junk" float at the end of each
 #  row of the matrix.
-#
-# I'm gonna have to remind myself why location and color need 4, not 3,
-# floats.  (For location, it's so that the transformation matrices can
-# be 4×4 to allow offsets as well as rotations and scales.)  (For color,
-# alpha?  It's not implemented, but maybe that's what I was thinking.)
-#
 
 class SimpleObjectCollection(GLObjectCollection):
     """A collection of "simple" objects.
@@ -660,8 +657,8 @@ class SimpleObjectCollection(GLObjectCollection):
             
             self.context.update()
                 
-    # Updates positions of verticies and directions of normals.
-    # Can NOT change the number of vertices
+    # Updates positions of verticies and directions of normals.  Can NOT
+    # change the number of vertices.
     def update_object_vertices(self, obj):
         if not obj.visible: return
         if not obj._id in self.objects: return
@@ -740,12 +737,15 @@ class SimpleObjectCollection(GLObjectCollection):
 class CurveCollection(GLObjectCollection):
     """A collection of curves defined by a sequence of points.
 
+    Pass the name of the shader in "shader"; defaults to "Curve Tube Shader".
+    (Right now, that's the only option.)
+
     ROB WRITE MORE
     """
     
-    def __init__(self, context, *args, **kwargs):
+    def __init__(self, context, shader="Curve Tube Shader", *args, **kwargs):
         super().__init__(context, *args, **kwargs)
-        self.shader = Shader.get("Curve Tube Shader", context)
+        self.shader = Shader.get(shader, context)
         self.maxnumlines=16384
 
         self.curnumlines = 0
@@ -865,6 +865,8 @@ class CurveCollection(GLObjectCollection):
 
         self.context.run_glcode(lambda : self.do_update_object_points(obj))
 
+    # Don't change the number of points in the line from when you first
+    #   added the object, or things will go haywire.
     def do_update_object_points(self, obj):
         with GrContext._threadlock:
             if obj.points.shape[0] == 0:
@@ -1648,19 +1650,15 @@ class Shader(object):
         
         if name == "Basic Shader":
             with GrContext._threadlock:
-                # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._basic_shader) or
                      (Shader._basic_shader[context] == None) ):
-                    # sys.stderr.write("Creating a new BasicShader\n")
                     Shader._basic_shader[context] = BasicShader(context)
             return Shader._basic_shader[context]
 
         elif name == "Curve Tube Shader":
             with GrContext._threadlock:
-                # sys.stderr.write("Asking for a BasicShader\n")
                 if ( (not context in Shader._curvetube_shader) or
                      (Shader._curvetube_shader[context] == None) ):
-                    # sys.stderr.write("Creating a new CurveTubeShader\n");
                     Shader._curvetube_shader[context] = CurveTubeShader(context)
             return Shader._curvetube_shader[context]
 
@@ -1797,19 +1795,19 @@ uniform mat4 viewrot;
 uniform mat4 projection;
 
 layout (std140) uniform ModelMatrix
-{
-   mat4 model_matrix[512];
-};
+{{
+   mat4 model_matrix[{maxnumobj}];
+}};
 
 layout (std140) uniform ModelNormalMatrix
-{
-   mat3 model_normal_matrix[512];
-};
+{{
+   mat3 model_normal_matrix[{maxnumobj}];
+}};
 
 layout (std140) uniform Colors
-{
-   vec4 color[512];
-};
+{{
+   vec4 color[{maxnumobj}];
+}};
 
 layout(location=0) in vec4 in_Position;
 layout(location=1) in vec3 in_Normal;
@@ -1818,11 +1816,11 @@ out vec3 aNormal;
 out vec4 aColor;
 
 void main(void)
-{
+{{
   gl_Position =  projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
-}"""
+}}""".format(maxnumobj=_MAX_OBJS_PER_COLLECTION)
 
         fragment_shader = """
 #version 330
@@ -1905,19 +1903,19 @@ uniform mat4 viewrot;
 uniform mat4 projection;
 
 layout (std140) uniform ModelMatrix
-{
-   mat4 model_matrix[512];
-};
+{{
+   mat4 model_matrix[{maxnumobj}];
+}};
 
 layout (std140) uniform ModelNormalMatrix
-{
-   mat3 model_normal_matrix[512];
-};
+{{
+   mat3 model_normal_matrix[{maxnumobj}];
+}};
 
 layout (std140) uniform Colors
-{
-   vec4 color[512];
-};
+{{
+   vec4 color[{maxnumobj}];
+}};
 
 layout(location=0) in vec4 in_Position;
 layout(location=1) in vec3 in_Transverse;
@@ -1926,14 +1924,14 @@ out vec3 aTransverse;
 out vec4 aColor;
 
 void main(void)
-{
+{{
   gl_Position =  model_matrix[in_Index] * in_Position;
   // aTransverse = model_normal_matrix[in_Index] * in_Transverse;
   vec4 tmp = vec4(in_Transverse, 0);
   tmp = model_matrix[in_Index] * tmp;
   aTransverse = tmp.xyz;
   aColor = color[in_Index];
-}"""
+}}""".format(maxnumobj=_MAX_OBJS_PER_COLLECTION)
 
         skeleton_geometry_shader = """
 #version 330

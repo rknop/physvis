@@ -264,6 +264,7 @@ Object properties missing or not working:
   * opacity   (Doing this at all well is quite hard.  The variable is there, but ignored)
   * materials (Maybe someday)
   * composite objects with frame
+  * You can't delete displays (and object cleanup in general is lacking)
 
 Global features missing:
   * Automatic zoom updating to make all objects visible

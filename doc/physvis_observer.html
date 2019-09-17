@@ -1,0 +1,115 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module physvis_observer</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>physvis_observer</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/rknop/cjstuff/physvis/physvis_observer.py">/home/rknop/cjstuff/physvis/physvis_observer.py</a></font></td></tr></table>
+    <p><tt>#/usr/bin/python3<br>
+#&nbsp;-*-&nbsp;coding:&nbsp;utf-8&nbsp;-*-<br>
+#<br>
+#&nbsp;(c)&nbsp;2019&nbsp;by&nbsp;Rob&nbsp;Knop<br>
+#<br>
+#&nbsp;This&nbsp;file&nbsp;is&nbsp;part&nbsp;of&nbsp;physvis<br>
+#<br>
+#&nbsp;physvis&nbsp;is&nbsp;free&nbsp;software:&nbsp;you&nbsp;can&nbsp;redistribute&nbsp;it&nbsp;and/or&nbsp;modify<br>
+#&nbsp;it&nbsp;under&nbsp;the&nbsp;terms&nbsp;of&nbsp;the&nbsp;GNU&nbsp;General&nbsp;Public&nbsp;License&nbsp;as&nbsp;published&nbsp;by<br>
+#&nbsp;the&nbsp;Free&nbsp;Software&nbsp;Foundation,&nbsp;either&nbsp;version&nbsp;3&nbsp;of&nbsp;the&nbsp;License,&nbsp;or<br>
+#&nbsp;(at&nbsp;your&nbsp;option)&nbsp;any&nbsp;later&nbsp;version.</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="threading.html">threading</a><br>
+</td><td width="25%" valign=top><a href="uuid.html">uuid</a><br>
+</td><td width="25%" valign=top></td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ee77aa">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Classes</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl>
+<dt><font face="helvetica, arial"><a href="builtins.html#object">builtins.object</a>
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="physvis_observer.html#Observer">Observer</a>
+</font></dt><dt><font face="helvetica, arial"><a href="physvis_observer.html#Subject">Subject</a>
+</font></dt></dl>
+</dd>
+</dl>
+ <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Observer">class <strong>Observer</strong></a>(<a href="builtins.html#object">builtins.object</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Subclass&nbsp;this&nbsp;to&nbsp;be&nbsp;able&nbsp;to&nbsp;get&nbsp;messages&nbsp;from&nbsp;a&nbsp;<a href="#Subject">Subject</a>.<br>
+&nbsp;<br>
+Must&nbsp;implement&nbsp;receive_message&nbsp;(if&nbsp;you&nbsp;want&nbsp;to&nbsp;do&nbsp;anything).<br>
+&nbsp;<br>
+Call&nbsp;the&nbsp;add_listener()&nbsp;method&nbsp;of&nbsp;a&nbsp;<a href="#Subject">Subject</a>&nbsp;<a href="builtins.html#object">object</a>,&nbsp;passing&nbsp;self&nbsp;as<br>
+an&nbsp;argument,&nbsp;to&nbsp;start&nbsp;getting&nbsp;messages&nbsp;from&nbsp;the&nbsp;<a href="#Subject">Subject</a>.<br>
+&nbsp;<br>
+Call&nbsp;the&nbsp;remove_listener()&nbsp;method&nbsp;of&nbsp;a&nbsp;<a href="#Subject">Subject</a>&nbsp;<a href="builtins.html#object">object</a>&nbsp;to&nbsp;no&nbsp;logner<br>
+get&nbsp;messages.&nbsp;&nbsp;You&nbsp;need&nbsp;to&nbsp;do&nbsp;this&nbsp;if&nbsp;you&nbsp;want&nbsp;yourself&nbsp;to&nbsp;be<br>
+deleted.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Observer-__init__"><strong>__init__</strong></a>(self, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="Observer-receive_message"><strong>receive_message</strong></a>(self, message, subject)</dt><dd><tt>In&nbsp;your&nbsp;subclass,&nbsp;implement&nbsp;this&nbsp;to&nbsp;get&nbsp;message&nbsp;(usually&nbsp;just&nbsp;a&nbsp;text&nbsp;string)&nbsp;from&nbsp;<a href="#Subject">Subject</a>&nbsp;subject.</tt></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Subject">class <strong>Subject</strong></a>(<a href="builtins.html#object">builtins.object</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>Subclass&nbsp;this&nbsp;to&nbsp;create&nbsp;something&nbsp;from&nbsp;which&nbsp;Observers&nbsp;will&nbsp;listen&nbsp;for&nbsp;messages.<br>
+&nbsp;<br>
+Incidentally,&nbsp;each&nbsp;thing&nbsp;that&nbsp;is&nbsp;a&nbsp;<a href="#Subject">Subject</a>&nbsp;has&nbsp;a&nbsp;_id&nbsp;field&nbsp;that&nbsp;is&nbsp;a<br>
+UUID,&nbsp;that&nbsp;you&nbsp;can&nbsp;use&nbsp;to&nbsp;make&nbsp;sure&nbsp;that&nbsp;something&nbsp;is&nbsp;the&nbsp;thing&nbsp;that<br>
+it&nbsp;is.<br>
+&nbsp;<br>
+Includes&nbsp;_threadlock,&nbsp;a&nbsp;threading.RLock&nbsp;<a href="builtins.html#object">object</a>,&nbsp;you&nbsp;can&nbsp;use&nbsp;for<br>
+global&nbsp;thread&nbsp;locking.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Subject-__del__"><strong>__del__</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Subject-__init__"><strong>__init__</strong></a>(self, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="Subject-add_listener"><strong>add_listener</strong></a>(self, listener)</dt><dd><tt>Add&nbsp;<a href="#Observer">Observer</a>&nbsp;listener&nbsp;to&nbsp;the&nbsp;list&nbsp;of&nbsp;things&nbsp;that&nbsp;gets&nbsp;messages.</tt></dd></dl>
+
+<dl><dt><a name="Subject-broadcast"><strong>broadcast</strong></a>(self, message)</dt><dd><tt>Call&nbsp;this&nbsp;on&nbsp;yourself&nbsp;to&nbsp;broadcast&nbsp;message&nbsp;to&nbsp;all&nbsp;listeners.</tt></dd></dl>
+
+<dl><dt><a name="Subject-remove_listener"><strong>remove_listener</strong></a>(self, listener)</dt><dd><tt>Remove&nbsp;<a href="#Observer">Observer</a>&nbsp;listener&nbsp;from&nbsp;the&nbsp;list&nbsp;of&nbsp;things&nbsp;that&nbsp;gets&nbsp;messages.</tt></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table></td></tr></table>
+</body></html>

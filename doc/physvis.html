@@ -59,10 +59,7 @@ computer&nbsp;takes&nbsp;more&nbsp;than&nbsp;1/30&nbsp;seconds&nbsp;to&nbsp;proc
 The&nbsp;user&nbsp;can&nbsp;rotate&nbsp;the&nbsp;orientation&nbsp;of&nbsp;the&nbsp;display&nbsp;by&nbsp;holding&nbsp;down&nbsp;the&nbsp;right&nbsp;mouse&nbsp;button<br>
 and&nbsp;moving&nbsp;the&nbsp;mouse.&nbsp;&nbsp;Roll&nbsp;the&nbsp;mouse&nbsp;wheel,&nbsp;or&nbsp;hold&nbsp;down&nbsp;the&nbsp;middle&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move<br>
 the&nbsp;mouse&nbsp;to&nbsp;zoom&nbsp;the&nbsp;display&nbsp;(really,&nbsp;just&nbsp;move&nbsp;the&nbsp;camera&nbsp;forwards&nbsp;and&nbsp;backwards).&nbsp;&nbsp;Hold<br>
-down&nbsp;the&nbsp;left&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move&nbsp;the&nbsp;mouse&nbsp;to&nbsp;move&nbsp;the&nbsp;display&nbsp;in&nbsp;a&nbsp;slightly<br>
-complicated&nbsp;way.&nbsp;&nbsp;(If&nbsp;you&nbsp;haven't&nbsp;rotated&nbsp;the&nbsp;camera,&nbsp;then&nbsp;the&nbsp;plane&nbsp;of&nbsp;the&nbsp;screen&nbsp;is&nbsp;the<br>
-x-y&nbsp;plane,&nbsp;and&nbsp;it&nbsp;moves&nbsp;the&nbsp;display&nbsp;in&nbsp;an&nbsp;obvious&nbsp;way.&nbsp;&nbsp;If&nbsp;you&nbsp;have,&nbsp;really&nbsp;it&nbsp;moves&nbsp;the<br>
-whole&nbsp;world&nbsp;in&nbsp;the&nbsp;x-y&nbsp;plane.)<br>
+down&nbsp;the&nbsp;left&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move&nbsp;the&nbsp;mouse&nbsp;to&nbsp;move&nbsp;the&nbsp;point&nbsp;the&nbsp;display&nbsp;looks&nbsp;at.<br>
 &nbsp;<br>
 The&nbsp;following&nbsp;ojects&nbsp;are&nbsp;available<br>
 &nbsp;<br>
@@ -102,6 +99,7 @@ each&nbsp;object&nbsp;for&nbsp;more&nbsp;information.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;make_trail&nbsp;—&nbsp;True&nbsp;to&nbsp;leave&nbsp;behind&nbsp;a&nbsp;trail<br>
 &nbsp;&nbsp;&nbsp;&nbsp;interval&nbsp;—&nbsp;Only&nbsp;add&nbsp;a&nbsp;trail&nbsp;segment&nbsp;after&nbsp;the&nbsp;object&nbsp;has&nbsp;moved&nbsp;this&nbsp;many&nbsp;times&nbsp;(default:&nbsp;10)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;retain&nbsp;—&nbsp;Only&nbsp;keep&nbsp;this&nbsp;many&nbsp;trail&nbsp;segments&nbsp;(the&nbsp;most&nbsp;recent&nbsp;ones)&nbsp;(Default:&nbsp;50)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;context&nbsp;—&nbsp;The&nbsp;display&nbsp;(window&nbsp;or&nbsp;widget)&nbsp;to&nbsp;put&nbsp;this&nbsp;object&nbsp;in.<br>
 &nbsp;<br>
 &nbsp;&nbsp;The&nbsp;following&nbsp;properties&nbsp;you&nbsp;can't&nbsp;specify&nbsp;when&nbsp;you&nbsp;make&nbsp;the&nbsp;object,&nbsp;but&nbsp;you&nbsp;can&nbsp;change<br>
 &nbsp;&nbsp;later&nbsp;(e.g.&nbsp;with&nbsp;"mycube.x&nbsp;=&nbsp;0.1):<br>
@@ -112,7 +110,7 @@ each&nbsp;object&nbsp;for&nbsp;more&nbsp;information.<br>
 &nbsp;&nbsp;&nbsp;&nbsp;sx&nbsp;—&nbsp;The&nbsp;x&nbsp;scale&nbsp;of&nbsp;the&nbsp;object&nbsp;(this&nbsp;is&nbsp;usually&nbsp;the&nbsp;object's&nbsp;"length"&nbsp;where&nbsp;that&nbsp;makes&nbsp;sense)<br>
 &nbsp;&nbsp;&nbsp;&nbsp;sy&nbsp;—&nbsp;The&nbsp;y&nbsp;scale&nbsp;of&nbsp;the&nbsp;object<br>
 &nbsp;&nbsp;&nbsp;&nbsp;sz&nbsp;—&nbsp;The&nbsp;z&nbsp;scale&nbsp;of&nbsp;the&nbsp;object<br>
-&nbsp;&nbsp;&nbsp;&nbsp;visible&nbsp;—&nbsp;Set&nbsp;to&nbsp;False&nbsp;to&nbsp;remove&nbsp;an&nbsp;object&nbsp;from&nbsp;the&nbsp;display,&nbsp;True&nbsp;to&nbsp;put&nbsp;it&nbsp;back&nbsp;in<br>
+&nbsp;&nbsp;&nbsp;&nbsp;visible&nbsp;—&nbsp;Set&nbsp;to&nbsp;False&nbsp;to&nbsp;remove&nbsp;an&nbsp;object&nbsp;from&nbsp;the&nbsp;display,&nbsp;True&nbsp;to&nbsp;put&nbsp;it&nbsp;back&nbsp;in.<br>
 &nbsp;<br>
 &nbsp;&nbsp;Methods.&nbsp;&nbsp;These&nbsp;are&nbsp;functions&nbsp;on&nbsp;an&nbsp;object&nbsp;you&nbsp;can&nbsp;call&nbsp;to&nbsp;do&nbsp;things&nbsp;to&nbsp;the&nbsp;object,,&nbsp;e.g.<br>
 &nbsp;<br>
@@ -158,13 +156,76 @@ There&nbsp;are&nbsp;also&nbsp;functions&nbsp;corresponding&nbsp;to&nbsp;each&nbs
 &nbsp;<br>
 returns&nbsp;v.<a href="#-cross">cross</a>(u).<br>
 &nbsp;<br>
-(ASIDE:&nbsp;Internally,&nbsp;vector&nbsp;is&nbsp;implemented&nbsp;as&nbsp;a&nbsp;few&nbsp;things&nbsp;on&nbsp;top&nbsp;of&nbsp;a&nbsp;3-element&nbsp;numpy<br>
-array,&nbsp;so&nbsp;you&nbsp;can&nbsp;use&nbsp;them&nbsp;wherever&nbsp;you'd&nbsp;use&nbsp;a&nbsp;numpy&nbsp;array.&nbsp;&nbsp;However,&nbsp;some&nbsp;things&nbsp;are&nbsp;a<br>
-bit&nbsp;wonky;&nbsp;for&nbsp;instance,&nbsp;try&nbsp;making&nbsp;two&nbsp;vectors&nbsp;v1&nbsp;and&nbsp;v2,&nbsp;and&nbsp;doing&nbsp;(v1*v2).sum().<br>
-You'll&nbsp;get&nbsp;back&nbsp;a&nbsp;vector&nbsp;object&nbsp;with&nbsp;one&nbsp;element,&nbsp;which&nbsp;is&nbsp;broken,&nbsp;and&nbsp;probably&nbsp;means&nbsp;I<br>
-didn't&nbsp;subclass&nbsp;properly.&nbsp;&nbsp;You&nbsp;can&nbsp;fix&nbsp;this&nbsp;by&nbsp;just&nbsp;typecasting&nbsp;the&nbsp;result&nbsp;to&nbsp;a&nbsp;float.<br>
-Really,&nbsp;you're&nbsp;probably&nbsp;better&nbsp;off&nbsp;treating&nbsp;the&nbsp;vector&nbsp;class&nbsp;as&nbsp;its&nbsp;own&nbsp;thing&nbsp;and&nbsp;not<br>
-relying&nbsp;too&nbsp;muich&nbsp;on&nbsp;the&nbsp;fact&nbsp;that&nbsp;it's&nbsp;a&nbsp;numpy&nbsp;array.)<br>
+(ASIDE:&nbsp;Internally,&nbsp;vector&nbsp;is&nbsp;implemented&nbsp;as&nbsp;a&nbsp;few&nbsp;things&nbsp;on&nbsp;top&nbsp;of&nbsp;a<br>
+3-element&nbsp;numpy&nbsp;array,&nbsp;so&nbsp;you&nbsp;can&nbsp;use&nbsp;them&nbsp;wherever&nbsp;you'd&nbsp;use&nbsp;a&nbsp;numpy<br>
+array.&nbsp;&nbsp;However,&nbsp;some&nbsp;things&nbsp;are&nbsp;a&nbsp;bit&nbsp;wonky;&nbsp;for&nbsp;instance,&nbsp;try&nbsp;making<br>
+two&nbsp;vectors&nbsp;v1&nbsp;and&nbsp;v2,&nbsp;and&nbsp;doing&nbsp;(v1*v2).sum().&nbsp;&nbsp;You'll&nbsp;get&nbsp;back&nbsp;a<br>
+vector&nbsp;object&nbsp;with&nbsp;one&nbsp;element,&nbsp;which&nbsp;is&nbsp;broken,&nbsp;and&nbsp;probably&nbsp;means&nbsp;I<br>
+didn't&nbsp;subclass&nbsp;properly.&nbsp;&nbsp;You&nbsp;can&nbsp;fix&nbsp;this&nbsp;by&nbsp;just&nbsp;typecasting&nbsp;the<br>
+result&nbsp;to&nbsp;a&nbsp;float.&nbsp;&nbsp;Really,&nbsp;you're&nbsp;probably&nbsp;better&nbsp;off&nbsp;treating&nbsp;the<br>
+vector&nbsp;class&nbsp;as&nbsp;its&nbsp;own&nbsp;thing&nbsp;and&nbsp;not&nbsp;relying&nbsp;too&nbsp;muich&nbsp;on&nbsp;the&nbsp;fact&nbsp;that<br>
+it's&nbsp;a&nbsp;numpy&nbsp;array.&nbsp;&nbsp;For&nbsp;instance,&nbsp;in&nbsp;this&nbsp;example,&nbsp;it's&nbsp;better&nbsp;just&nbsp;to<br>
+do&nbsp;v1.<a href="#-dot">dot</a>(v2).)<br>
+&nbsp;<br>
+&nbsp;<br>
+CONTROLLING&nbsp;DISPLAYS&nbsp;(WINDOWS)<br>
+&nbsp;<br>
+You&nbsp;can&nbsp;get&nbsp;a&nbsp;new&nbsp;display&nbsp;with&nbsp;the&nbsp;function&nbsp;"<a href="#-display">display</a>()",&nbsp;e.g.:<br>
+&nbsp;<br>
+&nbsp;&nbsp;disp&nbsp;=&nbsp;<a href="#-display">display</a>()<br>
+&nbsp;<br>
+That&nbsp;will&nbsp;open&nbsp;a&nbsp;new&nbsp;window;&nbsp;disp&nbsp;is&nbsp;a&nbsp;handle&nbsp;to&nbsp;it.&nbsp;&nbsp;If&nbsp;you&nbsp;want&nbsp;a<br>
+handle&nbsp;to&nbsp;the&nbsp;first&nbsp;display&nbsp;created&nbsp;(which&nbsp;may&nbsp;have&nbsp;been&nbsp;created<br>
+automatically&nbsp;when&nbsp;you&nbsp;created&nbsp;a&nbsp;graphic&nbsp;object),&nbsp;the&nbsp;function&nbsp;"<a href="#-scene">scene</a>()"<br>
+returns&nbsp;that.<br>
+&nbsp;<br>
+You&nbsp;can&nbsp;get&nbsp;and&nbsp;set&nbsp;various&nbsp;display&nbsp;properties:<br>
+&nbsp;<br>
+&nbsp;&nbsp;*&nbsp;width&nbsp;—&nbsp;width&nbsp;of&nbsp;the&nbsp;window<br>
+&nbsp;&nbsp;*&nbsp;height&nbsp;—&nbsp;height&nbsp;of&nbsp;the&nbsp;window<br>
+&nbsp;&nbsp;*&nbsp;background&nbsp;—&nbsp;the&nbsp;background&nbsp;color&nbsp;of&nbsp;the&nbsp;display.&nbsp;&nbsp;Three&nbsp;numbers<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(rgb)&nbsp;between&nbsp;0&nbsp;and&nbsp;1,&nbsp;where&nbsp;0&nbsp;is&nbsp;black.&nbsp;&nbsp;You&nbsp;can<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;also&nbsp;use&nbsp;color.red,&nbsp;etc.<br>
+&nbsp;&nbsp;*&nbsp;foreground&nbsp;—&nbsp;the&nbsp;default&nbsp;color&nbsp;of&nbsp;newly-created&nbsp;objects.<br>
+&nbsp;&nbsp;*&nbsp;center&nbsp;—&nbsp;(a&nbsp;vector,&nbsp;or&nbsp;a&nbsp;list&nbsp;or&nbsp;tuple&nbsp;of&nbsp;3&nbsp;objects)&nbsp;the&nbsp;coordinates<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;of&nbsp;the&nbsp;point&nbsp;the&nbsp;camera&nbsp;is&nbsp;looking&nbsp;at.&nbsp;&nbsp;If&nbsp;the&nbsp;user<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rotates&nbsp;the&nbsp;display,&nbsp;this&nbsp;point&nbsp;will&nbsp;stay&nbsp;centered.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Default:&nbsp;(0,&nbsp;0,&nbsp;0)<br>
+&nbsp;&nbsp;*&nbsp;forward&nbsp;—&nbsp;the&nbsp;direction&nbsp;the&nbsp;camera&nbsp;looks.&nbsp;&nbsp;The&nbsp;camera&nbsp;will&nbsp;always&nbsp;look<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;the&nbsp;"center"&nbsp;position.&nbsp;&nbsp;If&nbsp;you&nbsp;set&nbsp;forward,&nbsp;it&nbsp;will&nbsp;move<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;camera&nbsp;to&nbsp;the&nbsp;right&nbsp;place&nbsp;so&nbsp;that&nbsp;looking&nbsp;in&nbsp;the&nbsp;forward<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;direction&nbsp;it's&nbsp;looking&nbsp;at&nbsp;center.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Default:&nbsp;(0,&nbsp;0,&nbsp;-1)<br>
+&nbsp;&nbsp;*&nbsp;up&nbsp;—&nbsp;A&nbsp;vector&nbsp;in&nbsp;world&nbsp;that&nbsp;will&nbsp;(as&nbsp;best&nbsp;possible)&nbsp;be&nbsp;up&nbsp;on&nbsp;the&nbsp;screen<br>
+&nbsp;&nbsp;*&nbsp;fov&nbsp;—&nbsp;the&nbsp;field&nbsp;of&nbsp;view&nbsp;of&nbsp;the&nbsp;camera.&nbsp;&nbsp;Default:&nbsp;π/3<br>
+&nbsp;<br>
+&nbsp;&nbsp;*&nbsp;range&nbsp;—&nbsp;the&nbsp;range&nbsp;of&nbsp;the&nbsp;dispay&nbsp;in&nbsp;world&nbsp;coordinates.&nbsp;For<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;historical&nbsp;reasons,&nbsp;it's&nbsp;a&nbsp;three-element&nbsp;vector,&nbsp;but&nbsp;all<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;three&nbsp;values&nbsp;have&nbsp;to&nbsp;be&nbsp;the&nbsp;same.&nbsp;&nbsp;You&nbsp;can&nbsp;set&nbsp;it&nbsp;with&nbsp;a<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;single&nbsp;value.&nbsp;&nbsp;An&nbsp;object&nbsp;of&nbsp;radius&nbsp;range&nbsp;at&nbsp;center&nbsp;will<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;have&nbsp;angular&nbsp;size&nbsp;fov&nbsp;(i.e.&nbsp;it&nbsp;will&nbsp;just&nbsp;fill&nbsp;the&nbsp;screen).<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Change&nbsp;this&nbsp;to&nbsp;zoom&nbsp;the&nbsp;display.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Default:&nbsp;(3,&nbsp;3,&nbsp;3)<br>
+&nbsp;<br>
+&nbsp;&nbsp;*&nbsp;scale&nbsp;—&nbsp;1/range.&nbsp;&nbsp;If&nbsp;you&nbsp;set&nbsp;this,&nbsp;it&nbsp;changes&nbsp;range,&nbsp;and&nbsp;vice&nbsp;versa.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Bigger&nbsp;scale&nbsp;means&nbsp;smaller&nbsp;objects&nbsp;on&nbsp;the&nbsp;screen.<br>
+&nbsp;<br>
+Many&nbsp;of&nbsp;these&nbsp;properties&nbsp;will&nbsp;be&nbsp;overridden&nbsp;if&nbsp;the&nbsp;user&nbsp;uses&nbsp;the&nbsp;mouse.<br>
+In&nbsp;particular,&nbsp;whenever&nbsp;the&nbsp;user&nbsp;adjusts&nbsp;the&nbsp;display&nbsp;rotation&nbsp;with&nbsp;the<br>
+mouse,&nbsp;"up"&nbsp;will&nbsp;be&nbsp;adjusted&nbsp;so&nbsp;that&nbsp;the&nbsp;+y-axis&nbsp;is&nbsp;(as&nbsp;best&nbsp;possible)<br>
+up&nbsp;on&nbsp;the&nbsp;screen.<br>
+&nbsp;<br>
+You&nbsp;can&nbsp;make&nbsp;objects&nbsp;go&nbsp;into&nbsp;the&nbsp;a&nbsp;display&nbsp;by&nbsp;adding&nbsp;"context=disp"<br>
+when&nbsp;you&nbsp;make&nbsp;the&nbsp;object,&nbsp;where&nbsp;disp&nbsp;is&nbsp;the&nbsp;value&nbsp;returned&nbsp;from&nbsp;a<br>
+<a href="#-display">display</a>()&nbsp;function&nbsp;call.&nbsp;&nbsp;Alternatively,&nbsp;if&nbsp;you&nbsp;call&nbsp;"disp.select()",<br>
+that&nbsp;will&nbsp;make&nbsp;that&nbsp;display&nbsp;the&nbsp;default&nbsp;for&nbsp;newly&nbsp;created&nbsp;objects.&nbsp;&nbsp;If<br>
+you&nbsp;want&nbsp;to&nbsp;get&nbsp;to&nbsp;the&nbsp;first&nbsp;(probably&nbsp;automatically&nbsp;created)&nbsp;display,<br>
+the&nbsp;function&nbsp;"<a href="#-scene">scene</a>()"&nbsp;returns&nbsp;a&nbsp;handle&nbsp;to&nbsp;that&nbsp;first&nbsp;display,&nbsp;so&nbsp;you<br>
+can&nbsp;call&nbsp;".select()"&nbsp;on&nbsp;it&nbsp;and&nbsp;pass&nbsp;it&nbsp;to&nbsp;objects&nbsp;to&nbsp;put&nbsp;them&nbsp;in&nbsp;that<br>
+first&nbsp;display.<br>
+&nbsp;<br>
+Currently,&nbsp;all&nbsp;displays&nbsp;are&nbsp;GLUT&nbsp;windows.&nbsp;&nbsp;In&nbsp;the&nbsp;future,&nbsp;I'm&nbsp;hoping<br>
+that&nbsp;you&nbsp;will&nbsp;be&nbsp;able&nbsp;to&nbsp;get&nbsp;a&nbsp;display&nbsp;as&nbsp;a&nbsp;Qt&nbsp;OpenGL&nbsp;widget<br>
 &nbsp;<br>
 &nbsp;<br>
 DIFFERENCES&nbsp;FROM&nbsp;VPYTHON&nbsp;6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
@@ -191,9 +252,9 @@ Object&nbsp;properties&nbsp;missing&nbsp;or&nbsp;not&nbsp;working:<br>
 &nbsp;&nbsp;*&nbsp;opacity&nbsp;&nbsp;&nbsp;(Doing&nbsp;this&nbsp;at&nbsp;all&nbsp;well&nbsp;is&nbsp;quite&nbsp;hard.&nbsp;&nbsp;The&nbsp;variable&nbsp;is&nbsp;there,&nbsp;but&nbsp;ignored)<br>
 &nbsp;&nbsp;*&nbsp;materials&nbsp;(Maybe&nbsp;someday)<br>
 &nbsp;&nbsp;*&nbsp;composite&nbsp;objects&nbsp;with&nbsp;frame<br>
+&nbsp;&nbsp;*&nbsp;You&nbsp;can't&nbsp;delete&nbsp;displays&nbsp;(and&nbsp;object&nbsp;cleanup&nbsp;in&nbsp;general&nbsp;is&nbsp;lacking)<br>
 &nbsp;<br>
 Global&nbsp;features&nbsp;missing:<br>
-&nbsp;&nbsp;*&nbsp;More&nbsp;than&nbsp;one&nbsp;display&nbsp;window&nbsp;&nbsp;(implemented&nbsp;in&nbsp;visual_base,&nbsp;not&nbsp;in&nbsp;physvis)<br>
 &nbsp;&nbsp;*&nbsp;Automatic&nbsp;zoom&nbsp;updating&nbsp;to&nbsp;make&nbsp;all&nbsp;objects&nbsp;visible<br>
 &nbsp;&nbsp;*&nbsp;custom&nbsp;lighting<br>
 &nbsp;&nbsp;*&nbsp;Widgets,&nbsp;embedding&nbsp;display&nbsp;in&nbsp;a&nbsp;UI&nbsp;library&nbsp;(see&nbsp;below&nbsp;re:&nbsp;wxPython)<br>
@@ -202,10 +263,18 @@ Global&nbsp;features&nbsp;missing:<br>
 &nbsp;&nbsp;*&nbsp;Shapes&nbsp;library<br>
 &nbsp;&nbsp;*&nbsp;Paths&nbsp;library<br>
 &nbsp;<br>
-wxPython&nbsp;interaction&nbsp;is&nbsp;not&nbsp;implemented;&nbsp;for&nbsp;a&nbsp;very&nbsp;long&nbsp;time,&nbsp;it&nbsp;looked&nbsp;like&nbsp;wxPython&nbsp;was<br>
-dead&nbsp;and&nbsp;would&nbsp;not&nbsp;support&nbsp;Python&nbsp;3.&nbsp;&nbsp;That's&nbsp;no&nbsp;longer&nbsp;true,&nbsp;but&nbsp;PyQt&nbsp;may&nbsp;still&nbsp;be&nbsp;a<br>
-better&nbsp;choice.&nbsp;&nbsp;For&nbsp;now,&nbsp;it&nbsp;uses&nbsp;GLUT&nbsp;to&nbsp;open&nbsp;the&nbsp;one&nbsp;default&nbsp;window&nbsp;for&nbsp;display.&nbsp;&nbsp;In&nbsp;the<br>
-future,&nbsp;I&nbsp;hope&nbsp;to&nbsp;integrate&nbsp;it&nbsp;with&nbsp;some&nbsp;standard&nbsp;Python&nbsp;widget&nbsp;library.</tt></p>
+Things&nbsp;Changed:<br>
+&nbsp;&nbsp;*&nbsp;There&nbsp;is&nbsp;no&nbsp;"scene"&nbsp;variable;&nbsp;the&nbsp;"<a href="#-scene">scene</a>()"&nbsp;function&nbsp;gets&nbsp;you&nbsp;the&nbsp;default&nbsp;display.<br>
+&nbsp;&nbsp;*&nbsp;I&nbsp;believe&nbsp;the&nbsp;default&nbsp;range&nbsp;of&nbsp;a&nbsp;display&nbsp;is&nbsp;different&nbsp;(bigger)<br>
+&nbsp;&nbsp;*&nbsp;<a href="#-axes">axes</a>()&nbsp;object&nbsp;is&nbsp;new<br>
+&nbsp;&nbsp;*&nbsp;context=&nbsp;parameter&nbsp;of&nbsp;objects&nbsp;is&nbsp;new&nbsp;(I&nbsp;think)<br>
+&nbsp;<br>
+wxPython&nbsp;interaction&nbsp;is&nbsp;not&nbsp;implemented;&nbsp;for&nbsp;a&nbsp;very&nbsp;long&nbsp;time,&nbsp;it&nbsp;looked<br>
+like&nbsp;wxPython&nbsp;was&nbsp;dead&nbsp;and&nbsp;would&nbsp;not&nbsp;support&nbsp;Python&nbsp;3.&nbsp;&nbsp;That's&nbsp;no&nbsp;longer<br>
+true,&nbsp;but&nbsp;PyQt&nbsp;(or&nbsp;PySide2,&nbsp;or,&nbsp;really,&nbsp;probably&nbsp;QtPy&nbsp;as&nbsp;a&nbsp;front-end&nbsp;to<br>
+both)&nbsp;may&nbsp;still&nbsp;be&nbsp;a&nbsp;better&nbsp;choice.&nbsp;&nbsp;For&nbsp;now,&nbsp;it&nbsp;uses&nbsp;GLUT&nbsp;to&nbsp;open&nbsp;the<br>
+one&nbsp;default&nbsp;window&nbsp;for&nbsp;display.&nbsp;&nbsp;In&nbsp;the&nbsp;future,&nbsp;I&nbsp;hope&nbsp;to&nbsp;integrate&nbsp;it<br>
+with&nbsp;some&nbsp;standard&nbsp;Python&nbsp;widget&nbsp;library.</tt></p>
 <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#aa55cc">
@@ -250,6 +319,15 @@ radius&nbsp;—&nbsp;The&nbsp;transverse&nbsp;radius&nbsp;of&nbsp;the&nbsp;cylin
 num_edge_points&nbsp;—&nbsp;How&nbsp;many&nbsp;faces&nbsp;the&nbsp;end&nbsp;polygons&nbsp;have&nbsp;(default:&nbsp;16)</tt></dd></dl>
  <dl><dt><a name="-degrees"><strong>degrees</strong></a>(rad)</dt><dd><tt>Pass&nbsp;radians,&nbsp;get&nbsp;back&nbsp;degrees.</tt></dd></dl>
  <dl><dt><a name="-diff_angle"><strong>diff_angle</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;angle&nbsp;between&nbsp;two&nbsp;vectors&nbsp;(radians).</tt></dd></dl>
+ <dl><dt><a name="-display"><strong>display</strong></a>(*args, **kwargs)</dt><dd><tt>Create&nbsp;a&nbsp;new&nbsp;display&nbsp;in&nbsp;which&nbsp;you&nbsp;can&nbsp;put&nbsp;objects.<br>
+&nbsp;<br>
+If&nbsp;you&nbsp;get&nbsp;a&nbsp;display&nbsp;with&nbsp;"disp=<a href="#-display">display</a>()",&nbsp;you&nbsp;can&nbsp;make&nbsp;that<br>
+display&nbsp;the&nbsp;default&nbsp;for&nbsp;new&nbsp;objects&nbsp;wiht&nbsp;"disp.select()".<br>
+Alternatively,&nbsp;you&nbsp;can&nbsp;explicitly&nbsp;put&nbsp;an&nbsp;object&nbsp;in&nbsp;a&nbsp;given&nbsp;display<br>
+by&nbsp;using&nbsp;the&nbsp;"context=disp"&nbsp;parameter&nbsp;in&nbsp;the&nbsp;functon&nbsp;that&nbsp;creates&nbsp;an<br>
+object.<br>
+&nbsp;<br>
+See&nbsp;overall&nbsp;module&nbsp;documentation&nbsp;at&nbsp;the&nbsp;top&nbsp;for&nbsp;properties&nbsp;of&nbsp;displays.</tt></dd></dl>
  <dl><dt><a name="-dot"><strong>dot</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;dot&nbsp;product&nbsp;of&nbsp;the&nbsp;two&nbsp;vectors.</tt></dd></dl>
  <dl><dt><a name="-ellipsoid"><strong>ellipsoid</strong></a>(*args, **kwargs)</dt><dd><tt>An&nbsp;ellipsoidal&nbsp;solid.<br>
 &nbsp;<br>
@@ -281,8 +359,11 @@ This&nbsp;is&nbsp;more&nbsp;efficient&nbsp;than&nbsp;doing&nbsp;<a href="#-mag">
 &nbsp;<br>
 The&nbsp;while&nbsp;loop&nbsp;will&nbsp;run&nbsp;at&nbsp;most&nbsp;this&nbsp;many&nbsp;times&nbsp;each&nbsp;second.&nbsp;&nbsp;If&nbsp;the<br>
 computations&nbsp;in&nbsp;the&nbsp;loop&nbsp;take&nbsp;longer&nbsp;than&nbsp;1/fps&nbsp;seconds,&nbsp;then&nbsp;the<br>
-animation&nbsp;will&nbsp;run&nbsp;slower.</tt></dd></dl>
+loop&nbsp;will&nbsp;run&nbsp;slower.</tt></dd></dl>
  <dl><dt><a name="-rotate"><strong>rotate</strong></a>(A, theta, B)</dt><dd><tt>Return&nbsp;vector&nbsp;A&nbsp;rotated&nbsp;by&nbsp;theta&nbsp;around&nbsp;vector&nbsp;B.</tt></dd></dl>
+ <dl><dt><a name="-scene"><strong>scene</strong></a>()</dt><dd><tt>Return&nbsp;the&nbsp;first&nbsp;display&nbsp;that&nbsp;was&nbsp;created&nbsp;(perhaps&nbsp;automatically).<br>
+&nbsp;<br>
+Will&nbsp;be&nbsp;None&nbsp;if&nbsp;you&nbsp;haven't&nbsp;made&nbsp;any&nbsp;displays&nbsp;or&nbsp;graphic&nbsp;objects&nbsp;yet.</tt></dd></dl>
  <dl><dt><a name="-sphere"><strong>sphere</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;sphere,&nbsp;modelled&nbsp;by&nbsp;default&nbsp;as&nbsp;a&nbsp;2x&nbsp;subdivided&nbsp;icosahedron&nbsp;(320&nbsp;faces).<br>
 &nbsp;<br>
 radius&nbsp;—&nbsp;radius&nbsp;of&nbsp;the&nbsp;sphere&nbsp;(default&nbsp;1)<br>

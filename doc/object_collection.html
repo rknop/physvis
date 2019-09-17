@@ -1,0 +1,450 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module object_collection</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong>object_collection</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/home/rknop/cjstuff/physvis/object_collection.py">/home/rknop/cjstuff/physvis/object_collection.py</a></font></td></tr></table>
+    <p><tt>#/usr/bin/python3<br>
+#&nbsp;-*-&nbsp;coding:&nbsp;utf-8&nbsp;-*-<br>
+#<br>
+#&nbsp;(c)&nbsp;2019&nbsp;by&nbsp;Rob&nbsp;Knop<br>
+#<br>
+#&nbsp;This&nbsp;file&nbsp;is&nbsp;part&nbsp;of&nbsp;physvis<br>
+#<br>
+#&nbsp;physvis&nbsp;is&nbsp;free&nbsp;software:&nbsp;you&nbsp;can&nbsp;redistribute&nbsp;it&nbsp;and/or&nbsp;modify<br>
+#&nbsp;it&nbsp;under&nbsp;the&nbsp;terms&nbsp;of&nbsp;the&nbsp;GNU&nbsp;General&nbsp;Public&nbsp;License&nbsp;as&nbsp;published&nbsp;by<br>
+#&nbsp;the&nbsp;Free&nbsp;Software&nbsp;Foundation,&nbsp;either&nbsp;version&nbsp;3&nbsp;of&nbsp;the&nbsp;License,&nbsp;or<br>
+#&nbsp;(at&nbsp;your&nbsp;option)&nbsp;any&nbsp;later&nbsp;version.</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="OpenGL.GL.html">OpenGL.GL</a><br>
+<a href="OpenGL.GLUT.html">OpenGL.GLUT</a><br>
+<a href="ctypes.html">ctypes</a><br>
+</td><td width="25%" valign=top><a href="itertools.html">itertools</a><br>
+<a href="math.html">math</a><br>
+<a href="numpy.html">numpy</a><br>
+</td><td width="25%" valign=top><a href="object_collection.html">object_collection</a><br>
+<a href="quaternions.html">quaternions</a><br>
+<a href="queue.html">queue</a><br>
+</td><td width="25%" valign=top><a href="sys.html">sys</a><br>
+<a href="threading.html">threading</a><br>
+<a href="time.html">time</a><br>
+</td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ee77aa">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Classes</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#ee77aa"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl>
+<dt><font face="helvetica, arial"><a href="builtins.html#object">builtins.object</a>
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="object_collection.html#Shader">Shader</a>
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="object_collection.html#BasicShader">BasicShader</a>
+</font></dt><dt><font face="helvetica, arial"><a href="object_collection.html#CurveTubeShader">CurveTubeShader</a>
+</font></dt></dl>
+</dd>
+</dl>
+</dd>
+<dt><font face="helvetica, arial"><a href="physvis_observer.html#Observer">physvis_observer.Observer</a>(<a href="builtins.html#object">builtins.object</a>)
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="object_collection.html#GLObjectCollection">GLObjectCollection</a>
+</font></dt><dd>
+<dl>
+<dt><font face="helvetica, arial"><a href="object_collection.html#CurveCollection">CurveCollection</a>
+</font></dt><dt><font face="helvetica, arial"><a href="object_collection.html#SimpleObjectCollection">SimpleObjectCollection</a>
+</font></dt></dl>
+</dd>
+</dl>
+</dd>
+</dl>
+ <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="BasicShader">class <strong>BasicShader</strong></a>(<a href="object_collection.html#Shader">Shader</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt><a href="#Shader">Shader</a>&nbsp;class&nbsp;for&nbsp;<a href="#SimpleObjectCollection">SimpleObjectCollection</a>.&nbsp;&nbsp;(Render&nbsp;lots&nbsp;of&nbsp;triangles.)<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="object_collection.html#BasicShader">BasicShader</a></dd>
+<dd><a href="object_collection.html#Shader">Shader</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="BasicShader-__init__"><strong>__init__</strong></a>(self, context, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="BasicShader-create_shaders"><strong>create_shaders</strong></a>(self)</dt></dl>
+
+<hr>
+Methods inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><a name="BasicShader-__del__"><strong>__del__</strong></a>(self)</dt><dd><tt>#&nbsp;This&nbsp;makes&nbsp;me&nbsp;feel&nbsp;very&nbsp;queasy.&nbsp;&nbsp;A&nbsp;wait&nbsp;for&nbsp;another&nbsp;thread&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;__del__&nbsp;is&nbsp;probably&nbsp;just&nbsp;asking&nbsp;for&nbsp;circular&nbsp;references<br>
+#&nbsp;&nbsp;&nbsp;to&nbsp;trip&nbsp;you&nbsp;up.&nbsp;&nbsp;*But*,&nbsp;I&nbsp;gotta&nbsp;run&nbsp;all&nbsp;my&nbsp;GL&nbsp;code&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;single&nbsp;thread.&nbsp;&nbsp;So...&nbsp;hurm.</tt></dd></dl>
+
+<dl><dt><a name="BasicShader-destroy_shaders"><strong>destroy_shaders</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="BasicShader-get_shader"><strong>get_shader</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="BasicShader-init_lights_and_camera"><strong>init_lights_and_camera</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="BasicShader-set_camera_perspective"><strong>set_camera_perspective</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="BasicShader-set_camera_posrot"><strong>set_camera_posrot</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="BasicShader-update_lights"><strong>update_lights</strong></a>(self)</dt></dl>
+
+<hr>
+Static methods inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><a name="BasicShader-get"><strong>get</strong></a>(name, context)</dt><dd><tt>Factory&nbsp;method&nbsp;for&nbsp;giving&nbsp;shader&nbsp;instances.<br>
+&nbsp;<br>
+There&nbsp;will&nbsp;only&nbsp;be&nbsp;one&nbsp;shader&nbsp;instance&nbsp;of&nbsp;a&nbsp;given&nbsp;type&nbsp;for&nbsp;each&nbsp;context.&nbsp;<br>
+&nbsp;<br>
+name&nbsp;—&nbsp;The&nbsp;type&nbsp;of&nbsp;shader&nbsp;you&nbsp;want:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Basic&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#SimpleObjectCollection">SimpleObjectCollection</a>&nbsp;(stack&nbsp;of&nbsp;triangles)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Curve&nbsp;Tube&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#CurveCollection">CurveCollection</a>&nbsp;(round&nbsp;tubes&nbsp;around&nbsp;the&nbsp;curve)<br>
+context&nbsp;—&nbsp;The&nbsp;context&nbsp;for&nbsp;the&nbsp;sader.</tt></dd></dl>
+
+<hr>
+Data descriptors inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="CurveCollection">class <strong>CurveCollection</strong></a>(<a href="object_collection.html#GLObjectCollection">GLObjectCollection</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>A&nbsp;collection&nbsp;of&nbsp;curves&nbsp;defined&nbsp;by&nbsp;a&nbsp;sequence&nbsp;of&nbsp;points.<br>
+&nbsp;<br>
+Pass&nbsp;the&nbsp;name&nbsp;of&nbsp;the&nbsp;shader&nbsp;in&nbsp;"shader";&nbsp;defaults&nbsp;to&nbsp;"Curve&nbsp;Tube&nbsp;<a href="#Shader">Shader</a>".<br>
+(Right&nbsp;now,&nbsp;that's&nbsp;the&nbsp;only&nbsp;option.)<br>
+&nbsp;<br>
+ROB&nbsp;WRITE&nbsp;MORE<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="object_collection.html#CurveCollection">CurveCollection</a></dd>
+<dd><a href="object_collection.html#GLObjectCollection">GLObjectCollection</a></dd>
+<dd><a href="physvis_observer.html#Observer">physvis_observer.Observer</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="CurveCollection-__init__"><strong>__init__</strong></a>(self, context, shader='Curve Tube Shader', *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="CurveCollection-add_object"><strong>add_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-bind_vertex_attribs"><strong>bind_vertex_attribs</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_add_object"><strong>do_add_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_remove_object"><strong>do_remove_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_update_object_points"><strong>do_update_object_points</strong></a>(self, obj)</dt><dd><tt>#&nbsp;Don't&nbsp;change&nbsp;the&nbsp;number&nbsp;of&nbsp;points&nbsp;in&nbsp;the&nbsp;line&nbsp;from&nbsp;when&nbsp;you&nbsp;first<br>
+#&nbsp;&nbsp;&nbsp;added&nbsp;the&nbsp;<a href="builtins.html#object">object</a>,&nbsp;or&nbsp;things&nbsp;will&nbsp;go&nbsp;haywire.</tt></dd></dl>
+
+<dl><dt><a name="CurveCollection-draw"><strong>draw</strong></a>(self)</dt><dd><tt>#&nbsp;Never&nbsp;call&nbsp;this&nbsp;directly!&nbsp;&nbsp;It&nbsp;should&nbsp;only&nbsp;be&nbsp;called&nbsp;from&nbsp;within&nbsp;the<br>
+#&nbsp;&nbsp;&nbsp;draw&nbsp;method&nbsp;of&nbsp;a&nbsp;GrContext<br>
+#<br>
+#&nbsp;(This&nbsp;has&nbsp;a&nbsp;lot&nbsp;of&nbsp;redundant&nbsp;code&nbsp;with&nbsp;the&nbsp;same&nbsp;method&nbsp;in&nbsp;<a href="#SimpleObjectCollection">SimpleObjectCollection</a>.)</tt></dd></dl>
+
+<dl><dt><a name="CurveCollection-initglstuff"><strong>initglstuff</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveCollection-push_all_object_info"><strong>push_all_object_info</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-update_object_vertices"><strong>update_object_vertices</strong></a>(self, obj)</dt></dl>
+
+<hr>
+Methods inherited from <a href="object_collection.html#GLObjectCollection">GLObjectCollection</a>:<br>
+<dl><dt><a name="CurveCollection-bind_uniform_buffers"><strong>bind_uniform_buffers</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_remove_object_uniform_buffer_data"><strong>do_remove_object_uniform_buffer_data</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_update_object_color"><strong>do_update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-do_update_object_matrix"><strong>do_update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-receive_message"><strong>receive_message</strong></a>(self, message, subject)</dt><dd><tt>In&nbsp;your&nbsp;subclass,&nbsp;implement&nbsp;this&nbsp;to&nbsp;get&nbsp;message&nbsp;(usually&nbsp;just&nbsp;a&nbsp;text&nbsp;string)&nbsp;from&nbsp;Subject&nbsp;subject.</tt></dd></dl>
+
+<dl><dt><a name="CurveCollection-remove_object"><strong>remove_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-update_object_color"><strong>update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="CurveCollection-update_object_matrix"><strong>update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<hr>
+Data descriptors inherited from <a href="physvis_observer.html#Observer">physvis_observer.Observer</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="CurveTubeShader">class <strong>CurveTubeShader</strong></a>(<a href="object_collection.html#Shader">Shader</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt><a href="#Shader">Shader</a>&nbsp;class&nbsp;for&nbsp;<a href="#CurveCollection">CurveCollection</a>.&nbsp;&nbsp;Renders&nbsp;the&nbsp;<a href="builtins.html#object">object</a>&nbsp;as&nbsp;a&nbsp;round&nbsp;tube&nbsp;around&nbsp;a&nbsp;given&nbsp;curve.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="object_collection.html#CurveTubeShader">CurveTubeShader</a></dd>
+<dd><a href="object_collection.html#Shader">Shader</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="CurveTubeShader-__init__"><strong>__init__</strong></a>(self, context, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="CurveTubeShader-create_shaders"><strong>create_shaders</strong></a>(self)</dt></dl>
+
+<hr>
+Methods inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><a name="CurveTubeShader-__del__"><strong>__del__</strong></a>(self)</dt><dd><tt>#&nbsp;This&nbsp;makes&nbsp;me&nbsp;feel&nbsp;very&nbsp;queasy.&nbsp;&nbsp;A&nbsp;wait&nbsp;for&nbsp;another&nbsp;thread&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;__del__&nbsp;is&nbsp;probably&nbsp;just&nbsp;asking&nbsp;for&nbsp;circular&nbsp;references<br>
+#&nbsp;&nbsp;&nbsp;to&nbsp;trip&nbsp;you&nbsp;up.&nbsp;&nbsp;*But*,&nbsp;I&nbsp;gotta&nbsp;run&nbsp;all&nbsp;my&nbsp;GL&nbsp;code&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;single&nbsp;thread.&nbsp;&nbsp;So...&nbsp;hurm.</tt></dd></dl>
+
+<dl><dt><a name="CurveTubeShader-destroy_shaders"><strong>destroy_shaders</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveTubeShader-get_shader"><strong>get_shader</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveTubeShader-init_lights_and_camera"><strong>init_lights_and_camera</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveTubeShader-set_camera_perspective"><strong>set_camera_perspective</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveTubeShader-set_camera_posrot"><strong>set_camera_posrot</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="CurveTubeShader-update_lights"><strong>update_lights</strong></a>(self)</dt></dl>
+
+<hr>
+Static methods inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><a name="CurveTubeShader-get"><strong>get</strong></a>(name, context)</dt><dd><tt>Factory&nbsp;method&nbsp;for&nbsp;giving&nbsp;shader&nbsp;instances.<br>
+&nbsp;<br>
+There&nbsp;will&nbsp;only&nbsp;be&nbsp;one&nbsp;shader&nbsp;instance&nbsp;of&nbsp;a&nbsp;given&nbsp;type&nbsp;for&nbsp;each&nbsp;context.&nbsp;<br>
+&nbsp;<br>
+name&nbsp;—&nbsp;The&nbsp;type&nbsp;of&nbsp;shader&nbsp;you&nbsp;want:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Basic&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#SimpleObjectCollection">SimpleObjectCollection</a>&nbsp;(stack&nbsp;of&nbsp;triangles)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Curve&nbsp;Tube&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#CurveCollection">CurveCollection</a>&nbsp;(round&nbsp;tubes&nbsp;around&nbsp;the&nbsp;curve)<br>
+context&nbsp;—&nbsp;The&nbsp;context&nbsp;for&nbsp;the&nbsp;sader.</tt></dd></dl>
+
+<hr>
+Data descriptors inherited from <a href="object_collection.html#Shader">Shader</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="GLObjectCollection">class <strong>GLObjectCollection</strong></a>(<a href="physvis_observer.html#Observer">physvis_observer.Observer</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>The&nbsp;base&nbsp;class&nbsp;for&nbsp;a&nbsp;collection&nbsp;of&nbsp;openGL&nbsp;objects,&nbsp;used&nbsp;internally&nbsp;by&nbsp;a&nbsp;drawing&nbsp;context.<br>
+&nbsp;<br>
+It&nbsp;makes&nbsp;some&nbsp;assumptions&nbsp;about&nbsp;the&nbsp;shader&nbsp;that&nbsp;will&nbsp;be&nbsp;used&nbsp;with<br>
+the&nbsp;<a href="builtins.html#object">object</a>&nbsp;collection.&nbsp;&nbsp;There&nbsp;are&nbsp;three&nbsp;Uniform&nbsp;buffers,&nbsp;with&nbsp;one<br>
+element&nbsp;array&nbsp;represented&nbsp;by&nbsp;the&nbsp;buffer&nbsp;for&nbsp;each&nbsp;objectin&nbsp;the<br>
+collection.<br>
+&nbsp;&nbsp;&nbsp;—&nbsp;a&nbsp;model&nbsp;matrix&nbsp;uniform&nbsp;buffer&nbsp;(for&nbsp;transforming&nbsp;the&nbsp;<a href="builtins.html#object">object</a>)&nbsp;--&nbsp;mat4<br>
+&nbsp;&nbsp;&nbsp;—&nbsp;a&nbsp;model&nbsp;normal&nbsp;matrix&nbsp;uniform&nbsp;buffer&nbsp;(for&nbsp;transforming&nbsp;the&nbsp;normals&nbsp;for&nbsp;light&nbsp;interaction)&nbsp;--&nbsp;mat3&nbsp;(**)<br>
+&nbsp;&nbsp;&nbsp;—&nbsp;a&nbsp;color&nbsp;uniform&nbsp;buffer&nbsp;(the&nbsp;color&nbsp;of&nbsp;the&nbsp;<a href="builtins.html#object">object</a>)&nbsp;--&nbsp;vec4<br>
+&nbsp;<br>
+Objects&nbsp;added&nbsp;to&nbsp;a&nbsp;<a href="#GLObjectCollection">GLObjectCollection</a>&nbsp;must&nbsp;have:<br>
+&nbsp;&nbsp;&nbsp;_id&nbsp;—&nbsp;An&nbsp;id&nbsp;that&nbsp;is&nbsp;unique&nbsp;for&nbsp;all&nbsp;objects&nbsp;anywhere&nbsp;in&nbsp;the&nbsp;code<br>
+&nbsp;&nbsp;&nbsp;visible&nbsp;—&nbsp;True&nbsp;or&nbsp;False&nbsp;if&nbsp;the&nbsp;<a href="builtins.html#object">object</a>&nbsp;should&nbsp;be&nbsp;drawn<br>
+&nbsp;&nbsp;&nbsp;_color&nbsp;—&nbsp;A&nbsp;4-element&nbsp;float32&nbsp;numpy&nbsp;array&nbsp;(r,&nbsp;g,&nbsp;b,&nbsp;opacity)&nbsp;(opacity&nbsp;isn't&nbsp;currently&nbsp;used)<br>
+&nbsp;&nbsp;&nbsp;model_matrix&nbsp;—&nbsp;a&nbsp;16-element&nbsp;float32&nbsp;numpy&nbsp;array<br>
+&nbsp;&nbsp;&nbsp;inverse_model_matrix&nbsp;—&nbsp;a&nbsp;12-element&nbsp;float32&nbsp;numpy&nbsp;array&nbsp;(3x3&nbsp;plus&nbsp;std140&nbsp;layout&nbsp;padding)<br>
+&nbsp;&nbsp;<br>
+Subclasses&nbsp;must&nbsp;implement<br>
+&nbsp;&nbsp;&nbsp;—&nbsp;update_object_vertices(grobject)&nbsp;—&nbsp;update&nbsp;the&nbsp;OpenGL&nbsp;data&nbsp;for&nbsp;grobject's&nbsp;vertices<br>
+&nbsp;&nbsp;&nbsp;—&nbsp;probably&nbsp;other&nbsp;things<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="object_collection.html#GLObjectCollection">GLObjectCollection</a></dd>
+<dd><a href="physvis_observer.html#Observer">physvis_observer.Observer</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="GLObjectCollection-__init__"><strong>__init__</strong></a>(self, context, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="GLObjectCollection-bind_uniform_buffers"><strong>bind_uniform_buffers</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-do_remove_object_uniform_buffer_data"><strong>do_remove_object_uniform_buffer_data</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-do_update_object_color"><strong>do_update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-do_update_object_matrix"><strong>do_update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-initglstuff"><strong>initglstuff</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-receive_message"><strong>receive_message</strong></a>(self, message, subject)</dt><dd><tt>In&nbsp;your&nbsp;subclass,&nbsp;implement&nbsp;this&nbsp;to&nbsp;get&nbsp;message&nbsp;(usually&nbsp;just&nbsp;a&nbsp;text&nbsp;string)&nbsp;from&nbsp;Subject&nbsp;subject.</tt></dd></dl>
+
+<dl><dt><a name="GLObjectCollection-remove_object"><strong>remove_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-update_object_color"><strong>update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="GLObjectCollection-update_object_matrix"><strong>update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<hr>
+Data descriptors inherited from <a href="physvis_observer.html#Observer">physvis_observer.Observer</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="Shader">class <strong>Shader</strong></a>(<a href="builtins.html#object">builtins.object</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>The&nbsp;base&nbsp;class&nbsp;for&nbsp;shader&nbsp;objects.<br>
+&nbsp;<br>
+Get&nbsp;shaders&nbsp;by&nbsp;asking&nbsp;for&nbsp;one&nbsp;with&nbsp;<a href="#Shader">Shader</a>.<a href="#Shader-get">get</a>().<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%">Methods defined here:<br>
+<dl><dt><a name="Shader-__del__"><strong>__del__</strong></a>(self)</dt><dd><tt>#&nbsp;This&nbsp;makes&nbsp;me&nbsp;feel&nbsp;very&nbsp;queasy.&nbsp;&nbsp;A&nbsp;wait&nbsp;for&nbsp;another&nbsp;thread&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;__del__&nbsp;is&nbsp;probably&nbsp;just&nbsp;asking&nbsp;for&nbsp;circular&nbsp;references<br>
+#&nbsp;&nbsp;&nbsp;to&nbsp;trip&nbsp;you&nbsp;up.&nbsp;&nbsp;*But*,&nbsp;I&nbsp;gotta&nbsp;run&nbsp;all&nbsp;my&nbsp;GL&nbsp;code&nbsp;in<br>
+#&nbsp;&nbsp;&nbsp;a&nbsp;single&nbsp;thread.&nbsp;&nbsp;So...&nbsp;hurm.</tt></dd></dl>
+
+<dl><dt><a name="Shader-__init__"><strong>__init__</strong></a>(self, context, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="Shader-destroy_shaders"><strong>destroy_shaders</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Shader-get_shader"><strong>get_shader</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Shader-init_lights_and_camera"><strong>init_lights_and_camera</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Shader-set_camera_perspective"><strong>set_camera_perspective</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Shader-set_camera_posrot"><strong>set_camera_posrot</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="Shader-update_lights"><strong>update_lights</strong></a>(self)</dt></dl>
+
+<hr>
+Static methods defined here:<br>
+<dl><dt><a name="Shader-get"><strong>get</strong></a>(name, context)</dt><dd><tt>Factory&nbsp;method&nbsp;for&nbsp;giving&nbsp;shader&nbsp;instances.<br>
+&nbsp;<br>
+There&nbsp;will&nbsp;only&nbsp;be&nbsp;one&nbsp;shader&nbsp;instance&nbsp;of&nbsp;a&nbsp;given&nbsp;type&nbsp;for&nbsp;each&nbsp;context.&nbsp;<br>
+&nbsp;<br>
+name&nbsp;—&nbsp;The&nbsp;type&nbsp;of&nbsp;shader&nbsp;you&nbsp;want:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Basic&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#SimpleObjectCollection">SimpleObjectCollection</a>&nbsp;(stack&nbsp;of&nbsp;triangles)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Curve&nbsp;Tube&nbsp;<a href="#Shader">Shader</a>"&nbsp;to&nbsp;render&nbsp;a&nbsp;<a href="#CurveCollection">CurveCollection</a>&nbsp;(round&nbsp;tubes&nbsp;around&nbsp;the&nbsp;curve)<br>
+context&nbsp;—&nbsp;The&nbsp;context&nbsp;for&nbsp;the&nbsp;sader.</tt></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table> <p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#ffc8d8">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#000000" face="helvetica, arial"><a name="SimpleObjectCollection">class <strong>SimpleObjectCollection</strong></a>(<a href="object_collection.html#GLObjectCollection">GLObjectCollection</a>)</font></td></tr>
+    
+<tr bgcolor="#ffc8d8"><td rowspan=2><tt>&nbsp;&nbsp;&nbsp;</tt></td>
+<td colspan=2><tt>A&nbsp;collection&nbsp;of&nbsp;"simple"&nbsp;objects.<br>
+&nbsp;<br>
+Each&nbsp;<a href="builtins.html#object">object</a>&nbsp;is&nbsp;represented&nbsp;by&nbsp;a&nbsp;number&nbsp;of&nbsp;triangles.&nbsp;&nbsp;An&nbsp;<a href="builtins.html#object">object</a>&nbsp;that<br>
+goes&nbsp;into&nbsp;one&nbsp;of&nbsp;these&nbsp;collections&nbsp;must&nbsp;have:<br>
+&nbsp;&nbsp;—&nbsp;num_triangles&nbsp;:&nbsp;the&nbsp;number&nbsp;of&nbsp;triangles&nbsp;in&nbsp;the&nbsp;<a href="builtins.html#object">object</a><br>
+&nbsp;&nbsp;—&nbsp;vertexdata&nbsp;:&nbsp;a&nbsp;numpy&nbsp;array&nbsp;of&nbsp;float32&nbsp;that&nbsp;has&nbsp;a&nbsp;sequence&nbsp;of&nbsp;vec4&nbsp;(w=1),&nbsp;3&nbsp;for&nbsp;each&nbsp;triangle&nbsp;(w&nbsp;=&nbsp;1)<br>
+&nbsp;&nbsp;—&nbsp;normaldata&nbsp;:&nbsp;a&nbsp;numpy&nbsp;array&nbsp;of&nbsp;float32&nbsp;that&nbsp;has&nbsp;a&nbsp;sequence&nbsp;of&nbsp;vec3,&nbsp;3&nbsp;for&nbsp;each&nbsp;triangle<br>
+&nbsp;<br>
+They&nbsp;must&nbsp;also&nbsp;meet&nbsp;the&nbsp;requirements&nbsp;of&nbsp;<a href="#GLObjectCollection">GLObjectCollection</a>.<br>&nbsp;</tt></td></tr>
+<tr><td>&nbsp;</td>
+<td width="100%"><dl><dt>Method resolution order:</dt>
+<dd><a href="object_collection.html#SimpleObjectCollection">SimpleObjectCollection</a></dd>
+<dd><a href="object_collection.html#GLObjectCollection">GLObjectCollection</a></dd>
+<dd><a href="physvis_observer.html#Observer">physvis_observer.Observer</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="SimpleObjectCollection-__init__"><strong>__init__</strong></a>(self, context, *args, **kwargs)</dt><dd><tt>Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</tt></dd></dl>
+
+<dl><dt><a name="SimpleObjectCollection-add_object"><strong>add_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-bind_vertex_attribs"><strong>bind_vertex_attribs</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_add_object"><strong>do_add_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_remove_object"><strong>do_remove_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_update_object_vertex"><strong>do_update_object_vertex</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-draw"><strong>draw</strong></a>(self)</dt><dd><tt>#&nbsp;Never&nbsp;call&nbsp;this&nbsp;directly!&nbsp;&nbsp;It&nbsp;should&nbsp;only&nbsp;be&nbsp;called&nbsp;from&nbsp;within&nbsp;the<br>
+#&nbsp;&nbsp;&nbsp;draw&nbsp;method&nbsp;of&nbsp;a&nbsp;GrContext</tt></dd></dl>
+
+<dl><dt><a name="SimpleObjectCollection-initglstuff"><strong>initglstuff</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-push_all_object_info"><strong>push_all_object_info</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-update_object_vertices"><strong>update_object_vertices</strong></a>(self, obj)</dt><dd><tt>#&nbsp;Updates&nbsp;positions&nbsp;of&nbsp;verticies&nbsp;and&nbsp;directions&nbsp;of&nbsp;normals.&nbsp;&nbsp;Can&nbsp;NOT<br>
+#&nbsp;change&nbsp;the&nbsp;number&nbsp;of&nbsp;vertices.</tt></dd></dl>
+
+<hr>
+Methods inherited from <a href="object_collection.html#GLObjectCollection">GLObjectCollection</a>:<br>
+<dl><dt><a name="SimpleObjectCollection-bind_uniform_buffers"><strong>bind_uniform_buffers</strong></a>(self)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_remove_object_uniform_buffer_data"><strong>do_remove_object_uniform_buffer_data</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_update_object_color"><strong>do_update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-do_update_object_matrix"><strong>do_update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-receive_message"><strong>receive_message</strong></a>(self, message, subject)</dt><dd><tt>In&nbsp;your&nbsp;subclass,&nbsp;implement&nbsp;this&nbsp;to&nbsp;get&nbsp;message&nbsp;(usually&nbsp;just&nbsp;a&nbsp;text&nbsp;string)&nbsp;from&nbsp;Subject&nbsp;subject.</tt></dd></dl>
+
+<dl><dt><a name="SimpleObjectCollection-remove_object"><strong>remove_object</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-update_object_color"><strong>update_object_color</strong></a>(self, obj)</dt></dl>
+
+<dl><dt><a name="SimpleObjectCollection-update_object_matrix"><strong>update_object_matrix</strong></a>(self, obj)</dt></dl>
+
+<hr>
+Data descriptors inherited from <a href="physvis_observer.html#Observer">physvis_observer.Observer</a>:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><tt>dictionary&nbsp;for&nbsp;instance&nbsp;variables&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><tt>list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object&nbsp;(if&nbsp;defined)</tt></dd>
+</dl>
+</td></tr></table></td></tr></table>
+</body></html>

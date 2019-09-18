@@ -284,6 +284,8 @@ class GrObject(Subject):
         self.normalmatrixdata = None
 
         self._axis = vector([1., 0., 0.])
+        self._up = vector([0., 1., 0.])
+
         if axis is not None:
             self.axis = vector(axis)
 
@@ -394,67 +396,22 @@ class GrObject(Subject):
         """
         
         return self._axis
-        # return quaternion_rotate([self._scale[0], 0., 0.], self._rotation)
-        # v = numpy.array([self._scale[0], 0., 0.], dtype=numpy.float32)
-        # qinv = q.copy()
-        # qinv[0:3] *= -1.
-        # qinv /= (q*q).sum()
-        # return quaternion_multiply(q, quaternion_multiply(v, qinv))[0:3]
 
     @axis.setter
     def axis(self, value):
         if len(value) != 3:
             raise Exception("axis must have 3 values")
-        newaxis = numpy.array( float(value[0], float(value[1]), float(value[2])) )
-        axismag = math.sqrt( self._axis[0]**2 + self._axis[1]**2 + self._axis[2]**2 )
+        newaxis = numpy.array( ( float(value[0]), float(value[1]), float(value[2]) ) )
+        axismag = math.sqrt( newaxis[0]**2 + newaxis[1]**2 + newaxis[2]**2 )
         if axismag < 1e-8:
             raise Exception("axis too short")
-        newaxis /= math.sqrt( self._axis[0]**2 + self._axis[1]**2 + self._axis[2]**2 )
+        newaxis /= axismag
         if (newaxis == self._axis).all():
             return
         else:
             self._axis = newaxis
             self._scale[0] = axismag
-            set_object_rotation()
-
-        # I'm not completely happy with this, because if you rotate an
-        # object a lot small errors can build up.
-        #
-        # I figure out the rotation by building on top of the exiting
-        # rotation, rather than just purely from the axis (and figuring out
-        # the rotation to get to the axis from [1, 0, 0], so that the
-        # object's orientation doesn't suddenly change if you make a small
-        # rotation that would go past a (θ, φ) coordinate singularity.
-        #
-        # (Really, I should figure out how I want to deal with "up".)
-
-        # magaxis = numpy.sqrt(numpy.square(self._axis).sum())
-        # newaxis = vector(value)
-        # magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
-        # cosang = (self._axis * newaxis).sum() / ( magaxis * magnewaxis )
-        # if math.fabs(1.-cosang) > 0.:
-        #     rotaxis = numpy.cross(self._axis, newaxis)
-        #     rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
-        #     cosang_2 = math.sqrt((1+cosang)/2.)
-        #     sinang_2 = math.sqrt((1-cosang)/2.)
-        #     q = numpy.empty(4)
-        #     q[0:3] = sinang_2 * rotaxis
-        #     q[3] = cosang_2
-
-        #     self._rotation = quaternion_multiply(q, self._rotation)
-        # self._axis = newaxis
-        # self._scale[0] = magnewaxis
-        # self.update_model_matrix()
-
-        # # An even older version
-        # # R = math.sqrt(value[0]*value[0] + value[2]*value[2])
-        # # theta = math.atan2(value[1], R)
-        # # phi = -math.atan2(value[2], value[0])
-        # # q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
-        # # q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
-        # # self._rotation = quaternion_multiply(q2, q1)
-        # # self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
-        # # self.update_model_matrix()
+            self.set_object_rotation()
 
     @property
     def up(self):
@@ -504,39 +461,43 @@ class GrObject(Subject):
             self.pos = origin + relpos
         self.rotation = quaternion_multiply(q, self.rotation)
 
-    def set_object_rotation():
+    def set_object_rotation(self):
         """Figures out what the quaternion self._rotation should be from self._axis and self._up.
 
         (Both self._axis and self._up must be normalized
         """
-        # θ is the angle off of the y-axis
-        # φ is the angle in the x-z plane off of x towards -z (i.e. about y)
-        costheta = math.sqrt(1 - self._axis[1])
-        costheta_2 = math.sqrt( (1+costheta) / 2. )
-        sintheta_2 = math.sqrt( (1-costheta) / 2. )
-        
+        # θ is the angle off of the x-axis
+        # φ is the angle in the y-z plane off of y towards z (i.e. about x)
+        # costheta = math.sqrt(1 - self._axis[1])
+        try:
+            costheta = self._axis[0]
+            costheta_2 = math.sqrt( (1+costheta) / 2. )
+            sintheta_2 = math.sqrt( (1-costheta) / 2. )
+        except ValueError:
+            import pdb; pdb.set_trace()
+            
         # Make sure we aren't going to divide by (close to) 0
-        xzmag = math.sqrt( self._axis[0]**2 + self._axis[2]**2 )
-        if xzmag < 1e-12:
-            # Object is oriented effectively along ±y
+        yzmag = math.sqrt( self._axis[1]**2 + self._axis[2]**2 )
+        if yzmag < 1e-12:
+            # Object is oriented effectively along ±x
             if self._axis[1] < 0.:
-                baserot = numpy.array( [1., 0., 0., 0.] )      # rot by π about x
+                baserot = numpy.array( [0., 1., 0., 0.] )      # rot by π about y
             else:
                 baserot = numpy.array( [0., 0., 0., 1.] )      # no rotatiob
         else:
-            cosphi = self._axis[0] / xzmag
+            cosphi = self._axis[1] / yzmag
             cosphi_2 = math.sqrt( (1+cosphi) / 2. )
             sinphi_2 = math.sqrt( (1-cosphi) / 2. )
             if self._axis[2] < 0.:
-                # gotta rotate about -y
-                yrot = -1.
+                # gotta rotate about -x
+                xrot = -1.
             else:
-                yrot = 1.
-            # This is the quaternion for a rotation of θ about z followed by a rotation of φ about y (I HOPE!)
-            baserot = numpy.array( [ sinphi_2 * sintheta_2 * yrot,
-                                     sinphi_2 * costheta_2 * yrot, 
-                                     cosphi_2 * sintheta_2,
-                                     cosphi_2 * costheta_2] )
+                xrot = 1.
+            # This is the quaternion for a rotation of θ about z followed by a rotation of φ about ±x (I HOPE!)
+            baserot = numpy.array( [ costheta_2 * sinphi_2 * xrot,
+                                    -sintheta_2 * sinphi_2 * xrot, 
+                                     sintheta_2 * cosphi_2,
+                                     costheta_2 * cosphi_2 ] )
         # Finally, rotate around axis by an angle determined by up
         if self._up[2] < 0.:
             psirot = -1
@@ -551,7 +512,6 @@ class GrObject(Subject):
                                                 cospsi_2 ] , baserot )
 
         self.update_model_matrix()
-        # Rob, gotta test this
         
     def update_model_matrix(self):
         """(Internal function to update stuff needed by OpenGL.)"""
@@ -1810,20 +1770,28 @@ class CylindarStack(object):
 # ======================================================================
 
 def main():
-    dobox1 = True
-    dobox2 = True
-    doball = True
+    doaxes = False
+    dobox1 = False
+    dobox2 = False
+    doball = False
     dopeg = False
     dopeg2 = False
     doblob = False
-    doarrow = True
-    dohelix = True
-    docurve = True
-    domanyelongatedboxes = False
+    doarrow = False
+    dohelix = False
+    docurve = False
+    domanyelongatedboxes = True
 
     # Make objects
     sys.stderr.write("Making boxes and peg and other things.\n")
-    
+
+    if doaxes:
+        xax = Arrow(pos=(0, 0, 0), shaftwidth=0.05, headwidth=0.125, headlength=0.2, fixedwidth=True,
+                    axis=(1, 0, 0), color=color.red)
+        yax = Arrow(pos=(0, 0, 0), shaftwidth=0.05, headwidth=0.125, headlength=0.2, fixedwidth=True,
+                    axis=(0, 1, 0), color=color.green)
+        zax = Arrow(pos=(0, 0, 0), shaftwidth=0.05, headwidth=0.125, headlength=0.2, fixedwidth=True,
+                    axis=(0, 0, 1), color=color.blue)
     if dobox1:
         sys.stderr.write("Making box1.\n")
         box1 = Box(pos=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=[0.5, 0., 1.])
@@ -1868,7 +1836,7 @@ def main():
                       num_circ_points=12)
 
     if domanyelongatedboxes:
-        n = 8
+        n = 10
         sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
         boxes = []
         phases = []
@@ -1910,7 +1878,8 @@ def main():
 
         if dobox1:
             box1.color = [ 0.5, (1. + math.sin(phi))/2., (1. + math.cos(phi2))/2. ]
-
+            box1.up = [ 0., math.cos(phi), math.sin(phi) ]
+            
         if doball:
             ball.x = 2.*math.cos(phi)
             if math.sin(phi)>0.:

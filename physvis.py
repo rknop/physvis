@@ -395,7 +395,7 @@ def scene():
 
     Will be None if you haven't made any displays or graphic objects yet.
     """
-    return vb._first_context
+    return vb.GrContext._first_context
 
 def display(*args, **kwargs):
     """Create a new display in which you can put objects.

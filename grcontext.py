@@ -108,7 +108,8 @@ class GrContext(Observer):
     """
     
     _default_instance = None
-
+    _first_context = None
+    
     print_fps = False
     
     OBJ_TYPE_SIMPLE = 1
@@ -130,8 +131,6 @@ class GrContext(Observer):
     
 
     def __init__(self, *args, **kwargs):
-        global _first_context
-
         super().__init__(*args, **kwargs)
 
         self.default_color = numpy.array([1., 1., 1., 1.])
@@ -157,7 +156,7 @@ class GrContext(Observer):
             if GrContext._default_instance is None:
                 # sys.stderr.write("Setting GrContext._default_instance to {}\n".format(self))
                 GrContext._default_instance = self
-                _first_context = self
+                GrContext._first_context = self
 
     @property
     def foreground(self):

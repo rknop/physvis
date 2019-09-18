@@ -401,58 +401,77 @@ class GrObject(Subject):
         # qinv /= (q*q).sum()
         # return quaternion_multiply(q, quaternion_multiply(v, qinv))[0:3]
 
-    # I'm not completely happy with this, because if you rotate an
-    # object a lot small errors can build up.
-    #
-    # I figure out the rotation by building on top of the exiting
-    # rotation, rather than just purely from the axis (and figuring out
-    # the rotation to get to the axis from [1, 0, 0], so that the
-    # object's orientation doesn't suddenly change if you make a small
-    # rotation that would go past a (θ, φ) coordinate singularity.
-    #
-    # (Really, I should figure out how I want to deal with "up".)
     @axis.setter
     def axis(self, value):
-        magaxis = numpy.sqrt(numpy.square(self._axis).sum())
-        newaxis = vector(value)
-        magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
-        cosang = (self._axis * newaxis).sum() / ( magaxis * magnewaxis )
-        if math.fabs(1.-cosang) > 0.:
-            rotaxis = numpy.cross(self._axis, newaxis)
-            rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
-            cosang_2 = math.sqrt((1+cosang)/2.)
-            sinang_2 = math.sqrt((1-cosang)/2.)
-            q = numpy.empty(4)
-            q[0:3] = sinang_2 * rotaxis
-            q[3] = cosang_2
+        if len(value) != 3:
+            raise Exception("axis must have 3 values")
+        newaxis = numpy.array( float(value[0], float(value[1]), float(value[2])) )
+        axismag = math.sqrt( self._axis[0]**2 + self._axis[1]**2 + self._axis[2]**2 )
+        if axismag < 1e-8:
+            raise Exception("axis too short")
+        newaxis /= math.sqrt( self._axis[0]**2 + self._axis[1]**2 + self._axis[2]**2 )
+        if (newaxis == self._axis).all():
+            return
+        else:
+            self._axis = newaxis
+            self._scale[0] = axismag
+            set_object_rotation()
 
-            self._rotation = quaternion_multiply(q, self._rotation)
-        self._axis = newaxis
-        self._scale[0] = magnewaxis
-        self.update_model_matrix()
-        
-        # R = math.sqrt(value[0]*value[0] + value[2]*value[2])
-        # theta = math.atan2(value[1], R)
-        # phi = -math.atan2(value[2], value[0])
-        # q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
-        # q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
-        # self._rotation = quaternion_multiply(q2, q1)
-        # self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
+        # I'm not completely happy with this, because if you rotate an
+        # object a lot small errors can build up.
+        #
+        # I figure out the rotation by building on top of the exiting
+        # rotation, rather than just purely from the axis (and figuring out
+        # the rotation to get to the axis from [1, 0, 0], so that the
+        # object's orientation doesn't suddenly change if you make a small
+        # rotation that would go past a (θ, φ) coordinate singularity.
+        #
+        # (Really, I should figure out how I want to deal with "up".)
+
+        # magaxis = numpy.sqrt(numpy.square(self._axis).sum())
+        # newaxis = vector(value)
+        # magnewaxis = numpy.sqrt(numpy.square(newaxis).sum())
+        # cosang = (self._axis * newaxis).sum() / ( magaxis * magnewaxis )
+        # if math.fabs(1.-cosang) > 0.:
+        #     rotaxis = numpy.cross(self._axis, newaxis)
+        #     rotaxis /= math.sqrt(numpy.square(rotaxis).sum())
+        #     cosang_2 = math.sqrt((1+cosang)/2.)
+        #     sinang_2 = math.sqrt((1-cosang)/2.)
+        #     q = numpy.empty(4)
+        #     q[0:3] = sinang_2 * rotaxis
+        #     q[3] = cosang_2
+
+        #     self._rotation = quaternion_multiply(q, self._rotation)
+        # self._axis = newaxis
+        # self._scale[0] = magnewaxis
         # self.update_model_matrix()
+
+        # # An even older version
+        # # R = math.sqrt(value[0]*value[0] + value[2]*value[2])
+        # # theta = math.atan2(value[1], R)
+        # # phi = -math.atan2(value[2], value[0])
+        # # q1 = numpy.array([ 0., 0., numpy.sin(theta/2.), numpy.cos(theta/2.)])
+        # # q2 = numpy.array([ 0., numpy.sin(phi/2.), 0., numpy.cos(phi/2.)])
+        # # self._rotation = quaternion_multiply(q2, q1)
+        # # self._scale[0] = math.sqrt( value[0]*value[0] + value[1]*value[1] + value[2]*value[2] )
+        # # self.update_model_matrix()
 
     @property
     def up(self):
-        """Not implemendted!!!!!!"""
-        # return self._up
-        raise Exception("up not implemented")
-
+        return self._up
+        
     @up.setter
     def up(self, value):
-        # if len(value) != 3:
-        #     sys.stderr.write("ERROR, up must have 3 elements.")
-        # self._up = numpy.array(up)
-        # self.update_model_matrix()
-        raise Exception("up not implemented")
+        if len(value) != 3:
+            sys.stderr.write("ERROR, up must have 3 elements.")
+        # Only the component in the yz plane matters.  Normalize.
+        yzmag = math.sqrt(value[1]**2 + value[2]**2)
+        # Punt if this is zero
+        if yzmag < 1e-8:
+            self._up = numpy.array( [0., 1., 0.] )
+        else:
+            self._up = numpy.array( [ 0., value[1]/yzmag, value[2]/yzmag ] )
+        self.set_object_rotation()
 
     @property
     def rotation(self):
@@ -485,10 +504,59 @@ class GrObject(Subject):
             self.pos = origin + relpos
         self.rotation = quaternion_multiply(q, self.rotation)
 
+    def set_object_rotation():
+        """Figures out what the quaternion self._rotation should be from self._axis and self._up.
+
+        (Both self._axis and self._up must be normalized
+        """
+        # θ is the angle off of the y-axis
+        # φ is the angle in the x-z plane off of x towards -z (i.e. about y)
+        costheta = math.sqrt(1 - self._axis[1])
+        costheta_2 = math.sqrt( (1+costheta) / 2. )
+        sintheta_2 = math.sqrt( (1-costheta) / 2. )
+        
+        # Make sure we aren't going to divide by (close to) 0
+        xzmag = math.sqrt( self._axis[0]**2 + self._axis[2]**2 )
+        if xzmag < 1e-12:
+            # Object is oriented effectively along ±y
+            if self._axis[1] < 0.:
+                baserot = numpy.array( [1., 0., 0., 0.] )      # rot by π about x
+            else:
+                baserot = numpy.array( [0., 0., 0., 1.] )      # no rotatiob
+        else:
+            cosphi = self._axis[0] / xzmag
+            cosphi_2 = math.sqrt( (1+cosphi) / 2. )
+            sinphi_2 = math.sqrt( (1-cosphi) / 2. )
+            if self._axis[2] < 0.:
+                # gotta rotate about -y
+                yrot = -1.
+            else:
+                yrot = 1.
+            # This is the quaternion for a rotation of θ about z followed by a rotation of φ about y (I HOPE!)
+            baserot = numpy.array( [ sinphi_2 * sintheta_2 * yrot,
+                                     sinphi_2 * costheta_2 * yrot, 
+                                     cosphi_2 * sintheta_2,
+                                     cosphi_2 * costheta_2] )
+        # Finally, rotate around axis by an angle determined by up
+        if self._up[2] < 0.:
+            psirot = -1
+        else:
+            psirot = 1.
+        cospsi = self._up[1]
+        cospsi_2 = math.sqrt( (1+cospsi)/2. )
+        sinpsi_2 = math.sqrt( (1-cospsi)/2. )
+        self._rotation = quaternion_multiply( [ sinpsi_2 * self._axis[0] * psirot,
+                                                sinpsi_2 * self._axis[1] * psirot,
+                                                sinpsi_2 * self._axis[2] * psirot,
+                                                cospsi_2 ] , baserot )
+
+        self.update_model_matrix()
+        # Rob, gotta test this
+        
     def update_model_matrix(self):
         """(Internal function to update stuff needed by OpenGL.)"""
         q = self._rotation
-        s = 1./( (q*q).sum() )
+        s = 1./( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3] )   # 1./(q*q).sum() )
         rot = numpy.matrix(
             [[ 1.-2*s*(q[1]*q[1]+q[2]*q[2]) ,    2*s*(q[0]*q[1]-q[2]*q[3]) ,    2*s*(q[0]*q[2]+q[1]*q[3])],
              [    2*s*(q[0]*q[1]+q[2]*q[3]) , 1.-2*s*(q[0]*q[0]+q[2]*q[2]) ,    2*s*(q[1]*q[2]-q[0]*q[3])],

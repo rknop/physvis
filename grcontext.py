@@ -224,7 +224,7 @@ class GrContext(Observer):
         if len(val) != 3:
             raise Exception("forward needs 3 elements")
         self._forward = numpy.array(val, dtype=float)
-        self._forward /= math.sqrt( numpy.square(self._forward).sum() )
+        self._forward /= math.sqrt( self._forward[0]**2 + self_forward[1]**2 + self._forward[2]**2 )
         self.run_glcode(lambda : self.update_cam_posrot_gl())
 
     @property
@@ -236,7 +236,7 @@ class GrContext(Observer):
         if len(val) != 3:
             raise Exception("up needs 3 elements")
         self._up = numpy.array(val, dtype=float)
-        self._up /= math.sqrt( numpy.square(self._up).sum() )
+        self._up /= math.sqrt( self._up[0]**2 + self._up[1]**2 + self._up[2]**2 )
         self.run_glcode(lambda : self.update_cam_posrot_gl())
 
     @property
@@ -311,10 +311,10 @@ class GrContext(Observer):
     def determine_camera_matrices(self):
         center = self._center
         forward = numpy.array( self._forward )
-        forward /= math.sqrt( numpy.square(forward).sum() )
+        forward /= math.sqrt( forward[0]**2 + forward[1]**2 + forward[2]**2 )
         fov = self._fov
         up = numpy.array( self._up )
-        up /= math.sqrt( numpy.square(up).sum() )
+        up /= math.sqrt( up[0]**2 + up[1]**2 + up[2]**2 )
         rng = numpy.array( self._range )
 
         # I'm not dealing with non-equal range properly
@@ -332,7 +332,7 @@ class GrContext(Observer):
         if costheta < 1.-1e-8:
             if costheta > -1.+1e-6:
                 rotabout = numpy.array( [ forward[1], -forward[0], 0. ] )   # -ẑ × forward
-                rotabout /= math.sqrt( numpy.square(rotabout).sum() )
+                rotabout /= math.sqrt( rotabout[0]**2 + rotabout[1]**2 + rotabout[2]**2 )
                 costheta_2 = math.sqrt( (1+costheta) / 2. )
                 sintheta_2 = math.sqrt( (1-costheta) / 2. )
                 # Negative because we really rotate objects, not camera
@@ -351,7 +351,7 @@ class GrContext(Observer):
         # Project it into the camera (x-y) plane.
 
         rotup[2] = 0.
-        magrotup = math.sqrt( numpy.square(rotup).sum() )
+        magrotup = math.sqrt( rotup[0]**2 + rotup[1]**2 + rotup[2]**2 )
         cosphi = 0.
         if magrotup > 1e-8:
             # punt if the vector is too parallel to forward
@@ -645,7 +645,9 @@ class GLUTContext(GrContext):
                 # sys.stderr.write("RMB down\n")
                 self._mousex0 = x
                 self._mousey0 = y
-                self._origtheta = math.acos(-self._forward[1] / math.sqrt( numpy.square(self._forward).sum() ) )
+                self._origtheta = math.acos(-self._forward[1] / math.sqrt( self._forward[0]**2 +
+                                                                           self._forward[1]**2 +
+                                                                           self._forward[2]**2 ) )
                 self._origphi = math.atan2(-self._forward[0], -self._forward[2])
                 # sys.stderr.write("origθ = {:.2f}, origφ = {:.2f}\n".format(self._origtheta, self._origphi))
                 GLUT.glutMotionFunc(lambda x, y : self.rmb_moved(x, y))
@@ -679,15 +681,19 @@ class GLUTContext(GrContext):
                     self._mouseposy0 = y
                     self._origcenter = self._center
                     self._upinscreen = self._up - self._forward * ( numpy.sum(self._up*self._forward ) /
-                                                                    math.sqrt(numpy.square(self._up).sum()) )
-                    self._upinscreen /= math.sqrt(numpy.square(self._upinscreen).sum())
+                                                                    math.sqrt( self._up[0]**2 +
+                                                                               self._up[1]**2 +
+                                                                               self._up[2]**2 ) )
+                    self._upinscreen /= math.sqrt( self._upinscreen[0]**2 + self._upinscreen[1]**2 +
+                                                   self._upinscreen[2]**2 )
                     self._rightinscreen = numpy.array( [ self._forward[1]*self._upinscreen[2] -
                                                             self._forward[2]*self._upinscreen[1],
                                                          self._forward[2]*self._upinscreen[0] -
                                                             self._forward[0]*self._upinscreen[2],
                                                          self._forward[0]*self._upinscreen[1] -
                                                             self._forward[1]*self._upinscreen[0] ] )
-                    self._rightinscreen /= math.sqrt(numpy.square(self._rightinscreen).sum())
+                    self._rightinscreen /= math.sqrt( self._rightinscreen[0]**2 + self._rightinscreen[1]**2 +
+                                                      self._rightinscreen[2]**2 )
                                                         
                     GLUT.glutMotionFunc(lambda x, y : self.lmb_moved(x, y))
             

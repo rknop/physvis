@@ -25,13 +25,19 @@ machines, so... good luck.)
 
 USAGE
 
-The easiest way to use this is to copy the two files physvis.py and
-visual_base.py to the directory where your own python code is.
+You need to have all of the following files available to your Python
+program.  You can just put them in the same directory with your code,
+or, better, you can install them in a "library" directory.  (What those
+directories are, and how to add new library directories with environment
+variables, will depend on your operating system.)
 
-You can also put those two files somewhere in your python library path,
-or add the directory where they already exist to your python library
-path.  How you do that is dependent on your operating system and/or
-programming environment you use.
+  grcontext.py
+  object_collection.py
+  physvis_observer.py
+  physvis.py
+  quaternions.py
+  rater.py
+  visual_base.py
 
 See doc/physvis.html for a very brief introduction to code that uses
 this library.  See bouncing_ball.py, rotating_spring.py, and

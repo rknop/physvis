@@ -406,15 +406,57 @@ class GrObject(Subject):
         if axismag < 1e-8:
             raise Exception("axis too short")
         newaxis /= axismag
-        if (newaxis == self._axis).all():
-            return
-        else:
-            self._axis = newaxis
-            self._scale[0] = axismag
-            self.set_object_rotation()
 
+        # # This code will figure out the orientation from scratch.
+        # # The problem is that it doesn't lead to smooth rotations.
+        # self._axis = newaxis
+        # self._scale[0] = axismag
+        # self.set_object_rotation()
+
+        # Figure out the direct rotation to go from self._axis to
+        #   newaxis, and add that on top of current rotation.  (I'm
+        #   a little worried about accumulating precision errors.)
+        #   Rotate about self._axis × newaxis (normalized)
+        rotax = [ self._axis[1]*newaxis[2] - self._axis[2]*newaxis[1],
+                  self._axis[2]*newaxis[0] - self._axis[0]*newaxis[2],
+                  self._axis[0]*newaxis[1] - self._axis[1]*newaxis[0] ]
+        rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+
+        # Don't rotate if rotation is dinky
+        if rotaxmag < 1e-10:
+            if self._scale[0] != axismag:
+                self._scale[0] = axismag
+                self.update_model_matrix()
+            return
+
+        rotax[0] /= rotaxmag
+        rotax[1] /= rotaxmag
+        rotax[2] /= rotaxmag
+
+        # The dot product self._axis · newaxis gives the cos of the angle to rotate (both vectors are normalized)
+        cosrot = self._axis[0]*newaxis[0] + self._axis[1]*newaxis[1] + self._axis[2]*newaxis[2]
+        cosrot_2 = math.sqrt( (1+cosrot) / 2. )
+        sinrot_2 = math.sqrt( (1-cosrot) / 2. )
+
+        self._rotation = quaternion_multiply( [ sinrot_2 * rotax[0],
+                                                sinrot_2 * rotax[1],
+                                                sinrot_2 * rotax[2],
+                                                cosrot_2 ] , self._rotation )
+        self._axis = numpy.array( newaxis )
+        self._scale[0] = axismag
+        self.update_model_matrix()
+            
     @property
     def up(self):
+        """A vector in the object's frame tries to be up on the screen.
+
+        If you read this, the results could be meaningless.
+
+        Pass a vector in the object's frame; the object will be rotated
+        around its axis in an attempt to make that vector "up" on the
+        screen.  Only the y- and z- components of up matter, as the x
+        component in the object's frame points along the object's axis.
+        """
         return self._up
         
     @up.setter
@@ -1603,7 +1645,7 @@ class Helix(FixedLengthCurve):
         
         radius — The radius of the whole spring
         coils — The number of coils in the spring (can be fractional, but you'll get an approximation)
-        length — The length of the spring (redundant with the length of axis)
+        length — The length of the spring (same as scale[0])
         num_circ_points — The number of points on the path in one winding of the spring (default: 12)
         thickness — The thickness of the actual spring wire (default: 0.05 * radius)
 
@@ -1771,16 +1813,16 @@ class CylindarStack(object):
 
 def main():
     doaxes = False
-    dobox1 = False
-    dobox2 = False
-    doball = False
-    dopeg = False
+    dobox1 = True
+    dobox2 = True
+    doball = True
+    dopeg = True
     dopeg2 = False
     doblob = False
-    doarrow = False
-    dohelix = False
-    docurve = False
-    domanyelongatedboxes = True
+    doarrow = True
+    dohelix = True
+    docurve = True
+    domanyelongatedboxes = False
 
     # Make objects
     sys.stderr.write("Making boxes and peg and other things.\n")
@@ -1803,6 +1845,7 @@ def main():
         sys.stderr.write("Making peg.\n")
         peg = Cylinder(pos=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
         peg.axis = (0.5, 0.5, 0.5)
+        sys.stderr.write("Peg axis = {}\n".format(peg.axis))
     if dopeg2:
         sys.stderr.write("Making peg2.\n")
         peg2 = Cylinder(pos=(0., -0.25, 0.), radius=0.125, color=color.cyan, num_edge_points=6,

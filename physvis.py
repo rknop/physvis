@@ -30,6 +30,12 @@ PyOpenGL (specifically, the GL and GLUT modules).
 This module is really just a front-end for visual_base.py; this module has the more direct
 VPython-like interface.
 
+This module depends on you having the other nonstandard modules installed:
+
+  * numpy
+  * scipy
+  * PyOpenGL (modules OpenGL.GL and OpenGL.GLUT)
+
 USING OBJECTS:
 
 You must be running python3.  physvis is not compatible with python2.

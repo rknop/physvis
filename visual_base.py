@@ -434,7 +434,9 @@ class GrObject(Subject):
         rotax[2] /= rotaxmag
 
         # The dot product self._axis · newaxis gives the cos of the angle to rotate (both vectors are normalized)
+        # But, because of floating point inefficiencies, I still gotta normalize it
         cosrot = self._axis[0]*newaxis[0] + self._axis[1]*newaxis[1] + self._axis[2]*newaxis[2]
+        if cosrot > 1.: cosrot = 1.
         cosrot_2 = math.sqrt( (1+cosrot) / 2. )
         sinrot_2 = math.sqrt( (1-cosrot) / 2. )
 

@@ -227,7 +227,7 @@ class GrObject(Subject):
 
         super().__init__(*args, **kwargs)
 
-        self._object_type = GrContext.OBJ_TYPE_SIMPLE
+        self._object_type = GLObjectCollection._OBJ_TYPE_SIMPLE
         self._make_trail = False
         self._trail = None
         self.num_triangles = 0
@@ -257,7 +257,7 @@ class GrObject(Subject):
         self.colordata = None
 
         if color is None and opacity is None:
-            self._color = numpy.array( context.default_color, dtype=numpy.float32 )
+            self._color = numpy.array( self.context.default_color, dtype=numpy.float32 )
         elif color is None:
             self._color = numpy.empty(4, dtype=numpy.float32)
             self._color[0:3] = context.default_color[0:3]
@@ -1538,7 +1538,7 @@ class FixedLengthCurve(GrObject):
         
         super().__init__(*args, **kwargs)
 
-        self._object_type = GrContext.OBJ_TYPE_CURVE
+        self._object_type = GLObjectCollection._OBJ_TYPE_CURVE
         
         self._radius = radius
         if points is None:

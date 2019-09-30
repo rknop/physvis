@@ -112,9 +112,6 @@ class GrContext(Observer):
     
     print_fps = False
     
-    OBJ_TYPE_SIMPLE = 1
-    OBJ_TYPE_CURVE = 2
-
     @staticmethod
     def get_default_instance(*args, **kwargs):
         if GrContext._default_instance is None:
@@ -149,8 +146,7 @@ class GrContext(Observer):
 
         self.determine_perspective_matrix()
         
-        self.simple_object_collections = []
-        self.curve_collections = []
+        self.object_collections = []
 
         with Subject._threadlock:
             if GrContext._default_instance is None:
@@ -293,9 +289,6 @@ class GrContext(Observer):
         """Makes this context the default context."""
         GrContext._default_instance = self
 
-    def objects(self):
-        return itertools.chain( self.simple_object_collections, self.curve_collections )
-        
     def resize2d(self, width, height):
         """Callback that is called when window is resized."""
         # sys.stderr.write("In resize2d w/ size {} × {}\n".format(width, height))
@@ -386,8 +379,7 @@ class GrContext(Observer):
             
     def update_cam_posrot_gl(self):
         self.determine_camera_matrices()
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
+        for collection in self.object_collections:
             collection.shader.set_camera_posrot()
 
     def determine_perspective_matrix(self):
@@ -409,8 +401,7 @@ class GrContext(Observer):
 
     def update_cam_perspective_gl(self):
         self.determine_perspective_matrix()
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
+        for collection in self.object_collections:
             collection.shader.set_camera_perspective()
     
     def gl_version_info(self):
@@ -555,8 +546,8 @@ class GLUTContext(GrContext):
         while not self.window_is_initialized:
             time.sleep(0.1)
 
-        self.simple_object_collections.append(object_collection.SimpleObjectCollection(self))
-        self.curve_collections.append(object_collection.CurveCollection(self))
+        self.object_collections.append(object_collection.SimpleObjectCollection(self))
+        self.object_collections.append(object_collection.CurveCollection(self))
 
         # sys.stderr.write("Exiting GLUTContext.__init__\n")
 
@@ -781,8 +772,7 @@ class GLUTContext(GrContext):
 
         with Subject._threadlock:
             # sys.stderr.write("About to draw collections\n")
-            for collection in itertools.chain( self.simple_object_collections,
-                                               self.curve_collections ):
+            for collection in self.object_collections:
                 
                 collection.draw()
 
@@ -799,14 +789,21 @@ class GLUTContext(GrContext):
         self.framecount += 1
 
     def add_object(self, obj):
-        # Try to figure out which collection this goes into for real
-        if obj._object_type == GrContext.OBJ_TYPE_SIMPLE:
-            self.simple_object_collections[0].add_object(obj)
-        elif obj._object_type == GrContext.OBJ_TYPE_CURVE:
-            self.curve_collections[0].add_object(obj)
+
+        # See if any current collection will take it:
+        for collection in self.object_collections:
+            if collection.canyoutake(obj):
+                collection.add_object(obj)
+                return
+
+        # If nobody took it, get a new collection
+
+        newcollection = object_collection.GLObjectCollection.get_new_collection(obj, self)
+        sys.stderr.write("CREATED a new collection for object type {}\n".format(newcollection.my_object_type))
+        newcollection.add_object(obj)
+        self.object_collections.append(newcollection)
 
     def remove_object(self, obj):
-        for collection in itertools.chain( self.simple_object_collections,
-                                           self.curve_collections ):
+        for collection in self.object_collections:
             collection.remove_object(obj)
 

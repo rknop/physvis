@@ -47,12 +47,29 @@ class GLObjectCollection(Observer):
       
     Subclasses must implement
        — update_object_vertices(grobject) — update the OpenGL data for grobject's vertices
+       — canyoutake(grobject) — returns True or False if the collection can handle the object.  (ROB: Race conditions.)
        — probably other things
 
     """
 
+    _OBJ_TYPE_NONE = 0
+    _OBJ_TYPE_SIMPLE = 1
+    _OBJ_TYPE_CURVE = 2
+
     _MAX_OBJS_PER_COLLECTION = 512
 
+    collection_classes = {}
+    
+    @staticmethod
+    def get_new_collection(obj, context):
+        for key in GLObjectCollection.collection_classes:
+            if obj._object_type == key:
+                return GLObjectCollection.collection_classes[key](context)
+        raise Exception("No colletion can handle object of type {}\n".format(obj._object_type))
+
+    @staticmethod
+    def register_collection_type(collection_class, objid):
+        GLObjectCollection.collection_classes[objid] = collection_class
     
     def __init__(self, context, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,6 +79,8 @@ class GLObjectCollection(Observer):
         self.numobjects = 0
 
         self.context = context
+
+        self.my_object_type = GLObjectCollection._OBJ_TYPE_NONE
 
     def initglstuff(self):
         self.modelmatrixbuffer = GL.glGenBuffers(1)
@@ -98,6 +117,9 @@ class GLObjectCollection(Observer):
         # See https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_instanced_arrays.txt
         # and http://sol.gfxile.net/instancing.html
 
+    def canyoutake(self, obj):
+        return False
+        
     def remove_object(self, obj):
         if not obj._id in self.objects:
             return
@@ -225,11 +247,16 @@ class SimpleObjectCollection(GLObjectCollection):
         self.curnumtris = 0
         self.object_triangle_index = {}
 
+        self.pending_objects = 0
+        self.pending_tris = 0
+        
         self.draw_as_lines = False
 
         self.is_initialized = False
         context.run_glcode(lambda : self.initglstuff())
 
+        self.my_object_type = GLObjectCollection._OBJ_TYPE_SIMPLE
+        
         while not self.is_initialized:
             time.sleep(0.1)
 
@@ -271,17 +298,29 @@ class SimpleObjectCollection(GLObjectCollection):
         GL.glVertexAttribIPointer(2, 1, GL.GL_INT, 0, None)
         GL.glEnableVertexAttribArray(2)
 
+    def canyoutake(self, obj):
+        if obj._object_type != self.my_object_type:
+            return False
+        if len(self.objects) >= self.maxnumobjs:
+            return False
+        if self.curnumtris + self.pending_tris + obj.num_triangles > self.maxnumtris:
+            return False
+        return True
+        
     def add_object(self, obj):
         # Make sure not to double-add
         if obj._id in self.objects:
             return
 
-        if len(self.objects) >= self.maxnumobjs:
-            raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
-        if self.curnumtris + obj.num_triangles > self.maxnumtris:
-            raise Exception("Error, I can currently only handle {} triangles.".format(self.maxnumtris))
+        if not self.canyoutake(obj):
+            raise Exception("Error, can't add object, limits reached.")
 
-        self.context.run_glcode(lambda : self.do_add_object(obj))
+        with Subject._threadlock:
+            self.pending_objects += 1
+            self.pending_tris += obj.num_triangles
+
+            self.context.run_glcode(lambda : self.do_add_object(obj))
+            
 
     def do_add_object(self, obj):
         with Subject._threadlock:
@@ -293,6 +332,9 @@ class SimpleObjectCollection(GLObjectCollection):
             self.object_index[obj._id] = len(self.objects) - 1
             self.push_all_object_info(obj)
             obj.add_listener(self)
+
+            self.pending_objects -= 1
+            self.pending_tris -= obj.num_triangles
             # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
     def do_remove_object(self, obj):
@@ -407,6 +449,8 @@ class SimpleObjectCollection(GLObjectCollection):
             # sys.stderr.write("...done drawing triangles.")
 
 
+GLObjectCollection.register_collection_type(SimpleObjectCollection, GLObjectCollection._OBJ_TYPE_SIMPLE)
+
 # ======================================================================
 # CurveCollection
 
@@ -427,11 +471,16 @@ class CurveCollection(GLObjectCollection):
         self.curnumlines = 0
         self.line_index = {}
 
+        self.pending_objects = 0
+        self.pending_lines = 0
+
         self.draw_as_lines = False
         
         self.is_initialized = False
         context.run_glcode(lambda : self.initglstuff())
 
+        self.my_object_type = GLObjectCollection._OBJ_TYPE_CURVE
+        
         while not self.is_initialized:
             time.sleep(0.1)
 
@@ -473,16 +522,26 @@ class CurveCollection(GLObjectCollection):
         GL.glVertexAttribIPointer(2, 1, GL.GL_INT, 0, None)
         GL.glEnableVertexAttribArray(2)
 
+    def canyoutake(self, obj):
+        if obj._object_type != self.my_object_type:
+            return False
+        if len(self.objects) >= self.maxnumobjs:
+            return False
+        if self.curnumlines + self.pending_lines + obj.points.shape[0]-1 > self.maxnumlines:
+            return False
+        return True
+        
     def add_object(self, obj):
         if obj._id in self.objects:
             return
 
-        if len(self.objects) >= self.maxnumobjs:
-            raise Exception("Error, I can currently only handle {} objects.".format(self.maxnumobjs))
-        if self.curnumlines + (obj.points.shape[0]-1) > self.maxnumlines:
-            raise Exception("Error, I can currently only handle {} lines.".format(self.maxnumlines))
+        if not self.canyoutake(obj):
+            raise Exception("Error, can't add curve, wrong type or limits reached.")
 
-        self.context.run_glcode(lambda : self.do_add_object(obj))
+        with Subject._threadlock:
+            self.pending_objects += 1
+            self.pending_lines += obj.points.shape[0]-1
+            self.context.run_glcode(lambda : self.do_add_object(obj))
 
     def do_add_object(self, obj):
         with Subject._threadlock:
@@ -495,6 +554,9 @@ class CurveCollection(GLObjectCollection):
             n = len(self.objects) - 1
             self.object_index[obj._id] = n
             self.push_all_object_info(obj)
+
+            self.pending_objects -= 1
+            self.pending_lines -= obj.points.shape[0]-1
         
     def do_remove_object(self, obj):
         with Subject._threadlock:
@@ -608,6 +670,8 @@ class CurveCollection(GLObjectCollection):
             # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
             GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
             # sys.stderr.write("...done drawing lines\n");
+
+GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
         
 # ======================================================================
 # ======================================================================

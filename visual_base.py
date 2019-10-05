@@ -417,26 +417,41 @@ class GrObject(Subject):
         #   newaxis, and add that on top of current rotation.  (I'm
         #   a little worried about accumulating precision errors.)
         #   Rotate about self._axis × newaxis (normalized)
-        rotax = [ self._axis[1]*newaxis[2] - self._axis[2]*newaxis[1],
-                  self._axis[2]*newaxis[0] - self._axis[0]*newaxis[2],
-                  self._axis[0]*newaxis[1] - self._axis[1]*newaxis[0] ]
-        rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
-
-        # Don't rotate if rotation is dinky
-        if rotaxmag < 1e-10:
-            if self._scale[0] != axismag:
-                self._scale[0] = axismag
-                self.update_model_matrix()
-            return
-
-        rotax[0] /= rotaxmag
-        rotax[1] /= rotaxmag
-        rotax[2] /= rotaxmag
 
         # The dot product self._axis · newaxis gives the cos of the angle to rotate (both vectors are normalized)
         # But, because of floating point inefficiencies, I still gotta normalize it
         cosrot = self._axis[0]*newaxis[0] + self._axis[1]*newaxis[1] + self._axis[2]*newaxis[2]
         if cosrot > 1.: cosrot = 1.
+        elif cosrot < -1.: cosrot = -1.
+
+        # If the new axis is parallel or antiparallel, then we can't use
+        #   axis cross newaxis as the rotation axis
+        if 1-math.fabs(cosrot) < 1e-8:
+            if cosrot > 0.:
+                # No actual rotation (well, dinky)
+                if self._scale[0] != axismag:
+                    self._scale[0] = axismag
+                    self.update_model_matrix()
+                    return
+            else:
+                # newaxis is opposite self._axis.  Try crossing with zhat to get a rotaxis
+                rotax = [ self._axis[1], -self._axis[0], 0. ]
+                # If that didn't work, then use yhat
+                rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+                if rotaxmag < 1e-10:
+                    rotax = [ -self._axis[2], 0., self._axis[0] ]
+                    rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+                    
+        else:
+            rotax = [ self._axis[1]*newaxis[2] - self._axis[2]*newaxis[1],
+                      self._axis[2]*newaxis[0] - self._axis[0]*newaxis[2],
+                      self._axis[0]*newaxis[1] - self._axis[1]*newaxis[0] ]
+            rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+
+        rotax[0] /= rotaxmag
+        rotax[1] /= rotaxmag
+        rotax[2] /= rotaxmag
+
         cosrot_2 = math.sqrt( (1+cosrot) / 2. )
         sinrot_2 = math.sqrt( (1-cosrot) / 2. )
 

@@ -486,7 +486,10 @@ class GLUTContext(GrContext):
         # sys.stderr.write("Making default GLUT window.\n")
         GLUT.glutInitWindowSize(instance.width, instance.height)
         GLUT.glutInitWindowPosition(0, 0)
-        instance.window = GLUT.glutCreateWindow(instance._title)
+        instance.window = GLUT.glutCreateWindow(bytes(instance._title, encoding='UTF-8'))
+        # freeglut on windows seems to need this here, even though I have a
+        #  "for real" display func in gl_init
+        GLUT.glutDisplayFunc(lambda : None)
 
         GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
         # sys.stderr.write("Going into GLUT.GLUT main loop.\n")
@@ -557,7 +560,7 @@ class GLUTContext(GrContext):
             # sys.stderr.write("Making a GLUT window.\n")
             GLUT.glutInitWindowSize(self._width, self._height)
             GLUT.glutInitWindowPosition(0, 0)
-            self.window = GLUT.glutCreateWindow(self._title)
+            self.window = GLUT.glutCreateWindow(bytes(self._title, encoding="UTF-8"))
         GLUT.glutSetWindow(self.window)
         GLUT.glutMouseFunc(lambda button, state, x, y : self.mouse_button_handler(button, state, x, y))
         GLUT.glutReshapeFunc(lambda width, height : self.resize2d(width, height))

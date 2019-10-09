@@ -432,7 +432,7 @@ class GrObject(Subject):
                 if self._scale[0] != axismag:
                     self._scale[0] = axismag
                     self.update_model_matrix()
-                    return
+                return
             else:
                 # newaxis is opposite self._axis.  Try crossing with zhat to get a rotaxis
                 rotax = [ self._axis[1], -self._axis[0], 0. ]
@@ -1916,8 +1916,7 @@ def main():
     phi = 0.
     phi2 = 0.
     fps = 30
-    global _print_fps
-    _print_fps = True
+    GrContext.print_fps = True
     printfpsevery = 30
     dphi = 2*math.pi/(4.*fps)
 

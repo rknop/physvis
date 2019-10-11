@@ -88,6 +88,7 @@ The following ojects are available
   — ellipsoid
   — helix
   — sphere
+  — icosahedron
   — xaxis
   — yaxis
   — zaxis
@@ -111,7 +112,7 @@ each object for more information.
 
     pos — The position of the object (vector)
     axis — The orientation of the object, and, if it's not normalized, the scale along its standard axis
-    up — not implemented
+    up — Rotate the object about its axies in an attempt to make this *local* vector of the object up on the screen
     scale — How much to scale the object (interactis with the amgnitude of axis)
     color — The color of the object (r, g, b) or (r, g, b, a)
     make_trail — True to leave behind a trail
@@ -130,7 +131,22 @@ each object for more information.
     sz — The z scale of the object
     visible — Set to False to remove an object from the display, True to put it back in.
 
-  Methods.  These are functions on an object you can call to do things to the object,, e.g.
+  Note that "up" is kind of a strange property.  When you read it, you
+  probably don't get anything meaningful.  When you set it, it will try
+  to orient the object so that the "up" vector you specified in the
+  object's local coordinate system is up on the screen.  If an object is
+  created in its default orientation (i.e. without an axis keyword), its
+  local coordinate system matches the global coordinate system.  If you
+  point the object in anoter direction, but want to have the same side
+  of the object upwards, set up to (0, 1, 0).  up only matters right
+  when you set it.  If you rotate the object again later, the code will
+  not try to keep the same side up; it will just do the most direct
+  rotation to get the object oriented in the new direction.  (This
+  behavior is probably not the same as what VPython used.)
+
+  Methods:
+
+  These are functions on an object you can call to do things to the object, e.g.
 
      mycube.rotate( 0.785, (0, 1, 0) )
 
@@ -266,7 +282,6 @@ Objects missing:
   * text
 
 Object properties missing or not working:
-  * up        (It's there, but doesn't do anything, and throws errors)
   * opacity   (Doing this at all well is quite hard.  The variable is there, but ignored)
   * materials (Maybe someday)
   * composite objects with frame
@@ -285,6 +300,7 @@ Things Changed:
   * There is no "scene" variable; the "scene()" function gets you the default display.
   * I believe the default range of a display is different (bigger)
   * axes() object is new
+  * icosahedron() object is new
   * context= parameter of objects is new (I think)
 
 wxPython interaction is not implemented; for a very long time, it looked
@@ -374,6 +390,17 @@ def sphere(*args,**kwargs):
     """
     return vb.Sphere(*args, **kwargs)
 
+def icosahedron(*args, **kwargs):
+    """An icosahedron, possibly subdivided.
+
+    radius — The radius of the object (to the vertices) (default: 1)
+    flat — If True, render flat faces rather than smooth faces (default: False)
+           This property can't be set after object creation.
+    subidvisions — How many times to subdivide the icosahedron; each subdivision
+                   increases the number of faces 4×.  This property can't be set
+                   after object creation.
+    """
+    return vb.Icosahedron(*args, **kwargs)
 
 def xaxis(*args, **kwargs):
     """A red arrow at the origin of length 1 pointing in the x-direction"""

@@ -20,8 +20,11 @@ physvis requires numpy (https://www.numpy.org) and PyOpenGL
 certainly both of these (for Python 3) are included with your
 distribution.
 
-(I have not tried this myself anywhere other than on a couple of Linux
-machines, so... good luck.)
+I've used this on Linux.  It has been succesfully used on Windows with
+Anaconda installed.  You can install the needed PyOpenGL libraries with
+
+   conda install pyopengl
+   conda install freeglut
 
 USAGE
 

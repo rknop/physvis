@@ -711,9 +711,70 @@ class GrObject(Subject):
     def destroy(self):
         pass
 
+# =====================================================================
+class Faces(GrObject):
+    """A set of triangles.
+
+    vertices must be a [3*faces, 3] numpy array.  Each of the elements
+    along axis 0 is one vertex (with x, y, z indexed along axis 1).
+    Three elements in a row specify a triangle.  Try to make it so that
+    the outward face of the triangle is what you'd get from the
+    right-hand-rule crossing the second minus first vertices with the
+    third minus second.
+    """
+
+    def __init__(self, vertices, normals=None, smooth=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.num_triangles = vertices.shape[0]//3
+        if ( len(vertices.shape) != 2 or
+             vertices.shape[0] % 3 != 0 or
+             vertices.shape[0] == 0 or
+             vertices.shape[1] != 3 ):
+            raise Exception("Faces requires a (3n, 3) numpy array.")
+
+        self.vertexdata = numpy.ones(self.num_triangles * 3 * 4, dtype=numpy.float32)
+        self.normaldata = numpy.zeros(self.num_triangles * 3 * 3, dtype=numpy.float32)
+
+        if normals is not None:
+            if normals.shape != vertices.shape:
+                raise Exception("Faces must have (3n, 3) numpy array for both vertices and normals.")
+            for i in range(3*self.num_triangles):
+                self.vertexdata[4*i : 4*i+3] = vertices[i : i+3, :]
+                self.normaldata[3*i : 3*i+3] = normaldata[i : i+3, :]
+        else:
+            if smooth:
+                raise Exception("Faces: smooth isn't implemented.")
+            else:
+                for i in range(self.num_triangles):
+                    self.vertexdata[3*4*i+0 : 3*4*i+3 ] = vertices[3*i  , :]
+                    self.vertexdata[3*4*i+4 : 3*4*i+7 ] = vertices[3*i+1, :]
+                    self.vertexdata[3*4*i+8 : 3*4*i+11] = vertices[3*i+2, :]
+                    l1 = vertices[3*i+1, :] - vertices[3*i, :]
+                    l2 = vertices[3*i+2, :] - vertices[3*i+1, :]
+                    norm = numpy.array( [ l1[1]*l2[2] - l1[2]*l2[1],
+                                          l1[2]*l2[0] - l1[0]*l2[2],
+                                          l1[0]*l2[1] - l1[1]*l2[0] ],
+                                        dtype=numpy.float32 )
+                    normnorm = math.sqrt( norm[0]*norm[0] + norm[1]*norm[1] + norm[2]*norm[2] )
+                    if normnorm < 1e-6:
+                        import pdb; pdb.set_trace()
+                        raise Exception("Faces error: degenerate triangle.")
+                    norm /= normnorm
+                    self.normaldata[3*3*i   : 3*3*i+3] = norm
+                    self.normaldata[3*3*i+3 : 3*3*i+6] = norm
+                    self.normaldata[3*3*i+6 : 3*3*i+9] = norm
+
+        self.finish_init()
+
+    def destroy(self):
+        raise Exception("OMG ROB!  You need to figure out how to destroy things!")
+        
+
 # ======================================================================
 
 class Box(GrObject):
+
     """A rectangular solid with dimenions (x,y,z) = (length,height,width)"""
     
     @staticmethod
@@ -833,6 +894,37 @@ class Box(GrObject):
 
     def destroy(self):
         raise Exception("OMG ROB!  You need to figure out how to destroy things!")
+
+# ======================================================================
+
+class Tetrahedron(Faces):
+    """A tetrahedron"""
+
+    def __init__(self, *args, **kwargs):
+        norm = 2*math.sqrt(2/3)
+        sqrt6 = math.sqrt(6)
+        sqrt3 = math.sqrt(3)
+        sqrt2 = math.sqrt(2)
+        verts = numpy.array( [ [ norm*sqrt3/(2*sqrt2) , 0 , 0, ],
+                               [ -norm/(2*sqrt6), norm/2, -norm/(2*sqrt3), ],
+                               [ -norm/(2*sqrt6), 0, norm/sqrt3, ],
+
+                               [ norm*sqrt3/(2*sqrt2) , 0 , 0, ],
+                               [ -norm/(2*sqrt6), 0, norm/sqrt3, ],
+                               [ -norm/(2*sqrt6), -norm/2., -norm/(2*sqrt3), ],
+                                                                   
+                               [ norm*sqrt3/(2*sqrt2) , 0 , 0, ],
+                               [ -norm/(2*sqrt6), -norm/2., -norm/(2*sqrt3), ],
+                               [ -norm/(2*sqrt6), norm/2, -norm/(2*sqrt3), ],
+                               
+                               [ -norm/(2*sqrt6), norm/2, -norm/(2*sqrt3), ],
+                               [ -norm/(2*sqrt6), -norm/2, -norm/(2*sqrt3), ],
+                               [ -norm/(2*sqrt6), 0, norm/sqrt3 ] ]
+                             ,dtype=numpy.float32 )
+
+        super().__init__(verts, smooth=False, *args, **kwargs)
+        
+
 
 # ======================================================================
 #
@@ -1832,8 +1924,9 @@ def main():
     doaxes = False
     dobox1 = True
     dobox2 = True
+    dotet = True
     doball = True
-    dopeg = True
+    dopeg = False
     dopeg2 = False
     doblob = False
     doarrow = True
@@ -1858,6 +1951,10 @@ def main():
         sys.stderr.write("Making box2.\n")
         box2 = Box(pos=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
 
+    if dotet:
+        sys.stderr.write("Making tetrahedron.\n")
+        tet = Tetrahedron(pos=( 0.75, -0.75, 0.75))
+        
     if dopeg:
         sys.stderr.write("Making peg.\n")
         peg = Cylinder(pos=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)

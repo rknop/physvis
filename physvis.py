@@ -86,8 +86,10 @@ The following ojects are available
   — cylinder
   — cone
   — ellipsoid
+  — faces
   — helix
   — sphere
+  — tetrahedron
   — icosahedron
   — xaxis
   — yaxis
@@ -273,7 +275,6 @@ An incomplete list things not implemented:
 Objects missing:
   * curve (but see visual_base.CylindarStack & visual_base.FixedLengthCurve)
   * extrusion
-  * faces
   * label
   * local lights
   * points
@@ -286,6 +287,8 @@ Object properties missing or not working:
   * materials (Maybe someday)
   * composite objects with frame
   * You can't delete displays (and object cleanup in general is lacking)
+  * You can't append faces to a faces object
+  * You can't give an array of colors to a faces object; it's all one color
 
 Global features missing:
   * Automatic zoom updating to make all objects visible
@@ -301,7 +304,11 @@ Things Changed:
   * I believe the default range of a display is different (bigger)
   * axes() object is new
   * icosahedron() object is new
+  * tetrahedron() object is new
   * context= parameter of objects is new (I think)
+  * For faces, you don't have to specify the normals; it will default to
+    flat faces and calculate the normals if you don't give them.
+  * You can give a faces (3*n*3) array for n trianges, or a (3*n, 3) array.
 
 wxPython interaction is not implemented; for a very long time, it looked
 like wxPython was dead and would not support Python 3.  That's no longer
@@ -365,7 +372,57 @@ def ellipsoid(*args, **kwargs):
     """
     return vb.Ellipsoid(*args, **kwargs)
 
+def faces(vertices, normals=None, *args, **kwargs):
+    """An arbitrary set of triangles.
+
+    vertices — Either a 3*3*n numpy array or a (3*n, 3) numpy array
+               specifing the vertices of all the triangles.  Each
+               triangle has 3 vertices, and each vetex has 3 values (x,
+               y, z).  Make sure to orient the vertices of each triangle
+               so that if you curl the fingers along the direction of
+               the three vertices, your thumb points along the outward
+               normal of that triangle.
+    normals — Either a 3*3*n numpy array, a (3*n, 3) numpy array, or
+              None (the default).  If you don't specify this or pass None, the
+              code will generate normals that makes each face flat.
+    smooth — If True, makes a smooth object (normals at each vertex
+             averaged over the adjancet faces).  If False (default),
+             faces are flat.  (NOTE: smooth isn't implemented. yet.)
+    """
+
+    if not isinstance(vertices, numpy.ndarray):
+        vertices = numpy.array(vertices)
+    if len(vertices.shape) == 2:
+        if vertices.shape[1] != 3 or vertices.shape[0] % 3 != 0:
+            raise Exception("faces needs an 3n×3 array if you pass it a 2d array, where n is the number of triangles")
+    elif len(vertices.shape) == 1:
+        if vertices.shape[0] % 9 != 0:
+            raise Exception("faces needs 3n vertices (so 9*n values)")
+        vertices = vertices.copy()
+        vertices.shape = (vertices.shape[0]//3, 3)
+    else:
+        raise Exception("faces requires a 1d or 2d array.")
+
+    if normals is not None:
+        if not isinstance(normals, numpy.ndarray):
+            normals = numpy.array(normals)
+        if len(normals.shape) == 2:
+            if normals.shape[1] != 3 or normals.shape[0] % 3 != 0:
+                raise Exception("faces (normals) needs an 3n×3 array if you pass it a 2d array, where n is the number of triangles")
+        elif len(normals.shape) == 1:
+            if normals.shape[0] % 9 != 0:
+                raise Exception("faces (normals) needs 3n vertices (so 9*n values)")
+            normals = normals.copy()
+            normals.shape = (normals.shape[0]//3, 3)
+        else:
+            raise Exception("faces (normals) requires a 1d or 2d array.")
+        if normals.shape != vertices.shape:
+            raise Exception("faces: if you give normals, must have the same number as you have vertices3")
+        
+    return vb.Faces(vertices, normals, *args, **kwargs)
+
 def helix(*args, **kwargs):
+
     """A helix (spring), rendered as a tube around a helical path.
 
     Initially oriented along the x-axis, with the first point at +z, and
@@ -389,6 +446,10 @@ def sphere(*args,**kwargs):
     subdivisions — Control how smooth the underlying geometry is.  Default: 2.  0 = icosahedron.  >3 = unreasonable.
     """
     return vb.Sphere(*args, **kwargs)
+
+def tetrahedron(*args, **kwargs):
+    """A tetrahedron with a point on the +x axis and points 1 unit (by default) from the origin."""
+    return vb.Tetrahedron(*args, **kwargs)
 
 def icosahedron(*args, **kwargs):
     """An icosahedron, possibly subdivided.

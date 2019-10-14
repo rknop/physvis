@@ -90,6 +90,7 @@ The following ojects are available
   — helix
   — sphere
   — tetrahedron
+  — octahedron
   — icosahedron
   — xaxis
   — yaxis
@@ -305,6 +306,7 @@ Things Changed:
   * axes() object is new
   * icosahedron() object is new
   * tetrahedron() object is new
+  * octahedron() object is new
   * context= parameter of objects is new (I think)
   * For faces, you don't have to specify the normals; it will default to
     flat faces and calculate the normals if you don't give them.
@@ -451,17 +453,21 @@ def tetrahedron(*args, **kwargs):
     """A tetrahedron with a point on the +x axis and points 1 unit (by default) from the origin."""
     return vb.Tetrahedron(*args, **kwargs)
 
-def icosahedron(*args, **kwargs):
+def octahedron(*args, **kwargs):
+    """An octahedron with (by default) points at ±1 along each of the axes."""
+    return vb.Octahedron(*args, **kwargs)
+
+def icosahedron(flat=True, *args, **kwargs):
     """An icosahedron, possibly subdivided.
 
     radius — The radius of the object (to the vertices) (default: 1)
-    flat — If True, render flat faces rather than smooth faces (default: False)
+    flat — If True, render flat faces rather than smooth faces (default: True)
            This property can't be set after object creation.
     subidvisions — How many times to subdivide the icosahedron; each subdivision
                    increases the number of faces 4×.  This property can't be set
                    after object creation.
     """
-    return vb.Icosahedron(*args, **kwargs)
+    return vb.Icosahedron(flat=flat, *args, **kwargs)
 
 def xaxis(*args, **kwargs):
     """A red arrow at the origin of length 1 pointing in the x-direction"""

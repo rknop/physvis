@@ -271,6 +271,11 @@ class SimpleObjectCollection(GLObjectCollection):
         # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle
         GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 4 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
 
+        self.normalbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+        # 4 bytes per float * 3 floats per vertex * 3 vertices per triangle
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 3 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
+
         self.objindexbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         # 4 bytes per int * 1 int per vertex * 3 vertices per triangle

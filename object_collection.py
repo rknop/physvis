@@ -55,6 +55,7 @@ class GLObjectCollection(Observer):
     _OBJ_TYPE_NONE = 0
     _OBJ_TYPE_SIMPLE = 1
     _OBJ_TYPE_CURVE = 2
+    _OBJ_TYPE_LABEL = 3
 
     _MAX_OBJS_PER_COLLECTION = 512
 
@@ -194,6 +195,8 @@ class GLObjectCollection(Observer):
             self.update_object_matrix(subject)
         if message == "update vertices":
             self.update_object_vertices(subject)
+        if message == "update everything":
+            self.context.run_glcode(lambda : self.push_all_object_info(subject))
 
 # ======================================================================
 # SimpleObjectCollection
@@ -267,11 +270,6 @@ class SimpleObjectCollection(GLObjectCollection):
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
         # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle
         GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 4 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
-
-        self.normalbuffer = GL.glGenBuffers(1)
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-        # 4 bytes per float * 3 floats per vertex * 3 vertices per triangle
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4 * 3 * 3 * self.maxnumtris, None, GL.GL_STATIC_DRAW)
 
         self.objindexbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
@@ -451,6 +449,247 @@ class SimpleObjectCollection(GLObjectCollection):
 
 GLObjectCollection.register_collection_type(SimpleObjectCollection, GLObjectCollection._OBJ_TYPE_SIMPLE)
 
+# ======================================================================
+# LabelObjectCollection
+#
+# Rob, doc this
+
+class LabelObjectCollection(GLObjectCollection):
+    """A collection of labels that face the camera at all times."""
+
+    _MAX_LABELS_PER_COLLECTION = 64
+    
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(context, *args, **kwargs)
+        self.shader = Shader.get("Label Object Shader", context)
+
+        self.label_texture_index = {}
+        self.texture_spot_used = numpy.array( (_MAX_LABELS_PER_COLLECTION), dtype=bool)
+        self.texture_spot_used[:] = False
+
+        self.pending_labels = 0
+
+        self.is_initialized = False
+        context.run_glcode(lambda : self.initglstuff())
+
+        self.my_object_type = GLObjectCollection._OBJ_TYPE_LABEL
+
+        while not self.is_initialized:
+            time.sleep(0.1)
+
+    def initglstuff(self):
+        super().initglstuff()
+
+        self.texturearray = GL.glGenTextures(1)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
+        GL.glTexStorage3D(GL.GL_TEXTURE_2D_ARRAY, 1, GL.GL_RGBA8,
+                          256, 256, LabelObjectCollection._MAX_LABELS_PER_COLLECTION)
+
+        GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
+        GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
+        
+        self.objposbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
+        # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle * 2 triangles per label
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*4*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
+                        None, GL.GL_DYNAMIC_DRAW)
+
+        self.labelposbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+        # 4 bytes per float * 2 floats per vertex * 3 vertices per triange * 2 triangles per label
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*2*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
+                        None, GL.GL_STATIC_DRAW)
+        
+        self.texcoordbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+        # 4 bytes per float * 2 floats per vertex * 3 vertices per triangle * 2 triangles per label
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*2*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
+                        None, GL.GL_STATIC_DRAW)
+
+        self.objindexbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        # 4 bytes per int * 1 int per vertex * 3 vertices per triangle * 2 triangles per label
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*1*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
+                        None, GL.GL_STATIC_DRAW)
+
+        self.texindexbuffer = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
+        # 4 bytes per int * 1 int per vertex * 3 vertices per triangle * 2 triangles per label
+        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*1*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
+                        None, GL.GL_STATIC_DRAW)
+
+        self.VAO = GL.glGenVertexArrays(1)
+        self.bind_vertex_attribs()
+        self.is_initialized = True
+
+    def bind_vertex_attribs(self):
+        GL.glBIndVertexArray(self.VAO)
+
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
+        GL.glVertexAttribPointer(0, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(0)
+
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+        GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(2)
+
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+        GL.glVertexAttribPointer(2, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glEnableVertexAttribArray(2)
+
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glVertexAttribIPointer(3, 1, GL.GL_INT, 0, None)
+        GL.glEnableVertexAttribArray(1)
+
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
+        GL.glVertexAttribIPointer(4, 1, GL.GL_INT, 0, None)
+        GL.glEnableVertexAttribArray(1)
+
+
+    def canyoutake(self, obj):
+        if ob._object_type != self.my_object_type:
+            return False
+        if len(self.objects) >= LabelObjectCollection._MAX_LABELS_PER_COLLECTION + self.pending_labels:
+            return False
+        return True
+
+    def add_object(self, obj):
+        # Make sure not to double-add
+        if obj._id in self.objects:
+            return
+
+        if not self.canyoutake(obj):
+            raise Exception("Error, can't add label, limits reached.")
+
+        with Subject._threadlock:
+            self.pending_labels += 1
+            self.context.run_glcode(lambda : self.do_add_object(obj))
+
+    def do_add_object(self, obj):
+        with Subject._threadlock:
+            if obj._id in self.objects:
+                return
+            self.object_index[obj._id] = len(self.objects) - 1
+            for i in range(self.texture_spot_used.shape[0]):
+                if not self.texture_spot_used[i]:
+                    self.label_texture_index[obj._id] = i
+                    self.texture_spot_used[i] = True
+                    break
+            self.push_all_object_info(obj)
+            obj.add_listener(self)
+
+            self.pending_labels -= 1
+
+    def do_remove_objgect(self, obj):
+        raise Exception("ROB!  Implement removing labels!")
+
+    def update_object_vertices(self, obj):
+        if not obj.visible: return
+        if not obj._id in self.objects: return
+        self.context.run_glcode(lambda : self.push_object_vertices(obj) )
+
+    def push_object_vertices(self, obj):
+        with Subject._threadlock:
+            if not obj._id in self.objects:
+                return
+            dex = self.object_index[obj._id]
+        
+            # 6 copies of the object position for the 6 vertices of the two triangles
+            pos = numpy.ones(4, dtype=numpy.float32)
+            pos[0:3] = obj.pos
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
+            for i in range(6):
+                GL.glBufferSubData(GL.GL_ARRRAY_BUFFER, dex*6*4*4 + 4*4*i, pos)
+        
+            # triangle positions
+            tris = numpy.ones(6, 2)
+            tris[0, 0] = obj.xoffset - obj.fullwid/2.
+            tris[0, 1] = obj.yoffset
+            tris[1, 0] = obj.xoffset + obj.fullwid/2.
+            tris[1, 1] = obj.yoffset
+            tris[2, 0] = obj.xoffset - obj.fullwid/2.
+            tris[2, 1] = obj.yoffset + obj.fullhei
+            tris[3, 0] = obj.xoffset + obj.fullwid/2.
+            tris[3, 1] = obj.yoffset
+            tris[4, 0] = obj.xoffset + obj.fullwid/2.
+            tris[4, 1] = obj.yoffset + obj.fullhei
+            tris[5, 0] = obj.xoffset - obj.fullwid/2.
+            tris[5, 1] = obj.yoffset + obj.fullhei
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+            for i in range(6):
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4 + 2*4*i, tris[i, :])
+
+            # texture coordinates
+            texcoords = numpy.array( [0., 0.,
+                                      1., 0.,
+                                      0., 1.,
+                                      1., 0.,
+                                      1., 1.,
+                                      0., 1.] , dtype=numpy.float32)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+            GL.glBufferSubDAta(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+
+    def push_all_object_info(self, obj):
+        with Subject._threadlock:
+            if not obj._id in self.objects:
+                return
+            dex = self.object_index[obj._id]
+            texdex = self.label_texture_index[obj._id]
+
+            self.push_object_vertices()
+
+            # object index
+            objindexcopies = numpy.empty(6, dtype=numpy.int32)
+            objindexcopies[:] = dex
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, objindexcopies)
+
+            # texture index
+            texindexcopies = numpy.empty(6, dtype=numpy.int32)
+            texindexcopies[:] = texdex
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, texindexcopies)
+            
+            # texture coordinates
+            texcoords = numpy.array( [0., 0.,
+                                      1., 0.,
+                                      0., 1.,
+                                      1., 0.,
+                                      1., 1.,
+                                      0., 1.] , dtype=numpy.float32)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+            GL.glBufferSubDAta(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+
+            # texture image data
+            GL.glActiveTexture(GL.GL_TEXTURE0)
+            GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
+            GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex, 256, 256, 1,
+                               GL.GL_RGBA, GL_UNSIGNED_BYTE, obj.texturedata)
+
+            self.do_update_object_matrix(obj)
+            # Color is irrelevant here
+
+            self.context.update()   # Redundant... just happened in do_update_object_matrix
+
+    # Never call this directly!  It should only be called from within the
+    #   draw method of a GrContext
+    def draw(self):
+        with Subject._threadlock:
+            GL.glUseProgram(self.shader.progid)
+            self.bind_uniform_buffers()
+            self.bind_vertex_attribs()
+            self.shader.set_camera_perspective()
+            self.shader.set_camera_posrot()
+
+            GL.glBindVertexArray(self.VAO)
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
+        
+            
+GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
+        
 # ======================================================================
 # CurveCollection
 
@@ -909,6 +1148,118 @@ void main(void)
 
         self.init_lights_and_camera()
             
+
+# ======================================================================
+# This goes with _OBJ_TYPE_LABEL and LabelObjectCollection
+
+class LabelObjectShader(Shader):
+    """Shader class for labels.  Renders a billboard facing the camera."""
+
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(context, *args, **kwargs)
+        self._name = "Label Object Shader"
+
+        self.context.run_glcode(lambda : self.create_shaders())
+
+    def create_shaders(self):
+        err = GL.glGetError()
+
+        vertex_shader = """
+#version 330
+
+uniform mat4 viewshift;
+uniform mat4 viewrot;
+uniform mat4 projection;
+
+layout (std140) uniform ModelMatrix
+{{
+   mat4 model_matrix[{maxnumobj}];
+}};
+
+layout (std140) uniform ModelNormalMatrix
+{{
+   mat3 model_normal_matrix[{maxnumobj}];
+}};
+
+layout (std140) uniform Colors
+{{
+   vec4 color[{maxnumobj}];
+}};
+
+uniform sampler2dArray label_textures;
+
+layout(location=0) in vec4 obj_Position;
+layout(location=1) in vec2 label_Position
+layout(location=2) in vec2 texCoord;
+layout(location=3) in int in_Index;
+layout(location=4) in int in_tex_Index;
+out vec2 uv;
+out int texIndex;
+
+void main(void)
+{{
+  objpos = projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
+  # What's the right z to use???  (Does it matter?)  (Stacking?)
+  gl_Position = vec4( objpos.x + label_Position.x, objpos.y + label_Position.y, objpos.z, 1. )
+  texIndex = in_tex_Index;
+  uv = texCoord;
+}}""".format(maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
+
+        fragment_shader = """
+#version 330
+
+uniform vec3 ambientcolor;
+uniform vec3 light1color;
+uniform vec3 light1dir;
+uniform vec3 light2color;
+uniform vec3 light2dir;
+
+in vec2 uv;
+in int texIndex;
+out vec4 out_Color;
+
+void main(void)
+{
+  out_Color = texture(label_textures, uv.x, uv.y, texIndex);
+}
+"""
+
+        # I've cut and paste the rest of this from BasicShader...
+        #   this begs some refactoring
+        if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
+
+        self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)
+        GL.glShaderSource(self.vtxshdrid, vertex_shader)
+        GL.glCompileShader(self.vtxshdrid)
+
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.vtxshdrid)))
+
+        self.fragshdrid = GL.glCreateShader(GL.GL_FRAGMENT_SHADER)
+        GL.glShaderSource(self.fragshdrid, fragment_shader)
+        GL.glCompileShader(self.fragshdrid)
+
+        if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.fragshdrid)))
+        
+        self.progid = GL.glCreateProgram()
+        GL.glAttachShader(self.progid, self.vtxshdrid)
+        GL.glAttachShader(self.progid, self.fragshdrid)
+        GL.glLinkProgram(self.progid)
+
+        if GL.glGetProgramiv(self.progid, GL.GL_LINK_STATUS) != GL.GL_TRUE:
+            sys.stderr.write("{}\n".format(GL.glGetProgramInfoLog(self.progid)))
+            sys.exit(-1)
+
+        GL.glUseProgram(self.progid)
+
+        if _debug_shaders: sys.stderr.write("Label Object Shader created with progid {}\n".format(self.progid))
+        
+        err = GL.glGetError()
+        if err != GL.GL_NO_ERROR:
+            sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
+            sys.exit(-1)
+
+        self.init_lights_and_camera()
+        
 
 # ======================================================================
 # This goes with _OBJ_TYPE_CURVE and CurveCollection

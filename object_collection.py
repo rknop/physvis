@@ -463,6 +463,7 @@ class LabelObjectCollection(GLObjectCollection):
     """A collection of labels that face the camera at all times."""
 
     _MAX_LABELS_PER_COLLECTION = 64
+    _TEXTURE_SIZE = 256
     
     def __init__(self, context, *args, **kwargs):
         super().__init__(context, *args, **kwargs)
@@ -489,7 +490,8 @@ class LabelObjectCollection(GLObjectCollection):
         GL.glActiveTexture(GL.GL_TEXTURE0)
         GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
         GL.glTexStorage3D(GL.GL_TEXTURE_2D_ARRAY, 1, GL.GL_RGBA8,
-                          256, 256, LabelObjectCollection._MAX_LABELS_PER_COLLECTION)
+                          LabelObjectCollection._TEXTURE_SIZE, LabelObjectCollection._TEXTURE_SIZE,
+                          LabelObjectCollection._MAX_LABELS_PER_COLLECTION)
 
         GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)
         GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)
@@ -671,7 +673,8 @@ class LabelObjectCollection(GLObjectCollection):
             # texture image data
             GL.glActiveTexture(GL.GL_TEXTURE0)
             GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
-            GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex, 256, 256, 1,
+            GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex,
+                               LabelObjectCollection._TEXTURE_SIZE, LabelObjectCollection._TEXTURE_SIZE, 1,
                                GL.GL_RGBA, GL_UNSIGNED_BYTE, obj.texturedata)
 
             self.do_update_object_matrix(obj)

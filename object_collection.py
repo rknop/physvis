@@ -696,7 +696,7 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
         
             
-GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
+### GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
         
 # ======================================================================
 # CurveCollection

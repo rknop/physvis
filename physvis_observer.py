@@ -38,7 +38,6 @@ class Subject(object):
 
     _threadlock = threading.RLock()
 
-
     def __init__(self, *args, **kwargs):
         super().__init__()
         self._id = uuid.uuid4()
@@ -51,9 +50,8 @@ class Subject(object):
 
     def broadcast(self, message):
         """Call this on yourself to broadcast message to all listeners."""
-        with Subject._threadlock:
-            for listener in self.listeners:
-                listener.receive_message(message, self)
+        for listener in self.listeners:
+            listener.receive_message(message, self)
 
     def add_listener(self, listener):
         """Add Observer listener to the list of things that gets messages."""

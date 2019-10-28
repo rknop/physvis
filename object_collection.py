@@ -619,13 +619,13 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
             
-            # sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
-            #                  "offset ({}, {}) and size ({}, {})\n"
-            #                  .format(obj.pos[0], obj.pos[1], obj.pos[2],
-            #                          obj.glxoff, obj.glyoff,
-            #                          obj.fullwid, obj.fullhei) )
-            # for i in range(6):
-            #     sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
+            sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
+                             "offset ({}, {}) and size ({}, {})\n"
+                             .format(obj.pos[0], obj.pos[1], obj.pos[2],
+                                     obj.glxoff, obj.glyoff,
+                                     obj.fullwid, obj.fullhei) )
+            for i in range(6):
+                sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
 
             # texture coordinates
             #

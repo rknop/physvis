@@ -39,6 +39,34 @@ class LabelObject(GrObject):
     axis, up.  If you try to set any of these, strange and unexpected
     things will happen.  (I should make it so that doesn't happen.)
 
+    The following properties exist; they may be set directly, or passed
+    to the object initialization.
+
+    text — the text to render
+    font — one of 'serif', 'sans-serif', 'cursive', 'fantasy', or 'monospace'
+    height — The height of the font -- really, the point size of the font (default: 12)
+    italic — True or False to italicize (default: True)
+    bold — True or False for bold text (default; False)
+
+    pos — a 3d vector, the reference position for where the label is
+    color — three values, the r, g, and b values of the text (between 0 and 1)
+
+    units — units for xoffset, yoffset, refheight.  There are three posibilities.
+             "display" means distances correspond to distances in world.
+             "centidisplay" (the default) is distances in world * 100
+                (so 25 would be 1/4 of one in-world unit).
+             "pixels" is not implemented.
+    xoffset, yoffset — By default, the label is positioned so that the
+           center of the bottom of the label is at the reference point
+           specified by pos.  Give these values to offset the label from
+           that position; the units are given by the "units" keyword.
+    refheight — A "reference height".  The height in units of a
+           character in a 12-point font.  Defaults to 25 centidisplay
+           units (or 0.25 display units).
+    box — Set to True to draw a box around the text (default: True)
+    border — Border in points between the text and the box (default: 1)
+    linecolor — Color of the border (default: same as text)
+    linewidth — Width of the border line in points (default: 1)
     """
 
     _known_units = ['display', 'centidisplay', 'pixels']
@@ -64,10 +92,11 @@ class LabelObject(GrObject):
 
 
 
-    def __init__(self, xoffset=0., yoffset=0.,
-                 text="test", font="serif", italic=True, bold=False,
-                 height=25, width=None, units='centidisplay',
-                 border=0.025, box=True, *args, **kwargs):
+    def __init__(self, text="test", font="serif", italic=True,
+                 bold=False, height=12, units='centidisplay',
+                 xoffset=0., yoffset=0., refheight=25,
+                 box=True, border=1, linecolor=None, linewidth=1,
+                 *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         with Subject._threadlock:
@@ -81,17 +110,19 @@ class LabelObject(GrObject):
 
         if not font in LabelObject._known_fonts:
             raise Exception("Unknown font\"{}\"; known values are {}".format(font, LabelObject._known_fonts))
+        self._text = text
         self._font = font
-
-        self._height = height
-        self._width = width
         self._italic = italic
         self._bold = bold
-        self._border = border
-        self._box = box
-        self._text = text
+        self._height = height
         self._xoff = xoffset
         self._yoff = yoffset
+        self._refheight = refheight
+        self._box = box
+        self._border = border
+        self._linecolor = linecolor
+        self._linewidth = linewidth
+
         self.glxoff = 0.
         self.glyoff = 0.
         self.texturedata = numpy.empty( (LabelObjectCollection._TEXTURE_SIZE,
@@ -143,54 +174,12 @@ class LabelObject(GrObject):
         self.update_vertices()
 
     @property
-    def xoffset(self):
-        return self._xoff
+    def text(self):
+        return self._text
 
-    @xoffset.setter
-    def xoffset(self, value):
-        self._xoff = value
-        self.update_vertices()
-
-    @property
-    def yoffset(self):
-        return self._yoff
-
-    @yoffset.setter
-    def yoffset(self, value):
-        self._yoff = value
-        self.update_vertices()
-
-    @property
-    def units(self):
-        return self._units
-
-    @units.setter
-    def units(self, value):
-        if not value in LabelObject._known_units:
-            raise Exception("Unknown unit \"{}\"".format(value))
-        self._units = value
-        self.render_text()
-        self.update_everything()
-
-    @property
-    def height(self):
-        return self._height
-
-    @height.setter
-    def height(self, value):
-        self._height = value
-        self._width = None
-        self.render_text()
-        self.update_everything()
-
-    @property
-    def width(self):
-        return self._width
-
-    @width.setter
-    def width(self, value):
-        self._width = value
-        self._height = None
+    @text.setter
+    def text(self):
+        self._text = text
         self.render_text()
         self.update_everything()
 
@@ -206,6 +195,17 @@ class LabelObject(GrObject):
             self._font = value
             self.render_text()
             self.update_everything()
+
+    @property
+    def height(self):
+        return self._height
+
+    @height.setter
+    def height(self, value):
+        self._height = value
+        self._width = None
+        self.render_text()
+        self.update_everything()
 
     @property
     def italic(self):
@@ -230,16 +230,45 @@ class LabelObject(GrObject):
             self.update_everything()
 
     @property
-    def border(self):
-        return self._border
+    def units(self):
+        return self._units
 
-    @border.setter
-    def border(self, value):
-        if self._border != value:
-            self._border = value
-            self.render_text()
-            self.update_everything()
+    @units.setter
+    def units(self, value):
+        if not value in LabelObject._known_units:
+            raise Exception("Unknown unit \"{}\"".format(value))
+        self._units = value
+        self.render_text()
+        self.update_everything()
 
+    @property
+    def xoffset(self):
+        return self._xoff
+
+    @xoffset.setter
+    def xoffset(self, value):
+        self._xoff = value
+        self.update_vertices()
+
+    @property
+    def yoffset(self):
+        return self._yoff
+
+    @yoffset.setter
+    def yoffset(self, value):
+        self._yoff = value
+        self.update_vertices()
+
+    @property
+    def refheight(self):
+        return self._refheight
+
+    @refheight.setter
+    def refheight(self, value):
+        self._refheight = value
+        self.render_text()
+        self.update_everything()
+        
     @property
     def box(self):
         return self._box
@@ -252,15 +281,15 @@ class LabelObject(GrObject):
             self.update_everything()
 
     @property
-    def text(self):
-        return self._text
+    def border(self):
+        return self._border
 
-    @text.setter
-    def text(self):
-        self._text = text
-        self.render_text()
-        self.update_everything()
-
+    @border.setter
+    def border(self, value):
+        if self._border != value:
+            self._border = value
+            self.render_text()
+            self.update_everything()
 
     def update_everything(self):
         self.broadcast("update everything")
@@ -289,18 +318,27 @@ class LabelObject(GrObject):
         scf = cairo.ScaledFont(font, ctx.get_font_matrix(), ctx.get_matrix(), cairo.FontOptions())
         xbear, ybear, wid, hei, xadv, yadv = scf.text_extents(self._text)
 
-        # Scale the font so that the width will fill imwid - 6 - 2*border (if there is a border)
-        if hei > wid:
-            if self._border:
-                fsize = (imwid - 6 - 2*self.border) / (hei/100.)
-            else:
-                fsize = (imwid - 6) / (wid/100.)
+        # We are given self._height as the point size of the font,self._border in
+        # points as the distance from the edge of the word to the
+        # border, and self._linewidth in points as the width of the border
+        # line.  We want to just fit this into a imwid × imwid image.  Figure out
+        # what point size fsize we should tell Cairo to make this work
+
+        if self._box:
+            fullwid = wid + 2 * ( (self._border + self._linewidth) * ( 100./self._height ) )
+            fullhei = hei + 2 * ( (self._border + self._linewidth) * ( 100./self._height ) )
         else:
-            if self._border:
-                fsize = (imwid - 6 - 2*self.border) / (wid/100.)
-            else:
-                fsize = (imwid - 6) / (wid/100.)
+            fullwid = wid
+            fullhei = hei
+
+        if fullwid > fullhei:
+            fsize = imwid / fullwid * 100
+        else:
+            fsize = imwid / fullhei * 100
+            
         ctx.set_font_size(fsize)
+        bordersp = self._border * fsize / self._height
+        linew = self._linewidth * fsize / self._height
 
         # Get a path representing the text, and figure out how big it is
         ctx.text_path(self._text)
@@ -312,7 +350,7 @@ class LabelObject(GrObject):
         #   figure it what it covers on the image,
         #   and draw it.
         xpos = imwid//2 - (x1-x0)/2
-        ypos = imwid - ( y1 + self.border + 4 if self._box else y1 )
+        ypos = imwid - (y1 + bordersp+linew if self._box else y1 )
         ctx.new_path()
         ctx.move_to(xpos, ypos)
         ctx.text_path(self._text)
@@ -320,12 +358,17 @@ class LabelObject(GrObject):
         ctx.fill()
 
         if self._box:
-            # Draw a box around the text
-            # ROB! Think about line width
-            ctx.move_to(x0-self.border, y0-self.border)
-            ctx.line_to(x1+self.border, y0-self.border)
-            ctx.line_to(x1+self.border, y1+self.border)
-            ctx.line_to(x0-self.border, y1+self.border)
+            if self._linecolor is not None:
+                ctx.set_source_rgb(self._linecolor[0], self._linecolor[1], self._linecolor[2])
+            udx, udy = ctx.device_to_user_distance(linew, linew)
+            if udx > udy:
+                ctx.set_line_width(udx)
+            else:
+                ctx.set_line_width(udy)
+            ctx.move_to(x0-bordersp, y0-bordersp)
+            ctx.line_to(x1+bordersp, y0-bordersp)
+            ctx.line_to(x1+bordersp, y1+bordersp)
+            ctx.line_to(x0-bordersp, y1+bordersp)
             ctx.close_path()
             ctx.stroke()
 
@@ -346,7 +389,9 @@ class LabelObject(GrObject):
             self.texturedata[:, :, 3] = data[:, :, 0]
 
 
-        # Figure out what the width and height of the polygon should be
+        # Figure out what the width and height of the polygon should be.
+        # They get stored in fullwid and fullhei (the renderer will use
+        # those two fields)
 
         factor = 1.
         if self._units == "pixels":
@@ -356,19 +401,9 @@ class LabelObject(GrObject):
 
         glxoff = factor * self._xoff
         glyoff = factor * self._yoff
-            
-        if self._height is not None:
-            self.fullhei = imwid / (y1-y0) * self._height * factor
-            # self.fullwid = self.fullhei * (x1-x0) / (y1-y0)
-            self.fullwid = self.fullhei
-        elif self._width is not None:
-            self.fullwid = imwid / (x1-x0) * self._width * factor
-            # self.fullhei = self.fullwid * (y1-y0) / (x1-x0)
-            self.fullwid = self.fullhei
-        else:
-            self.fullhei = imwid / (y1-y0)
-            # self.fullwid = self.fullhei * (x1-x0) / (y1-y0)
-            self.fullwid = self.fullhei
+
+        self.fullhei = factor * self._refheight * self._height / 12.
+        self.fullwid = self.fullhei
 
         # ... is there anything else I need to do?
             

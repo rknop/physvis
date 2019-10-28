@@ -36,9 +36,9 @@ class LabelObject(GrObject):
     """A label is a text string that always faces the camera.
 
     Some standard object properties are ignored, including rot, scale,
-    axis, up.
+    axis, up.  If you try to set any of these, strange and unexpected
+    things will happen.  (I should make it so that doesn't happen.)
 
-    Actually, I think scale might do something unexpected.
     """
 
     _known_units = ['display', 'centidisplay', 'pixels']
@@ -266,6 +266,7 @@ class LabelObject(GrObject):
         self.broadcast("update everything")
 
     def update_vertices(self):
+        self.update_model_matrix()
         self.broadcast("update vertices")
 
     def render_text(self):
@@ -279,8 +280,8 @@ class LabelObject(GrObject):
         bold = cairo.FONT_WEIGHT_BOLD if self._bold else cairo.FONT_WEIGHT_NORMAL
         font = cairo.ToyFontFace(self._font, italic, bold)
         ctx.set_font_face(font)
-        sys.stderr.write("Setting text color to r={}, g={}, b={}\n"
-                         .format(self.color[0], self.color[1], self.color[2]))
+        # sys.stderr.write("Setting text color to r={}, g={}, b={}\n"
+        #                  .format(self.color[0], self.color[1], self.color[2]))
         ctx.set_source_rgb(self.color[0], self.color[1], self.color[2])
 
         # Figure out how big the word is going to be with font size 100

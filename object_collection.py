@@ -25,7 +25,7 @@
 
 from grcontext import *
 
-_debug_shaders = True
+_debug_shaders = False
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -145,6 +145,7 @@ class GLObjectCollection(Observer):
         with Subject._threadlock:
             if not obj._id in self.objects:
                 return
+            # sys.stderr.write("Pushing object matrix:\n{}\n".format(obj.model_matrix))
             dex = self.object_index[obj._id]
             GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
             GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
@@ -502,12 +503,6 @@ class LabelObjectCollection(GLObjectCollection):
         GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)
         GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)
         
-        self.objposbuffer = GL.glGenBuffers(1)
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
-        # 4 bytes per float * 4 floats per vertex * 3 vertices per triangle * 2 triangles per label
-        GL.glBufferData(GL.GL_ARRAY_BUFFER, 4*4*3*2 * LabelObjectCollection._MAX_LABELS_PER_COLLECTION,
-                        None, GL.GL_DYNAMIC_DRAW)
-
         self.labelposbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
         # 4 bytes per float * 2 floats per vertex * 3 vertices per triange * 2 triangles per label
@@ -539,25 +534,21 @@ class LabelObjectCollection(GLObjectCollection):
     def bind_vertex_attribs(self):
         GL.glBindVertexArray(self.VAO)
 
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
-        GL.glVertexAttribPointer(0, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+        GL.glVertexAttribPointer(0, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
         GL.glEnableVertexAttribArray(0)
 
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
         GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
         GL.glEnableVertexAttribArray(1)
 
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
-        GL.glVertexAttribPointer(2, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glVertexAttribIPointer(2, 1, GL.GL_INT, 0, None)
         GL.glEnableVertexAttribArray(2)
 
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
         GL.glVertexAttribIPointer(3, 1, GL.GL_INT, 0, None)
         GL.glEnableVertexAttribArray(3)
-
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
-        GL.glVertexAttribIPointer(4, 1, GL.GL_INT, 0, None)
-        GL.glEnableVertexAttribArray(4)
 
 
     def canyoutake(self, obj):
@@ -569,7 +560,7 @@ class LabelObjectCollection(GLObjectCollection):
 
     def add_object(self, obj):
         # Make sure not to double-add
-        sys.stderr.write("Adding a label...\n")
+        # sys.stderr.write("Adding a label...\n")
         if obj._id in self.objects:
             return
 
@@ -610,13 +601,6 @@ class LabelObjectCollection(GLObjectCollection):
                 return
             dex = self.object_index[obj._id]
 
-            # 6 copies of the object position for the 6 vertices of the two triangles
-            pos = numpy.ones(4, dtype=numpy.float32)
-            pos[0:3] = obj.pos
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
-            for i in range(6):
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4*4 + 4*4*i, pos)
-        
             # triangle positions
             # I'm worried about left hand forward
             tris = numpy.ones( (6, 2) , dtype=numpy.float32)
@@ -635,12 +619,13 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
             
-            sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with offset ({}, {}) and size ({}, {})\n"
-                             .format(obj.pos[0], obj.pos[1], obj.pos[2],
-                                     obj.glxoff, obj.glyoff,
-                                     obj.fullwid, obj.fullhei) )
-            for i in range(6):
-                sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
+            # sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
+            #                  "offset ({}, {}) and size ({}, {})\n"
+            #                  .format(obj.pos[0], obj.pos[1], obj.pos[2],
+            #                          obj.glxoff, obj.glyoff,
+            #                          obj.fullwid, obj.fullhei) )
+            # for i in range(6):
+            #     sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
 
             # texture coordinates
             #
@@ -1238,17 +1223,16 @@ layout (std140) uniform Colors
    vec4 color[{maxnumobj}];
 }};
 
-layout(location=0) in vec4 obj_Position;
-layout(location=1) in vec2 label_Position;
-layout(location=2) in vec2 texCoord;
-layout(location=3) in int in_Index;
-layout(location=4) in int in_tex_Index;
+layout(location=0) in vec2 label_Position;
+layout(location=1) in vec2 texCoord;
+layout(location=2) in int in_Index;
+layout(location=3) in int in_tex_Index;
 out vec2 uv;
 flat out int texIndex;
 
 void main(void)
 {{
-  vec4 objpos = viewrot * viewshift * model_matrix[in_Index] * obj_Position;
+  vec4 objpos = viewrot * viewshift * model_matrix[in_Index] * vec4(0., 0., 0., 1.);
   gl_Position = projection * vec4( objpos.x + label_Position.x, objpos.y + label_Position.y, objpos.z, 1. );
   // gl_Position = projection * viewrot * viewshift * model_matrix[in_Index] * 
   //               ( obj_Position + vec4(label_Position.x, label_Position.y, 0., 0. ) );

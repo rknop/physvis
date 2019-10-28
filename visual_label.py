@@ -36,7 +36,10 @@ class LabelObject(GrObject):
     """A label is a text string that always faces the camera.
 
     Some standard object properties are ignored, including rot, scale,
-    axis, up.  """
+    axis, up.
+
+    Actually, I think scale might do something unexpected.
+    """
 
     _known_units = ['display', 'centidisplay', 'pixels']
     _known_fonts = ['serif', 'sans-serif', 'cursive', 'fantasy', 'monospace']
@@ -63,14 +66,15 @@ class LabelObject(GrObject):
 
     def __init__(self, xoffset=0., yoffset=0.,
                  text="test", font="serif", italic=True, bold=False,
-                 height=0.25, width=None, units='centidisplay', color=None,
+                 height=25, width=None, units='centidisplay',
                  border=0.025, box=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         with Subject._threadlock:
             if LabelObject._is_little_endian is None:
                 LabelObject._is_little_endian = LabelObject.isLittleE()
-        
+
+        self._object_type = GLObjectCollection._OBJ_TYPE_LABEL
         if not units in LabelObject._known_units:
             raise Exception("Unknown unit \"{}\"".format(unit))
         self._units = units
@@ -88,8 +92,10 @@ class LabelObject(GrObject):
         self._text = text
         self._xoff = xoffset
         self._yoff = yoffset
-        self.texturedata = numpy.array( (LabelObjectCollection._TEXTURE_SIZE,
-                                         LabelObjectCollection._TEXTURE_SIZE) , dtype=numpy.ubyte )
+        self.glxoff = 0.
+        self.glyoff = 0.
+        self.texturedata = numpy.empty( (LabelObjectCollection._TEXTURE_SIZE,
+                                         LabelObjectCollection._TEXTURE_SIZE, 4) , dtype=numpy.ubyte )
         
         self.render_text()
 
@@ -265,29 +271,38 @@ class LabelObject(GrObject):
     def render_text(self):
         imwid = LabelObjectCollection._TEXTURE_SIZE
         # Create a memory surface to render to and a drawing context
-        img = cairo.IamgeSurface(ciaro.FORMAT_ARGB32, imwid, imwid)
+        img = cairo.ImageSurface(cairo.FORMAT_ARGB32, imwid, imwid)
         ctx = cairo.Context(img)
 
         # Get the font, make it a color
         italic = cairo.FONT_SLANT_ITALIC if self._italic else cairo.FONT_SLANT_NORMAL
         bold = cairo.FONT_WEIGHT_BOLD if self._bold else cairo.FONT_WEIGHT_NORMAL
-        font cairo.ToyFontFace(self._font, italic, bold)
+        font = cairo.ToyFontFace(self._font, italic, bold)
         ctx.set_font_face(font)
-        ctx.set_source_rgb(self.color)
+        sys.stderr.write("Setting text color to r={}, g={}, b={}\n"
+                         .format(self.color[0], self.color[1], self.color[2]))
+        ctx.set_source_rgb(self.color[0], self.color[1], self.color[2])
 
         # Figure out how big the word is going to be with font size 100
         ctx.set_font_size(100)
         scf = cairo.ScaledFont(font, ctx.get_font_matrix(), ctx.get_matrix(), cairo.FontOptions())
-        xbear, ybear, wid, hei, xadv, yadv = scf.text_extents(text)
+        xbear, ybear, wid, hei, xadv, yadv = scf.text_extents(self._text)
 
         # Scale the font so that the width will fill imwid - 6 - 2*border (if there is a border)
-        if self._border:
-            ctx.set_font_size( (imwid - 6 - 2*self.border) / (wid/100.) )
+        if hei > wid:
+            if self._border:
+                fsize = (imwid - 6 - 2*self.border) / (hei/100.)
+            else:
+                fsize = (imwid - 6) / (wid/100.)
         else:
-            ctx.set_font_size( (imwid - 6) / (wid/100.) )
+            if self._border:
+                fsize = (imwid - 6 - 2*self.border) / (wid/100.)
+            else:
+                fsize = (imwid - 6) / (wid/100.)
+        ctx.set_font_size(fsize)
 
         # Get a path representing the text, and figure out how big it is
-        ctx.text_path(text)
+        ctx.text_path(self._text)
         x0, y0, x1, y1 = ctx.fill_extents()
 
         # Set the position offset from the center of
@@ -296,20 +311,20 @@ class LabelObject(GrObject):
         #   figure it what it covers on the image,
         #   and draw it.
         xpos = imwid//2 - (x1-x0)/2
-        ypos = imwid//2
+        ypos = imwid - ( y1 + self.border + 4 if self._box else y1 )
         ctx.new_path()
         ctx.move_to(xpos, ypos)
-        ctx.text_path(text)
+        ctx.text_path(self._text)
         x0, y0, x1, y1 = ctx.fill_extents()
         ctx.fill()
 
         if self._box:
             # Draw a box around the text
             # ROB! Think about line width
-            ctx.move_to(x0-border, y0-border)
-            ctx.line_to(x1+border, y0-border)
-            ctx.line_to(x1+border, y1+border)
-            ctx.line_to(x0-border, y1+border)
+            ctx.move_to(x0-self.border, y0-self.border)
+            ctx.line_to(x1+self.border, y0-self.border)
+            ctx.line_to(x1+self.border, y1+self.border)
+            ctx.line_to(x0-self.border, y1+self.border)
             ctx.close_path()
             ctx.stroke()
 
@@ -329,6 +344,33 @@ class LabelObject(GrObject):
             self.texturedata[:, :, 0:2] = data[:, :, 1:3]
             self.texturedata[:, :, 3] = data[:, :, 0]
 
-        # ROB YOU STOPPED HERE, MORE NEEDS TO BE DONE
+
+        # Figure out what the width and height of the polygon should be
+
+        factor = 1.
+        if self._units == "pixels":
+            raise Exception("Pixel units for labels isn't implemented")
+        elif self.units == "centidisplay":
+            factor = 0.01
+
+        glxoff = factor * self._xoff
+        glyoff = factor * self._yoff
+            
+        if self._height is not None:
+            self.fullhei = imwid / (y1-y0) * self._height * factor
+            # self.fullwid = self.fullhei * (x1-x0) / (y1-y0)
+            self.fullwid = self.fullhei
+        elif self._width is not None:
+            self.fullwid = imwid / (x1-x0) * self._width * factor
+            # self.fullhei = self.fullwid * (y1-y0) / (x1-x0)
+            self.fullwid = self.fullhei
+        else:
+            self.fullhei = imwid / (y1-y0)
+            # self.fullwid = self.fullhei * (x1-x0) / (y1-y0)
+            self.fullwid = self.fullhei
+
+        # ... is there anything else I need to do?
+            
         
-        
+    def destroy(self):
+        raise Exception("OMG ROB!  You need to figure out how to destroy things!")

@@ -488,6 +488,11 @@ def axes(*args, **kwargs):
     """Returns a tuple of three objects, an x-axis, a y-axis, and a z-axis.  Call this to quickly generate axes."""
     return ( xaxis(), yaxis(), zaxis() )
 
+
+def label(*args, **kwargs):
+    import visual_label
+    return visual_label.LabelObject(*args, **kwargs)
+
 # ======================================================================
 
 def scene():

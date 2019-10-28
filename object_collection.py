@@ -25,7 +25,7 @@
 
 from grcontext import *
 
-_debug_shaders = False
+_debug_shaders = True
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -413,11 +413,11 @@ class SimpleObjectCollection(GLObjectCollection):
 
         # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata.flatten())
 
         # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata.flatten())
 
         objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
         objindexcopies[:] = dex
@@ -457,7 +457,11 @@ GLObjectCollection.register_collection_type(SimpleObjectCollection, GLObjectColl
 # ======================================================================
 # LabelObjectCollection
 #
-# Rob, doc this
+# A label is drawn as two triangles that make a square.  The label has
+# an "object position" which is the reference point in 3d space; it
+# refers to the middle-bottom of the text (or the surrounding box if
+# there is one).  It also includes offsets and sizes which are in view
+# space (not clip space).
 
 class LabelObjectCollection(GLObjectCollection):
     """A collection of labels that face the camera at all times."""
@@ -470,7 +474,7 @@ class LabelObjectCollection(GLObjectCollection):
         self.shader = Shader.get("Label Object Shader", context)
 
         self.label_texture_index = {}
-        self.texture_spot_used = numpy.array( (_MAX_LABELS_PER_COLLECTION), dtype=bool)
+        self.texture_spot_used = numpy.empty( (LabelObjectCollection._MAX_LABELS_PER_COLLECTION), dtype=bool)
         self.texture_spot_used[:] = False
 
         self.pending_labels = 0
@@ -533,7 +537,7 @@ class LabelObjectCollection(GLObjectCollection):
         self.is_initialized = True
 
     def bind_vertex_attribs(self):
-        GL.glBIndVertexArray(self.VAO)
+        GL.glBindVertexArray(self.VAO)
 
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
         GL.glVertexAttribPointer(0, 4, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
@@ -541,7 +545,7 @@ class LabelObjectCollection(GLObjectCollection):
 
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
         GL.glVertexAttribPointer(1, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
-        GL.glEnableVertexAttribArray(2)
+        GL.glEnableVertexAttribArray(1)
 
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
         GL.glVertexAttribPointer(2, 2, GL.GL_FLOAT, GL.GL_FALSE, 0, None)
@@ -549,15 +553,15 @@ class LabelObjectCollection(GLObjectCollection):
 
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         GL.glVertexAttribIPointer(3, 1, GL.GL_INT, 0, None)
-        GL.glEnableVertexAttribArray(1)
+        GL.glEnableVertexAttribArray(3)
 
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
         GL.glVertexAttribIPointer(4, 1, GL.GL_INT, 0, None)
-        GL.glEnableVertexAttribArray(1)
+        GL.glEnableVertexAttribArray(4)
 
 
     def canyoutake(self, obj):
-        if ob._object_type != self.my_object_type:
+        if obj._object_type != self.my_object_type:
             return False
         if len(self.objects) >= LabelObjectCollection._MAX_LABELS_PER_COLLECTION + self.pending_labels:
             return False
@@ -565,6 +569,7 @@ class LabelObjectCollection(GLObjectCollection):
 
     def add_object(self, obj):
         # Make sure not to double-add
+        sys.stderr.write("Adding a label...\n")
         if obj._id in self.objects:
             return
 
@@ -579,6 +584,7 @@ class LabelObjectCollection(GLObjectCollection):
         with Subject._threadlock:
             if obj._id in self.objects:
                 return
+            self.objects[obj._id] = obj
             self.object_index[obj._id] = len(self.objects) - 1
             for i in range(self.texture_spot_used.shape[0]):
                 if not self.texture_spot_used[i]:
@@ -603,33 +609,43 @@ class LabelObjectCollection(GLObjectCollection):
             if not obj._id in self.objects:
                 return
             dex = self.object_index[obj._id]
-        
+
             # 6 copies of the object position for the 6 vertices of the two triangles
             pos = numpy.ones(4, dtype=numpy.float32)
             pos[0:3] = obj.pos
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objposbuffer)
             for i in range(6):
-                GL.glBufferSubData(GL.GL_ARRRAY_BUFFER, dex*6*4*4 + 4*4*i, pos)
+                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4*4 + 4*4*i, pos)
         
             # triangle positions
-            tris = numpy.ones(6, 2)
-            tris[0, 0] = obj.xoffset - obj.fullwid/2.
-            tris[0, 1] = obj.yoffset
-            tris[1, 0] = obj.xoffset + obj.fullwid/2.
-            tris[1, 1] = obj.yoffset
-            tris[2, 0] = obj.xoffset - obj.fullwid/2.
-            tris[2, 1] = obj.yoffset + obj.fullhei
-            tris[3, 0] = obj.xoffset + obj.fullwid/2.
-            tris[3, 1] = obj.yoffset
-            tris[4, 0] = obj.xoffset + obj.fullwid/2.
-            tris[4, 1] = obj.yoffset + obj.fullhei
-            tris[5, 0] = obj.xoffset - obj.fullwid/2.
-            tris[5, 1] = obj.yoffset + obj.fullhei
+            # I'm worried about left hand forward
+            tris = numpy.ones( (6, 2) , dtype=numpy.float32)
+            tris[0, 0] = obj.glxoff - obj.fullwid/2.
+            tris[0, 1] = obj.glyoff + obj.fullhei
+            tris[1, 0] = obj.glxoff + obj.fullwid/2.
+            tris[1, 1] = obj.glyoff + obj.fullhei
+            tris[2, 0] = obj.glxoff - obj.fullwid/2.
+            tris[2, 1] = obj.glyoff
+            tris[3, 0] = obj.glxoff + obj.fullwid/2.
+            tris[3, 1] = obj.glyoff + obj.fullhei
+            tris[4, 0] = obj.glxoff + obj.fullwid/2.
+            tris[4, 1] = obj.glyoff
+            tris[5, 0] = obj.glxoff - obj.fullwid/2.
+            tris[5, 1] = obj.glyoff
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
+            
+            sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with offset ({}, {}) and size ({}, {})\n"
+                             .format(obj.pos[0], obj.pos[1], obj.pos[2],
+                                     obj.glxoff, obj.glyoff,
+                                     obj.fullwid, obj.fullhei) )
             for i in range(6):
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4 + 2*4*i, tris[i, :])
+                sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
 
             # texture coordinates
+            #
+            # I don't understsand this: when I swap 1<->0 in y, the text renders
+            # exactly the same way.  I would think it would flip the thing vertically
             texcoords = numpy.array( [0., 0.,
                                       1., 0.,
                                       0., 1.,
@@ -637,16 +653,21 @@ class LabelObjectCollection(GLObjectCollection):
                                       1., 1.,
                                       0., 1.] , dtype=numpy.float32)
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
-            GL.glBufferSubDAta(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
 
     def push_all_object_info(self, obj):
         with Subject._threadlock:
+            sys.stderr.flush()
             if not obj._id in self.objects:
+                sys.stderr.write("LabelObjectCollection: tried to push object info for label not in collection")
+                sys.stderr.flush()
                 return
             dex = self.object_index[obj._id]
             texdex = self.label_texture_index[obj._id]
 
-            self.push_object_vertices()
+            sys.stderr.flush()
+            self.push_object_vertices(obj)
+            sys.stderr.flush()
 
             # object index
             objindexcopies = numpy.empty(6, dtype=numpy.int32)
@@ -668,14 +689,27 @@ class LabelObjectCollection(GLObjectCollection):
                                       1., 1.,
                                       0., 1.] , dtype=numpy.float32)
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
-            GL.glBufferSubDAta(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
 
             # texture image data
+            # ####
+            # sys.stderr.write("Writing texture image to test.ppm, alpha in test.pgm\n")
+            # ofppm = open("test.ppm", "wb")
+            # ofpgm = open("test.pgm", "wb")
+            # ofppm.write("P6 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
+            # ofpgm.write("P5 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
+            # for j in range(LabelObjectCollection._TEXTURE_SIZE):
+            #     for i in range(LabelObjectCollection._TEXTURE_SIZE):
+            #         ofppm.write(obj.texturedata[j, i, (0, 1, 2)])
+            #         ofpgm.write(obj.texturedata[j, i, 3])
+            # ofppm.close()
+            # ofpgm.close()
+            # ####
             GL.glActiveTexture(GL.GL_TEXTURE0)
             GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
             GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex,
                                LabelObjectCollection._TEXTURE_SIZE, LabelObjectCollection._TEXTURE_SIZE, 1,
-                               GL.GL_RGBA, GL_UNSIGNED_BYTE, obj.texturedata)
+                               GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, obj.texturedata)
 
             self.do_update_object_matrix(obj)
             # Color is irrelevant here
@@ -687,6 +721,8 @@ class LabelObjectCollection(GLObjectCollection):
     def draw(self):
         with Subject._threadlock:
             GL.glUseProgram(self.shader.progid)
+            GL.glEnable(GL.GL_BLEND);
+            GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);  
             self.bind_uniform_buffers()
             self.bind_vertex_attribs()
             self.shader.set_camera_perspective()
@@ -696,7 +732,7 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
         
             
-### GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
+GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
         
 # ======================================================================
 # CurveCollection
@@ -934,6 +970,7 @@ class Shader(object):
 
     _basic_shader = {}
     _curvetube_shader = {}
+    _label_shader = {}
 
     @staticmethod
     def get(name, context):
@@ -961,6 +998,13 @@ class Shader(object):
                     Shader._curvetube_shader[context] = CurveTubeShader(context)
             return Shader._curvetube_shader[context]
 
+        elif name == "Label Object Shader":
+            with Subject._threadlock:
+                if ( (not context in Shader._label_shader) or
+                     (Shader._label_shader[context] == None) ):
+                     Shader._label_shader[context] = LabelObjectShader(context)
+            return Shader._label_shader[context]
+        
         else:
             raise Exception("Unknown shader \"{}\"".format(name))
 
@@ -1194,21 +1238,20 @@ layout (std140) uniform Colors
    vec4 color[{maxnumobj}];
 }};
 
-uniform sampler2dArray label_textures;
-
 layout(location=0) in vec4 obj_Position;
-layout(location=1) in vec2 label_Position
+layout(location=1) in vec2 label_Position;
 layout(location=2) in vec2 texCoord;
 layout(location=3) in int in_Index;
 layout(location=4) in int in_tex_Index;
 out vec2 uv;
-out int texIndex;
+flat out int texIndex;
 
 void main(void)
 {{
-  objpos = projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
-  # What's the right z to use???  (Does it matter?)  (Stacking?)
-  gl_Position = vec4( objpos.x + label_Position.x, objpos.y + label_Position.y, objpos.z, 1. )
+  vec4 objpos = viewrot * viewshift * model_matrix[in_Index] * obj_Position;
+  gl_Position = projection * vec4( objpos.x + label_Position.x, objpos.y + label_Position.y, objpos.z, 1. );
+  // gl_Position = projection * viewrot * viewshift * model_matrix[in_Index] * 
+  //               ( obj_Position + vec4(label_Position.x, label_Position.y, 0., 0. ) );
   texIndex = in_tex_Index;
   uv = texCoord;
 }}""".format(maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
@@ -1222,32 +1265,36 @@ uniform vec3 light1dir;
 uniform vec3 light2color;
 uniform vec3 light2dir;
 
+uniform sampler2DArray label_textures;
+
 in vec2 uv;
-in int texIndex;
+flat in int texIndex;
 out vec4 out_Color;
 
 void main(void)
 {
-  out_Color = texture(label_textures, uv.x, uv.y, texIndex);
+  out_Color = texture(label_textures, vec3(uv.x, uv.y, texIndex));
 }
 """
 
         # I've cut and paste the rest of this from BasicShader...
         #   this begs some refactoring
-        if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
 
+        if _debug_shaders: sys.stderr.write("\nAbout to compile label vertex shader....\n")
         self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)
         GL.glShaderSource(self.vtxshdrid, vertex_shader)
         GL.glCompileShader(self.vtxshdrid)
 
         if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.vtxshdrid)))
 
+        if _debug_shaders: sys.stderr.write("\nAbout to compile label fragment shader....\n")
         self.fragshdrid = GL.glCreateShader(GL.GL_FRAGMENT_SHADER)
         GL.glShaderSource(self.fragshdrid, fragment_shader)
         GL.glCompileShader(self.fragshdrid)
 
         if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.fragshdrid)))
-        
+
+        if _debug_shaders: sys.stderr.write("\nAbout to link shaders....\n")
         self.progid = GL.glCreateProgram()
         GL.glAttachShader(self.progid, self.vtxshdrid)
         GL.glAttachShader(self.progid, self.fragshdrid)

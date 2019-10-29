@@ -386,6 +386,10 @@ class GrContext(Observer):
         # Math from
         # https://www.opengl.org/discussion_boards/showthread.php/197893-View-and-Perspective-matrices
         #
+        # See also
+        #
+        # http://www.songho.ca/opengl/gl_projectionmatrix.html
+        #
         # I should understand this
         #
         # aspect is width/height

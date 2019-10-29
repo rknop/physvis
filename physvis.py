@@ -88,6 +88,7 @@ The following ojects are available
   — ellipsoid
   — faces
   — helix
+  — label
   — sphere
   — tetrahedron
   — octahedron
@@ -269,14 +270,13 @@ DIFFERENCES FROM VPYTHON 6
 
 Many objects are not implemented. physvis includes some objects not in VPython 6
 (e.g. *axis).  (There are also some visual_base.py, e.g. FixedLengthCurve and Icosahedron.
-There may be some parameters some objects take which weren't there in VPython.)
+There may be some parameters some objects take which weren't there in VPython.
 
 An incomplete list things not implemented:
 
 Objects missing:
   * curve (but see visual_base.CylindarStack & visual_base.FixedLengthCurve)
   * extrusion
-  * label
   * local lights
   * points
   * pyramid
@@ -303,6 +303,8 @@ Global features missing:
 Things Changed:
   * There is no "scene" variable; the "scene()" function gets you the default display.
   * I believe the default range of a display is different (bigger)
+  * For label, sizes (height, xoffset, yoffset) are not in the same units as VPython 6
+       There's also no reference line, just the (maybe boxed) text.
   * axes() object is new
   * icosahedron() object is new
   * tetrahedron() object is new
@@ -310,7 +312,7 @@ Things Changed:
   * context= parameter of objects is new (I think)
   * For faces, you don't have to specify the normals; it will default to
     flat faces and calculate the normals if you don't give them.
-  * You can give a faces (3*n*3) array for n trianges, or a (3*n, 3) array.
+  * You can give a faces (3*n*3) array for n triangles, or a (3*n, 3) array.
 
 wxPython interaction is not implemented; for a very long time, it looked
 like wxPython was dead and would not support Python 3.  That's no longer
@@ -490,12 +492,51 @@ def axes(*args, **kwargs):
 
 
 def label(*args, **kwargs):
+    """A label that always faces forward and is the same size regardless of zoom.
+
+    By default, the label is ~1/7 the height of the screen and is an
+    italic serif font.  It's positioned so that the center of the bottom
+    of the text is at the pos you give it.
+
+    You can give it the following properties at initialization, and you can set them:
+
+    text — the text to render
+    font — one of 'serif', 'sans-serif', 'cursive', 'fantasy', or 'monospace'
+    height — The height of the font -- really, the point size of the font (default: 12)
+    italic — True or False to italicize (default: True)
+    bold — True or False for bold text (default; False)
+
+    pos — a 3d vector, the reference position for where the label is
+    color — three values, the r, g, and b values of the text (between 0 and 1)
+
+    units — units for xoffset, yoffset, refheight.  There are three posibilities.
+             "display" means very roughly in units of the dispaly size
+                -- so 0.5 is approximately half the screen height.  (It's
+                not exactly right.)
+             "centidisplay" (the default) is hundreths of the display
+                (so 25 would be approximately a quarter the screen size)
+             "pixels" is not implemented.
+    xoffset, yoffset — By default, the label is positioned so that the
+           center of the bottom of the label is at the reference point
+           specified by pos.  Give these values to offset the label from
+           that position; the units are given by the "units" keyword.
+    refheight — A "reference height".  The height in units of a
+           character in a 12-point font.  Defaults to 15 centidisplay
+           units (or 0.15 display units).
+    box — Set to True to draw a box around the text (default: True)
+    border — Border in points between the text and the box (default: 1)
+    linecolor — Color of the border (default: same as text)
+    linewidth — Width of the border line in points (default: 0.5)
+
+    """
+    
     import visual_label
     return visual_label.LabelObject(*args, **kwargs)
 
 # ======================================================================
 
 def scene():
+
     """Return the first display that was created (perhaps automatically).
 
     Will be None if you haven't made any displays or graphic objects yet.

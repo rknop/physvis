@@ -619,13 +619,13 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
             GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
             
-            sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
-                             "offset ({}, {}) and size ({}, {})\n"
-                             .format(obj.pos[0], obj.pos[1], obj.pos[2],
-                                     obj.glxoff, obj.glyoff,
-                                     obj.fullwid, obj.fullhei) )
-            for i in range(6):
-                sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
+            # sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
+            #                  "offset ({}, {}) and size ({}, {})\n"
+            #                  .format(obj.pos[0], obj.pos[1], obj.pos[2],
+            #                          obj.glxoff, obj.glyoff,
+            #                          obj.fullwid, obj.fullhei) )
+            # for i in range(6):
+            #     sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
 
             # texture coordinates
             #
@@ -1233,7 +1233,8 @@ flat out int texIndex;
 void main(void)
 {{
   vec4 objpos = viewrot * viewshift * model_matrix[in_Index] * vec4(0., 0., 0., 1.);
-  gl_Position = projection * vec4( objpos.x + label_Position.x, objpos.y + label_Position.y, objpos.z, 1. );
+  gl_Position = projection * vec4( objpos.x + label_Position.x*(-objpos.z) , 
+                                   objpos.y + label_Position.y*(-objpos.z) , objpos.z, 1. );
   // gl_Position = projection * viewrot * viewshift * model_matrix[in_Index] * 
   //               ( obj_Position + vec4(label_Position.x, label_Position.y, 0., 0. ) );
   texIndex = in_tex_Index;
@@ -1257,7 +1258,10 @@ out vec4 out_Color;
 
 void main(void)
 {
-  out_Color = texture(label_textures, vec3(uv.x, uv.y, texIndex));
+  vec4 texcolor = texture(label_textures, vec3(uv.x, uv.y, texIndex));
+  if (texcolor.a < 0.2)
+     discard;
+  out_Color = texcolor;
 }
 """
 

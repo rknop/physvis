@@ -5,9 +5,12 @@ from physvis import *
 
 def main():
     axeses = axes()
-    xlab = label(pos=(1., 0., 0.), color=color.red, units='centidisplay', xoffset=50, yoffset=0., text="x", border=True)
-    ylab = label(pos=(0., 1., 0.), color=color.green, xoffset=0., yoffset=0., text="y", border=True)
-    zlab = label(pos=(0., 0., 1.), color=color.blue, xoffset=0., yoffset=0., text="z", border=True)
+    xlab = label(pos=(1., 0., 0.), color=color.red, text="x", border=True,
+                 refheight=15, xoffset=7.5, yoffset=0.)
+    ylab = label(pos=(0., 1., 0.), color=color.green, text="y", border=True,
+                 refheight=15, xoffset=0., yoffset=0.)
+    zlab = label(pos=(0., 0., 1.), color=color.blue, text="z", border=True,
+                 refheight=15, xoffset=-7.5, yoffset=0.)
 
     while True:
         rate(30)

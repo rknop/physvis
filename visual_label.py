@@ -52,21 +52,24 @@ class LabelObject(GrObject):
     color — three values, the r, g, and b values of the text (between 0 and 1)
 
     units — units for xoffset, yoffset, refheight.  There are three posibilities.
-             "display" means distances correspond to distances in world.
-             "centidisplay" (the default) is distances in world * 100
-                (so 25 would be 1/4 of one in-world unit).
+             "display" means very roughly in units of the dispaly size
+                -- so 0.5 is approximately half the screen height.  (It's
+                not exactly right.)
+             "centidisplay" (the default) is hundreths of the display
+                (so 25 would be approximately a quarter the screen size)
              "pixels" is not implemented.
     xoffset, yoffset — By default, the label is positioned so that the
            center of the bottom of the label is at the reference point
            specified by pos.  Give these values to offset the label from
            that position; the units are given by the "units" keyword.
     refheight — A "reference height".  The height in units of a
-           character in a 12-point font.  Defaults to 25 centidisplay
-           units (or 0.25 display units).
+           character in a 12-point font.  Defaults to 15 centidisplay
+           units (or 0.15 display units).
     box — Set to True to draw a box around the text (default: True)
     border — Border in points between the text and the box (default: 1)
     linecolor — Color of the border (default: same as text)
-    linewidth — Width of the border line in points (default: 1)
+    linewidth — Width of the border line in points (default: 0.5)
+
     """
 
     _known_units = ['display', 'centidisplay', 'pixels']
@@ -94,8 +97,8 @@ class LabelObject(GrObject):
 
     def __init__(self, text="test", font="serif", italic=True,
                  bold=False, height=12, units='centidisplay',
-                 xoffset=0., yoffset=0., refheight=25,
-                 box=True, border=1, linecolor=None, linewidth=1,
+                 xoffset=0., yoffset=0., refheight=15.,
+                 box=True, border=1., linecolor=None, linewidth=0.5,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -120,7 +123,11 @@ class LabelObject(GrObject):
         self._refheight = refheight
         self._box = box
         self._border = border
-        self._linecolor = linecolor
+        if linecolor is not None:
+            self._linecolor = numpy.empty(3)
+            self._linecolor[0:3] = linecolor
+        else:
+            self._linecolor = None
         self._linewidth = linewidth
 
         self.glxoff = 0.
@@ -175,6 +182,7 @@ class LabelObject(GrObject):
 
     @property
     def text(self):
+        """The text to show."""
         return self._text
 
     @text.setter
@@ -185,6 +193,7 @@ class LabelObject(GrObject):
 
     @property
     def font(self):
+        """The font.  One of serif, sans-serif, cursive, fantasy, or monospace"""
         return self._font
 
     @font.setter
@@ -198,6 +207,7 @@ class LabelObject(GrObject):
 
     @property
     def height(self):
+        """The point size of the font.  This will be mapped to refheight on the dsiplay"""
         return self._height
 
     @height.setter
@@ -209,6 +219,7 @@ class LabelObject(GrObject):
 
     @property
     def italic(self):
+        """True for an italic font, False otherwise."""
         return self._italic
 
     @italic.setter
@@ -220,6 +231,7 @@ class LabelObject(GrObject):
 
     @property
     def bold(self):
+        """True for a bold font, False otherwise."""
         return self._bold
 
     @bold.setter
@@ -231,6 +243,7 @@ class LabelObject(GrObject):
 
     @property
     def units(self):
+        """Units for offsets and refheight.  One of display, centidisplay.  (Pixels isn't implemented.)"""
         return self._units
 
     @units.setter
@@ -243,6 +256,7 @@ class LabelObject(GrObject):
 
     @property
     def xoffset(self):
+        """x-offset of the label position (in "units" units)."""
         return self._xoff
 
     @xoffset.setter
@@ -252,6 +266,7 @@ class LabelObject(GrObject):
 
     @property
     def yoffset(self):
+        """y-offset of the label position (in "units" units)."""
         return self._yoff
 
     @yoffset.setter
@@ -261,6 +276,7 @@ class LabelObject(GrObject):
 
     @property
     def refheight(self):
+        """A full-size letter of point size height will be this many units high on the display."""
         return self._refheight
 
     @refheight.setter
@@ -271,6 +287,7 @@ class LabelObject(GrObject):
         
     @property
     def box(self):
+        """True to draw a box around the label."""
         return self._box
 
     @box.setter
@@ -282,6 +299,7 @@ class LabelObject(GrObject):
 
     @property
     def border(self):
+        """Spacing between the letters and the lines that make up the box (in points)"""
         return self._border
 
     @border.setter
@@ -290,6 +308,34 @@ class LabelObject(GrObject):
             self._border = value
             self.render_text()
             self.update_everything()
+
+    @property
+    def linewidth(self):
+        """Width of the lines that make up the box (in points)"""
+        return self_linewidth
+
+    @linewidth.setter
+    def linewidth(self, value):
+        if self._linewidth != value:
+            self._linewidth = value
+            self.render_text()
+            self.update_everything()
+
+    @property
+    def linecolor(self):
+        """Color of the lines that make up the box; a 3-element list or tuple"""
+        return self._linecolor
+
+    @linecolor.setter
+    def linecolor(self, rgb):
+        if rgb is None:
+            self._linecolor = None
+        elif len(rgb) != 3:
+            raise Exception("ERROR!  Need all of r, g, and b for linecolor\n")
+        self._linecolor[0:3] = linecolor
+        self.render_text()
+        self.update_everything()
+
 
     def update_everything(self):
         self.broadcast("update everything")
@@ -399,10 +445,18 @@ class LabelObject(GrObject):
         elif self.units == "centidisplay":
             factor = 0.01
 
-        glxoff = factor * self._xoff
-        glyoff = factor * self._yoff
+        self.glxoff = factor * self._xoff
+        self.glyoff = factor * self._yoff
 
-        self.fullhei = factor * self._refheight * self._height / 12.
+        # For the size of the polygon: factor * self._refheight is supposed
+        #   to be the world-space unit height of 12 pixels on the image
+        #   (for a self._height-point font).
+        # fullheight units / imwid pixels = refheight units / 12 points
+        # But my effective refheight is refheight * height / fsize
+        #
+        # so fullheight = imwid * refheight * height / (12 * fsize)
+        
+        self.fullhei = factor * self._refheight * imwid * self._height / (12 * fsize)
         self.fullwid = self.fullhei
 
         # ... is there anything else I need to do?

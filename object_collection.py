@@ -587,8 +587,46 @@ class LabelObjectCollection(GLObjectCollection):
 
             self.pending_labels -= 1
 
-    def do_remove_objgect(self, obj):
-        raise Exception("ROB!  Implement removing labels!")
+    def do_remove_object(self, obj):
+        if not obj._id in self.objects:
+            return
+        dex = self.object_index[obj._id]
+        if dex < len(self.objects)-1:
+            numafter = len(self.objects) - dex
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, (dex+1)*6*2*4, numafter*6*2*4 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, data)
+
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, (dex+1)*6*2*4, numafter*6*2*4 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, data)
+
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+            data = numpy.empty( numafter * 6, dtype=numpy.int32 )
+            GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, (dex+1)*6*1*4, numafter*6*1*4,
+                                   ctypes.c_void_p(data.__array_interface__['data'][0]) )
+            data[:] -= 1
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*1*4, data)
+
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
+            GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, (dex+1)*6*1*4, numafter*6*1*4,
+                                   ctypes.c_void_p(data.__array_interface__['data'][0]) )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*1*4, data)
+
+            for objid in self.objects:
+                if self.object_index[objid] > dex:
+                    self.object_index[objid] -= 1
+
+            self.do_remove_object_uniform_buffer_data(obj)
+                    
+        self.texture_spot_used[self.label_texture_index[obj._id]] = False
+
+        del self.objects[obj._id]
+        del self.label_texture_index[obj._id]
+        obj.remove_listener(self)
+
+        self.context.update()
+            
 
     def update_object_vertices(self, obj):
         if not obj.visible: return

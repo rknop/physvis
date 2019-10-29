@@ -527,6 +527,7 @@ def label(*args, **kwargs):
     border — Border in points between the text and the box (default: 1)
     linecolor — Color of the border (default: same as text)
     linewidth — Width of the border line in points (default: 0.5)
+    visible — (Means the same thing as any other object)
 
     """
     

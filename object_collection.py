@@ -25,7 +25,7 @@
 
 from grcontext import *
 
-_debug_shaders = False
+_debug_shaders = True
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -49,6 +49,7 @@ class GLObjectCollection(Observer):
        — update_object_vertices(grobject) — update the OpenGL data for grobject's vertices
        — canyoutake(grobject) — returns True or False if the collection can handle the object.  (ROB: Race conditions.)
        — probably other things
+       — Must call super().initglstuff() in their __init__
 
     """
 
@@ -82,8 +83,10 @@ class GLObjectCollection(Observer):
         self.context = context
 
         self.my_object_type = GLObjectCollection._OBJ_TYPE_NONE
+        sys.stderr.write("Returning from GLObjectCollection.__init__\n")
 
     def initglstuff(self):
+        sys.stderr.write("In GLObjectColletion.initglstuff; self.shader = {}\n".format(self.shader))
         self.modelmatrixbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         # 4 bytes per float * 16 floats per object
@@ -101,8 +104,12 @@ class GLObjectCollection(Observer):
         # 4 bytes per float * 4 floats per object
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
-        dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
-        GL.glUniformBlockBinding(self.shader.progid, dex, 0);
+        try:
+            dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
+            GL.glUniformBlockBinding(self.shader.progid, dex, 0);
+        except:
+            sys.stderr.write("self.shader.progid = {}\n".format(self.shader.progid))
+            import pdb; pdb.set_trace()
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
         GL.glUniformBlockBinding(self.shader.progid, dex, 1);
@@ -243,9 +250,12 @@ class SimpleObjectCollection(GLObjectCollection):
     """
     
     def __init__(self, context, *args, **kwargs):
+        sys.stderr.write("Creating SimpleObjectCollection.\n")
         super().__init__(context, *args, **kwargs)
+        sys.stderr.write("Getting basic shader\n")
         self.shader = Shader.get("Basic Shader", context)
-
+        sys.stderr.write("Got basic shader.\n")
+        
         self.maxnumtris = 65536
 
         self.curnumtris = 0
@@ -257,14 +267,11 @@ class SimpleObjectCollection(GLObjectCollection):
         self.draw_as_lines = False
 
         self.is_initialized = False
-        context.run_glcode(lambda : self.initglstuff())
 
         self.my_object_type = GLObjectCollection._OBJ_TYPE_SIMPLE
-        
-        while not self.is_initialized:
-            time.sleep(0.1)
 
-    def initglstuff(self):
+        sys.stderr.write("About to call super().initglstuff; self.shader = {}\n".format(self.shader))
+        sys.stderr.flush()
         super().initglstuff()
         
         self.vertexbuffer = GL.glGenBuffers(1)
@@ -284,8 +291,8 @@ class SimpleObjectCollection(GLObjectCollection):
         
         self.VAO = GL.glGenVertexArrays(1)
 
-        self.bind_vertex_attribs()
         self.is_initialized = True
+        self.bind_vertex_attribs()
 
     def bind_vertex_attribs(self):
         GL.glBindVertexArray(self.VAO)
@@ -481,14 +488,8 @@ class LabelObjectCollection(GLObjectCollection):
         self.pending_labels = 0
 
         self.is_initialized = False
-        context.run_glcode(lambda : self.initglstuff())
-
         self.my_object_type = GLObjectCollection._OBJ_TYPE_LABEL
 
-        while not self.is_initialized:
-            time.sleep(0.1)
-
-    def initglstuff(self):
         super().initglstuff()
 
         self.texturearray = GL.glGenTextures(1)
@@ -770,6 +771,7 @@ class CurveCollection(GLObjectCollection):
     """
     
     def __init__(self, context, shader="Curve Tube Shader", *args, **kwargs):
+        sys.stderr.write("Creating CurveCollection\n")
         super().__init__(context, *args, **kwargs)
         self.shader = Shader.get(shader, context)
         self.maxnumlines=16384
@@ -783,14 +785,9 @@ class CurveCollection(GLObjectCollection):
         self.draw_as_lines = False
         
         self.is_initialized = False
-        context.run_glcode(lambda : self.initglstuff())
 
         self.my_object_type = GLObjectCollection._OBJ_TYPE_CURVE
         
-        while not self.is_initialized:
-            time.sleep(0.1)
-
-    def initglstuff(self):
         super().initglstuff()
 
         self.linebuffer = GL.glGenBuffers(1)
@@ -1124,12 +1121,10 @@ class BasicShader(Shader):
     """Shader class for SimpleObjectCollection.  (Render lots of triangles.)"""
     
     def __init__(self, context, *args, **kwargs):
-        # sys.stderr.write("Initializing a Basic Shader...\n")
+        sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(context, *args, **kwargs)
         self._name = "Basic Shader"
-        self.context.run_glcode(lambda : self.create_shaders())
 
-    def create_shaders(self):
         err = GL.glGetError()
 
         vertex_shader = """
@@ -1234,9 +1229,6 @@ class LabelObjectShader(Shader):
         super().__init__(context, *args, **kwargs)
         self._name = "Label Object Shader"
 
-        self.context.run_glcode(lambda : self.create_shaders())
-
-    def create_shaders(self):
         err = GL.glGetError()
 
         vertex_shader = """
@@ -1353,9 +1345,6 @@ class CurveTubeShader(Shader):
         # sys.stderr.write("Initializing a CurveTubeShader")
         self._name = "Curve Tube Shader"
 
-        self.context.run_glcode(lambda : self.create_shaders())
-
-    def create_shaders(self):
         err = GL.glGetError()
       
         vertex_shader = """

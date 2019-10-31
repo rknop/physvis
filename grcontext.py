@@ -110,7 +110,7 @@ class GrContext(Observer):
     _default_instance = None
     _first_context = None
     
-    print_fps = False
+    print_fps = True
     
     @staticmethod
     def get_default_instance(*args, **kwargs):
@@ -496,7 +496,7 @@ class GLUTContext(GrContext):
         GLUT.glutDisplayFunc(lambda : None)
 
         GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
-        # sys.stderr.write("Going into GLUT.GLUT main loop.\n")
+        sys.stderr.write("Going into GLUT.GLUT main loop.\n")
         GLUTContext._class_init = True
 
         GLUT.glutMainLoop()
@@ -535,9 +535,6 @@ class GLUTContext(GrContext):
         # sys.stderr.write("Starting GLUTContext.__init__\n")
         self.window_is_initialized = False
         self.framecount = 0
-        self.vtxarr = None
-        self.vboarr = None
-        self.colorbuffer = None
 
         self._mousex0 = 0.
         self._mousey0 = 0.
@@ -552,9 +549,6 @@ class GLUTContext(GrContext):
 
         while not self.window_is_initialized:
             time.sleep(0.1)
-
-        self.object_collections.append(object_collection.SimpleObjectCollection(self))
-        self.object_collections.append(object_collection.CurveCollection(self))
 
         # sys.stderr.write("Exiting GLUTContext.__init__\n")
 
@@ -573,6 +567,9 @@ class GLUTContext(GrContext):
         # Right now, the timer just prints FPS
         GLUT.glutTimerFunc(0, lambda val : self.timer(val), 0)
         GLUT.glutCloseFunc(lambda : self.cleanup())
+
+        self.object_collections.append(object_collection.SimpleObjectCollection(self))
+        self.object_collections.append(object_collection.CurveCollection(self))
 
         self.window_is_initialized = True
         GLUTContext._instances.append(self)
@@ -796,7 +793,12 @@ class GLUTContext(GrContext):
         self.framecount += 1
 
     def add_object(self, obj):
+        self.run_glcode( lambda : self.do_add_object(obj) )
 
+    def remove_object(self, obj):
+        self.run_glcode( lambda : self.do_remove_object(obj) )
+
+    def do_add_object(self, obj):
         # See if any current collection will take it:
         for collection in self.object_collections:
             if collection.canyoutake(obj):

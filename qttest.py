@@ -4,14 +4,19 @@
 import time
 import sys
 import qtgrcontext
+import grcontext
 import visual_base as vb
 import PyQt5.QtCore as qtcore
 import PyQt5.QtWidgets as qt
 import PyQt5.QtGui as qtgui
 
 def mainloop(wid):
-    box = vb.Box(context=wid, color=vb.color.red)
-
+    try:
+        setup
+    except:
+        setup = True
+        box = vb.Box(context=wid, color=vb.color.red)
+        
     newtime = time.perf_counter()
     try:
         dtime = newtime - lasttime
@@ -31,22 +36,21 @@ def click(which, wid=None, *args, **kwargs):
 
     if wid is not None:
         sys.stderr.write("OpenGL Info:\n")
-        wid.dump_version_info()
+        wid.gl_version_info()
 
 def main():
+    grcontext.GrContext.print_fps = True
+
     app = qt.QApplication([])
     window = qt.QWidget()
     vbox = qt.QVBoxLayout()
     window.setLayout(vbox)
 
     wid = qtgrcontext.QtGrContext()
-    vbox.addWidget(wid)
-    mainlooptimer = qtcore.QTimer()
-    mainlooptimer.timeout.connect(lambda : mainloop(wid) )
-    mainlooptimer.start(1000./30.)
+    vbox.addWidget(wid, 1)
 
     subwindow = qt.QWidget()
-    vbox.addWidget(subwindow)    
+    vbox.addWidget(subwindow, 0)
     hbox = qt.QHBoxLayout()
     subwindow.setLayout(hbox)
     
@@ -60,6 +64,11 @@ def main():
     sys.stderr.write("Showing window.\n")
     window.show()
 
+    mainlooptimer = qtcore.QTimer()
+    mainlooptimer.timeout.connect(lambda : mainloop(wid) )
+    mainlooptimer.start(1000./30.)
+        
+    sys.stderr.write("Executing Qt app\n")
     app.exec_()
 
 

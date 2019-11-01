@@ -25,7 +25,7 @@
 
 from grcontext import *
 
-_debug_shaders = True
+_debug_shaders = False
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -83,10 +83,10 @@ class GLObjectCollection(Observer):
         self.context = context
 
         self.my_object_type = GLObjectCollection._OBJ_TYPE_NONE
-        sys.stderr.write("Returning from GLObjectCollection.__init__\n")
+        # sys.stderr.write("Returning from GLObjectCollection.__init__\n")
 
     def initglstuff(self):
-        sys.stderr.write("In GLObjectColletion.initglstuff; self.shader = {}\n".format(self.shader))
+        # sys.stderr.write("In GLObjectColletion.initglstuff; self.shader = {}\n".format(self.shader))
         self.modelmatrixbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
         # 4 bytes per float * 16 floats per object
@@ -250,12 +250,10 @@ class SimpleObjectCollection(GLObjectCollection):
     """
     
     def __init__(self, context, *args, **kwargs):
-        sys.stderr.write("Creating SimpleObjectCollection.\n")
+        # sys.stderr.write("Creating SimpleObjectCollection.\n")
         super().__init__(context, *args, **kwargs)
-        sys.stderr.write("Getting basic shader\n")
         self.shader = Shader.get("Basic Shader", context)
-        sys.stderr.write("Got basic shader.\n")
-        
+
         self.maxnumtris = 65536
 
         self.curnumtris = 0
@@ -270,8 +268,8 @@ class SimpleObjectCollection(GLObjectCollection):
 
         self.my_object_type = GLObjectCollection._OBJ_TYPE_SIMPLE
 
-        sys.stderr.write("About to call super().initglstuff; self.shader = {}\n".format(self.shader))
-        sys.stderr.flush()
+        # sys.stderr.write("About to call super().initglstuff; self.shader = {}\n".format(self.shader))
+        # sys.stderr.flush()
         super().initglstuff()
         
         self.vertexbuffer = GL.glGenBuffers(1)
@@ -406,36 +404,37 @@ class SimpleObjectCollection(GLObjectCollection):
 
 
     def push_all_object_info(self, obj):
-        if not obj._id in self.objects: return
-        dex = self.object_index[obj._id]
-        
-        # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-        #                  .format(dex, obj.num_triangles,
-        #                          self.object_triangle_index[obj._id]))
-        # sys.stderr.write("\nvertexdata: {}\n".format(obj.vertexdata))
-        # sys.stderr.write("\nnormaldata: {}\n".format(obj.normaldata))
-        # sys.stderr.write("\ncolordata: {}\n".format(obj.colordata))
-        # sys.stderr.write("\nmatrixdata: {}\n".format(obj.matrixdata))
-        # sys.stderr.write("\nnormalmatrixdata: {}\n".format(obj.normalmatrixdata))
-        # sys.exit(20)
+        with Subject._threadlock:
+            if not obj._id in self.objects: return
+            dex = self.object_index[obj._id]
 
-        # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata.flatten())
+            # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
+            #                  .format(dex, obj.num_triangles,
+            #                          self.object_triangle_index[obj._id]))
+            # sys.stderr.write("\nvertexdata: {}\n".format(obj.vertexdata))
+            # sys.stderr.write("\nnormaldata: {}\n".format(obj.normaldata))
+            # sys.stderr.write("\ncolordata: {}\n".format(obj.colordata))
+            # sys.stderr.write("\nmatrixdata: {}\n".format(obj.matrixdata))
+            # sys.stderr.write("\nnormalmatrixdata: {}\n".format(obj.normalmatrixdata))
+            # sys.exit(20)
 
-        # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata.flatten())
+            # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata.flatten())
 
-        objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
-        objindexcopies[:] = dex
-        # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
-        # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
-        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
-        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
-        
-        self.do_update_object_matrix(obj)
-        self.do_update_object_color(obj)
+            # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata.flatten())
+
+            objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
+            objindexcopies[:] = dex
+            # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
+            # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
+
+            self.do_update_object_matrix(obj)
+            self.do_update_object_color(obj)
 
         self.context.update()    # Redundant... it just happened in the last two function calls
 
@@ -771,7 +770,7 @@ class CurveCollection(GLObjectCollection):
     """
     
     def __init__(self, context, shader="Curve Tube Shader", *args, **kwargs):
-        sys.stderr.write("Creating CurveCollection\n")
+        # sys.stderr.write("Creating CurveCollection\n")
         super().__init__(context, *args, **kwargs)
         self.shader = Shader.get(shader, context)
         self.maxnumlines=16384
@@ -1121,7 +1120,6 @@ class BasicShader(Shader):
     """Shader class for SimpleObjectCollection.  (Render lots of triangles.)"""
     
     def __init__(self, context, *args, **kwargs):
-        sys.stderr.write("Initializing a Basic Shader...\n")
         super().__init__(context, *args, **kwargs)
         self._name = "Basic Shader"
 

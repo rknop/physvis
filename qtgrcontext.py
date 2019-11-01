@@ -36,8 +36,6 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
 
         super().__init__(*args, **kwargs)
 
-        sys.stderr.write("Creating QtGrContext\n")
-
         fmt = qtgui.QSurfaceFormat()
         fmt.setMajorVersion(3)
         fmt.setMinorVersion(3)
@@ -48,23 +46,26 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
 
         self._mousex0 = 0.
         self._mousey0 = 0.
+        self._leftmousemoving = False
+        self._middlemousemoving = False
+        self._rightmousemoving = False
 
         self.things_to_run = queue.Queue()
         self.qtimer = qtcore.QTimer()
         self.qtimer.timeout.connect(lambda : self.idlefunc())
         # I'm going to run my timer every 10 milliseconds; should I go full bore, or slower, or...?
         self.qtimer.start(10)
-
+        
         if GrContext.print_fps:
             self.fpstimer = qtcore.QTimer()
-            self.qtimer.timeout.connect(lambda : self.printfps())
-            self.qtimer.start(2000)
+            self.fpstimer.timeout.connect(lambda : self.printfps())
+            self.fpstimer.start(2000)
         
     def initializeGL(self):
-        sys.stderr.write("QtGrContext initializeGL\n")
         self.object_collections.append(object_collection.SimpleObjectCollection(self))
         self.object_collections.append(object_collection.CurveCollection(self))
         self.window_is_initialized = True
+        self.update()
 
     def printfps(self):
         sys.stderr.write("{} display fps: {}\n".format(self._title, self.framecount/2.))
@@ -121,6 +122,135 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
     def sizeHint(self):
         return qtcore.QSize(640, 480)
 
+    #========================================
+    # Mouse handling
+    #
+    # A LOT of code is copied straight from GLUTContext.  I should
+    # superclass it... or maybe move to only using Qt as my window
+    # manager.
+    
+    def mousePressEvent(self, event):
+        buts = event.buttons()
+        mods = event.modifiers()
+        x = event.pos().x()
+        y = event.pos().y()
+        
+        if buts & qtcore.Qt.LeftButton:
+            self._leftmousemoving = True
+            if mods & qtcore.Qt.ShiftModifier:
+                self._mouseposx0 = x
+                self._mouseposy0 = y
+                self._origcenter = self._center
+                self._upinscreen = self._up - self._forward * ( numpy.sum(self._up*self._forward ) /
+                                                                math.sqrt( self._up[0]**2 +
+                                                                           self._up[1]**2 +
+                                                                           self._up[2]**2 ) )
+                self._upinscreen /= math.sqrt( self._upinscreen[0]**2 + self._upinscreen[1]**2 +
+                                               self._upinscreen[2]**2 )
+                self._rightinscreen = numpy.array( [ self._forward[1]*self._upinscreen[2] -
+                                                        self._forward[2]*self._upinscreen[1],
+                                                     self._forward[2]*self._upinscreen[0] -
+                                                        self._forward[0]*self._upinscreen[2],
+                                                     self._forward[0]*self._upinscreen[1] -
+                                                        self._forward[1]*self._upinscreen[0] ] )
+                self._rightinscreen /= math.sqrt( self._rightinscreen[0]**2 + self._rightinscreen[1]**2 +
+                                                  self._rightinscreen[2]**2 )
+                
+
+        if buts & qtcore.Qt.RightButton:
+            self._rightmousemoving = True
+            self._mousex0 = x
+            self._mousey0 = y
+            self._origtheta = math.acos(-self.forward[1] / math.sqrt( self._forward[0]**2 +
+                                                                      self._forward[1]**2 +
+                                                                      self._forward[2]**2 ) )
+            self._origphi = math.atan2(-self._forward[0], -self._forward[2])
+            # sys.stderr.write("Right Press: θ = {:.3f}, φ = {:.3f}\n".format(self._origtheta, self._origphi))
+
+        if buts & qtcore.Qt.MidButton:
+            self._middlemousemoving = True
+            self._mousex0 = x
+            self._mousey0 = y
+            self._origrange = self._range
+
+    def mouseReleaseEvent(self, event):
+        buts = event.buttons()
+        if not buts & qtcore.Qt.LeftButton:
+            self._leftmousemoving = False
+        if not buts & qtcore.Qt.RightButton:
+            self._rightmousemoving = False
+        if not buts & qtcore.Qt.MidButton:
+            self._middlemousemoving = False
+
+
+    def mouseMoveEvent(self, event):
+        mods = event.modifiers()
+        x = event.pos().x()
+        y = event.pos().y()
+        
+        if self._rightmousemoving:
+            dx = x - self._mousex0
+            dy = y - self._mousey0
+            theta = self._origtheta - dy * math.pi/2. / self._height
+            if theta > math.pi:
+                theta = math.pi
+            if theta < 0.:
+                theta = 0.
+            phi = self._origphi - dx * math.pi / self._width
+            # if phi < -math.pi:
+            #     phi += 2.*math.pi
+            # if phi > math.pi:
+            #     phi -= 2.*math.pi
+            self._forward = numpy.array( [ -math.sin(theta) * math.sin(phi),
+                                           -math.cos(theta),
+                                           -math.sin(theta) * math.cos(phi) ] )
+            uptheta = theta - math.pi/2.
+            upphi = phi
+            if uptheta < 0.:
+                uptheta = math.fabs(uptheta)
+                upphi += math.pi
+            self._up = numpy.array( [ math.sin(uptheta) * math.sin(upphi),
+                                      math.cos(uptheta),
+                                      math.sin(uptheta) * math.cos(upphi) ] )
+            # self._up = numpy.array( [0., 1., 0.] )
+            # sys.stderr.write("Moved from (θ,φ) = ({:.2f},{:.2f}) to ({:.2f},{:.2f})\n".
+            #                  format(self._origtheta, self._origphi, theta, phi))
+            # sys.stderr.write("Forward is now: {}\n".format(self._forward))
+            self._theta = theta
+            self._phi = phi
+            self._uptheta = uptheta
+            self._upphi = upphi
+            self.update_cam_posrot_gl()
+
+
+        if self._leftmousemoving and (mods & qtcore.Qt.ShiftModifier) :
+            dx = x - self._mouseposx0
+            dy = y - self._mouseposy0
+
+            self._center = self._origcenter - self._rightinscreen * dx / self._width * self._range[0]
+            self._center += self._upinscreen * dy / self._height * self._range[1]
+            self.update_cam_posrot_gl()
+
+        if self._middlemousemoving:
+            dy = y - self._mousey0
+            self._range = self._origrange * 10.**(dy/self._width)
+            self.update_cam_posrot_gl()
+
+
+    def wheelEvent(self, event):
+        dang = event.angleDelta().y()
+        steps = abs( dang / 120. )
+        if dang > 0:
+            if self._range[0] > 1e-4:
+                self._range *= (0.9 ** steps)
+        elif dang < 0:
+            if self._range[0] < 1e4:
+                self._range *= (1.1 ** steps)
+        # sys.stderr.write("Updating self._range to {}\n".format(self._range))
+        self.update_cam_posrot_gl()
+        
+    # ========================================
+    
     # These next two are 100% redundant with GLUTContext... maybe they should
     #   go into the superclass?
     

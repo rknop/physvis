@@ -110,7 +110,7 @@ class GrContext(Observer):
     _default_instance = None
     _first_context = None
     
-    print_fps = True
+    print_fps = False
     
     @staticmethod
     def get_default_instance(*args, **kwargs):
@@ -378,9 +378,10 @@ class GrContext(Observer):
         
             
     def update_cam_posrot_gl(self):
-        self.determine_camera_matrices()
-        for collection in self.object_collections:
-            collection.shader.set_camera_posrot()
+        with Subject._threadlock:
+            self.determine_camera_matrices()
+            for collection in self.object_collections:
+                collection.shader.set_camera_posrot()
 
     def determine_perspective_matrix(self):
         # Math from

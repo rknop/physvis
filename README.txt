@@ -41,6 +41,7 @@ variables, will depend on your operating system.)
   quaternions.py
   rater.py
   visual_base.py
+  visual_label.py
 
 See doc/physvis.html for a very brief introduction to code that uses
 this library.  See bouncing_ball.py, rotating_spring.py, and

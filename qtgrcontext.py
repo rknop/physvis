@@ -128,7 +128,24 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
     # A LOT of code is copied straight from GLUTContext.  I should
     # superclass it... or maybe move to only using Qt as my window
     # manager.
-    
+
+    # def mouseDoubleClickEvent(self, event):
+    #     sys.stderr.write("Double click!\n")
+    #     if self.isFullScreen():
+    #         sys.stderr.write("Going normal\n")
+    #         self.setParent(self.oldparent)
+    #         self.resize(self.oldwindowsiae)
+    #         self.overridwindowflags(self.oldflags)
+    #         self.showNormal()
+    #     else:
+    #         sys.stderr.write("Going full screen\n")
+    #         self.oldparent = self.parentWidget()
+    #         self.oldwindowsize = self.size()
+    #         self.oldflags = self.windowFlags()
+    #         self.setParent(None)
+    #         self.showFullScreen()
+            
+            
     def mousePressEvent(self, event):
         buts = event.buttons()
         mods = event.modifiers()

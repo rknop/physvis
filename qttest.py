@@ -10,11 +10,14 @@ import PyQt5.QtCore as qtcore
 import PyQt5.QtWidgets as qt
 import PyQt5.QtGui as qtgui
 
+setup = False
+
 def mainloop(wid):
-    try:
-        setup
-    except:
+    global setup
+
+    if not setup:
         setup = True
+        sys.stderr.write("Making box...\n")
         box = vb.Box(context=wid, color=vb.color.red)
         
     newtime = time.perf_counter()

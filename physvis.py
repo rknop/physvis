@@ -89,6 +89,7 @@ The following ojects are available
   — faces
   — helix
   — label
+  — ring
   — sphere
   — tetrahedron
   — octahedron
@@ -280,7 +281,6 @@ Objects missing:
   * local lights
   * points
   * pyramid
-  * ring
   * text
 
 Object properties missing or not working:
@@ -440,6 +440,15 @@ def helix(*args, **kwargs):
     thickness — The thickness of the actual spring wire (default: 0.05 * radius)
     """
     return vb.Helix(*args, **kwargs)
+
+def ring(*args, **kwargs)
+    """A torus.
+
+    radius — The major radius of the torus (the radius to a zero-thickness ring) (default: 0.5)
+    thickness — The radius of the walls of the ring (default: 1/5 radius)
+    num_circ_points — The number of points along the circle for the ring (def: 36)
+    """
+    return vb.Ring(*args, **kwargs)
 
 def sphere(*args,**kwargs):
     """A sphere, modelled by default as a 2x subdivided icosahedron (320 faces).

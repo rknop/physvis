@@ -1755,6 +1755,65 @@ class FixedLengthCurve(GrObject):
         
 # ======================================================================
 
+class Ring(FixedLengthCurve):
+    def __init__(self, radius=0.5, thickness=None, num_circ_points=36, *args, **kwargs):
+        self._ring_radius = radius
+        if thickness is None:
+            self._thickness = 0.2 * self._ring_radius
+        else:
+            self._thickness = thickness
+        self._num_circ_points = int(num_circ_points)
+
+        self.calculate_ring_points()
+
+        super().__init__(radius=0.01, points=self._ring_points, *args, **kwargs)
+
+        self.thickness = self._thickness
+        
+    def calculate_ring_points(self):
+        dphi = 2.*math.pi / self._num_circ_points
+        phi = numpy.arange(self._num_circ_points + 1)*dphi
+        self._ring_points = numpy.empty( [self._num_circ_points + 1, 3], dtype=numpy.float32 )
+        self._ring_points[:, 0] = 0.
+        self._ring_points[:, 1] = self._ring_radius * numpy.sin(phi)
+        self._ring_points[:, 2] = self._ring_radius * numpy.cos(phi)
+        # Make real sure the last point is the first point
+        self._ring_points[-1, :] = self._ring_points[0, :]
+        
+    @property
+    def radius(self):
+        self._ring_radius
+
+    @radius.setter
+    def radius(self, val):
+        self._ring_radius = val
+        self.calculate_ring_points()
+        self.points = self._ring_points
+
+    @property
+    def thickness(self):
+        return self._thickness
+
+    @thickness.setter
+    def thickness(self, value):
+        self._thickness = value
+        # This is what I call "radius" in the FixedLengthCurve class
+        FixedLengthCurve.radius.fset(self, self._thickness)
+        # I want to update the first and last transverse,
+        #   so I'm gonna screw around with FixedLengthCurve's
+        #   internal data.  This is really ugly.  I should
+        #   have something like a "closed" parameter
+        #   for FixedLengthCurve
+        axis1 = self._points[-2, :] - self._points[-1, :]
+        axis2 = self._points[0, :] - self._points[1, :]
+        self._transverse[0, :] = axis2-axis1
+        self._transverse[0, :] *= self._radius / math.sqrt(numpy.square(self._transverse[0, :]).sum())
+        self._transverse[-1, :] = self._transverse[0, :]
+        self.broadcast("update vertices")
+    
+        
+# ======================================================================
+
 class Helix(FixedLengthCurve):
     """A helix (spring), rendered as a tube around a helical path.
 
@@ -1829,7 +1888,7 @@ class Helix(FixedLengthCurve):
     def thickness(self, value):
         self._thickness = value
         # This is what I call "radius" in the FixedLengthCurve class
-        self.radius = self._thickness
+        FixedLengthCurve.radius.fset(self, self._thickness)
             
 # ======================================================================
 # A CylindarStack is not a GrObject, even though some of the interface is the same
@@ -1945,8 +2004,9 @@ def main():
     dopeg2 = False
     doblob = False
     doarrow = True
-    dohelix = True
-    docurve = True
+    dohelix = False
+    docurve = False
+    doring = True
     domanyelongatedboxes = False
 
     # Make objects
@@ -2007,6 +2067,10 @@ def main():
         helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
                       num_circ_points=12)
 
+    if doring:
+        sys.stderr.write("Making ring.\n")
+        ring = Ring(color = (0.3, 0.7, 0.9), radius=0.75, thickness=0.1)
+        
     if domanyelongatedboxes:
         n = 10
         sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
@@ -2097,6 +2161,9 @@ def main():
             else:
                 curve.visible = True
                 
+        if doring:
+            ring.axis = [ math.cos(phi), math.sin(phi)*math.cos(phi2), math.sin(phi)*math.sin(phi2) ]
+
         if domanyelongatedboxes:
             # Rotate all the elongated boxes
             for i in range(len(boxes)):

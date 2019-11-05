@@ -314,11 +314,11 @@ class roller(object):
             if self.tbot[i] == "":
                 self.tbox[i].setText("")
             else:
-                self.tbox[i].setText("{:.3f}".format(self.tbot[i]))
+                self.tbox[i].setText("{:.2f}".format(self.tbot[i]))
             if self.vbot[i] == "":
                 self.vbox[i].setText("")
             else:
-                self.vbox[i].setText("{:.3f}".format(self.vbot[i]))
+                self.vbox[i].setText("{:.2f}".format(self.vbot[i]))
                 
 
     def dvals_dt(self, t, vals):

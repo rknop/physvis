@@ -38,6 +38,7 @@ variables, will depend on your operating system.)
   object_collection.py
   physvis_observer.py
   physvis.py
+  qtgrcontext.py
   quaternions.py
   rater.py
   visual_base.py

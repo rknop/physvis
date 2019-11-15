@@ -441,7 +441,7 @@ def helix(*args, **kwargs):
     """
     return vb.Helix(*args, **kwargs)
 
-def ring(*args, **kwargs)
+def ring(*args, **kwargs):
     """A torus.
 
     radius — The major radius of the torus (the radius to a zero-thickness ring) (default: 0.5)

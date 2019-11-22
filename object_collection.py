@@ -24,6 +24,7 @@
 #  all be drawn with the same shader.
 
 from grcontext import *
+from physvis_observer import *
 
 _debug_shaders = False
  
@@ -58,8 +59,22 @@ class GLObjectCollection(Observer):
     _OBJ_TYPE_CURVE = 2
     _OBJ_TYPE_LABEL = 3
 
+    # OBJ_TYPE_SIMPLE goes with:
+    #    SimpleObjectCollection
+    #    BasicShader
+    #    BasicMaterial
+    # OBJ_TYPE_CURVE goes with:
+    #    CurveCollection
+    #    CurveTubeShader
+    #    BasicMaterial
+    # OBJ_TYPE_LABEL goes with:
+    #    LabelObjectCollection
+    #    LabelObjectShader
+    #    (No material)
+    
     _MAX_OBJS_PER_COLLECTION = 512
-
+    _MAX_GLOBAL_LIGHTS = 8
+    
     collection_classes = {}
     
     @staticmethod
@@ -104,6 +119,16 @@ class GLObjectCollection(Observer):
         # 4 bytes per float * 4 floats per object
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
+        self.speculardatabuf = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.sepculardatabuf)
+        # (4 byte float + 4 byte int) per object
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 8*self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
+
+        self.globallightbuf = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.globallightbuf)
+        # (2 * (16-byte vec3 (std140 = vec4 alignment) ) per object
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 32*self.GLObjectCollection._MAX_GLOBAL_LIGHTS, None, GL.GL_DYNAMIC_DRAW)
+        
         try:
             dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
             GL.glUniformBlockBinding(self.shader.progid, dex, 0);
@@ -112,11 +137,17 @@ class GLObjectCollection(Observer):
             import pdb; pdb.set_trace()
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelNormalMatrix")
-        GL.glUniformBlockBinding(self.shader.progid, dex, 1);
+        GL.glUniformBlockBinding(self.shader.progid, dex, 1)
 
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "Colors")
-        GL.glUniformBlockBinding(self.shader.progid, dex, 2);
+        GL.glUniformBlockBinding(self.shader.progid, dex, 2)
 
+        dex = GL.glGetUniformBlockIndex(self.shader.progid, "SpecularData")
+        GL.glUniformBlockBinding(self.shader.progid, dex, 3)
+        
+        dex = GL.glGetUniformBlockIndex(self.shader.progid, "GlobalLights")
+        GL.glUniformBlockBinding(self.shader.progid, dex, 4)
+        
         self.bind_uniform_buffers()
         
         # In the past, I was passing a model matrix for each
@@ -138,6 +169,8 @@ class GLObjectCollection(Observer):
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 0, self.modelmatrixbuffer)
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 2, self.colorbuffer)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 3, self.speculardatabuf)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 4, self.globallightbuf)
         
     def update_object_matrix(self, obj):
         if not obj.visible: return
@@ -199,6 +232,8 @@ class GLObjectCollection(Observer):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
         if message == "update color":
             self.update_object_color(subject)
+        if message == "update material":
+            raise Exception("ROB!  Implement update material.")
         if message == "update matrix":
             self.update_object_matrix(subject)
         if message == "update vertices":
@@ -1038,6 +1073,11 @@ class Shader(object):
         self.fragshdrid = None
         self.progid = None
 
+        self.ambientcolor = (0.2, 0.2, 0.2)
+        self.nlights = 2
+        self.lightcolor = [ (0.8, 0.8, 0.8), (0.3, 0.3, 0.3) ]
+        self.lightdir = [ (0.22, 0.44, 0.88), (-0.88, -0.22, -0.44) ]
+        
     # This makes me feel very queasy.  A wait for another thread in
     #   a __del__ is probably just asking for circular references
     #   to trip you up.  *But*, I gotta run all my GL code in
@@ -1087,17 +1127,15 @@ class Shader(object):
 
     def update_lights(self):
         loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
-        GL.glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
-        loc = GL.glGetUniformLocation(self.progid, "light1color")
-        GL.glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
-        loc = GL.glGetUniformLocation(self.progid, "light1dir")
-        GL.glUniform3fv(loc, 1, numpy.array([0.22, 0.44, 0.88]))
-        loc = GL.glGetUniformLocation(self.progid, "light2color")
-        GL.glUniform3fv(loc, 1, numpy.array([0.3, 0.3, 0.3]))
-        loc = GL.glGetUniformLocation(self.progid, "light2dir")
-        GL.glUniform3fv(loc, 1, numpy.array([-0.88, -0.22, -0.44]))
+        GL.glUniform3fv(loc, 1, numpy.array(self.ambientcolor, dtype=numpy.float32))
 
-        
+        lightdata = numpy.empty( 8*self.nlights, dtype=numpy.float32 )
+        for i in range(self.nlights):
+            lightdata[8*i   : 8*i+3] = self.lightcolor[i]
+            lightdata[8*i+4 : 8*i+7] = self.lightdir[i]
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.globallightbuf)
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 0, 32*self.nlights, lightdata)
+
     def set_camera_perspective(self):
         GL.glUseProgram(self.progid)
         projection_location = GL.glGetUniformLocation(self.progid, "projection")
@@ -1147,40 +1185,67 @@ layout (std140) uniform Colors
    vec4 color[{maxnumobj}];
 }};
 
+layout (std140) uniform SpecularData
+{{
+   float specstr[{maxnumobj}];
+   int specpow[{maxnumobj}];
+}};
+
+
 layout(location=0) in vec4 in_Position;
 layout(location=1) in vec3 in_Normal;
 layout(location=2) in int in_Index;
+out vec3 fragPos;
 out vec3 aNormal;
 out vec4 aColor;
+out float specularStrength;
+out int specularPower;
 
 void main(void)
 {{
-  gl_Position =  projection * viewrot * viewshift * model_matrix[in_Index] * in_Position;
+  vec4 worldpos = model_matrix[in_Index] * in_Position 
+  fragPos = vec3(worldpos);
+  gl_Position =  projection * viewrot * viewshift * worldpos;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
+  specularStrength = specstr[in_Index];
+  specularPower = specpow[in_Index];
 }}""".format(maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
 
         fragment_shader = """
 #version 330
 
 uniform vec3 ambientcolor;
-uniform vec3 light1color;
-uniform vec3 light1dir;
-uniform vec3 light2color;
-uniform vec3 light2dir;
 
+uniform int numgloblights;
+layout (std140) uniform GlobalLights
+{{
+  vec3 globlightcolor[{maxnumlights}];
+  vec3 globlightdir[{maxnumlights}];
+}}
+
+in vec3 fragPos;
 in vec3 aNormal;
 in vec4 aColor;
+in float specularStrength;
+in int specularPower;
 out vec4 out_Color;
 
 void main(void)
 {
   vec3 norm = normalize(aNormal);
-  vec3 diff1 = max(dot(norm, light1dir), 0.) * light1color;
-  vec3 diff2 = max(dot(norm, light2dir), 0.) * light2color;
-  vec3 col = (ambientcolor + diff1 + diff2) * vec3(aColor);
+  vec3 col = ambientcolor
+  vec3 viewdir = normalize(-fragPos);
+  for (int i = 0 ; i < numgloblights ; ++i)
+  {
+    vec3 diff = max(dot(norm, globlightdir[i]), 0.) * globlightcolor[i];
+    vec3 reflectdir = reflect(-globlightdir[i], norm);
+    vec3 spec = specularStrength * pow(max(dot(viewdir, reflectdir), 0.), specularPower) * globlightcolor[i];
+    col += spec + diff;
+  }
+  col *= vec(aColor);
   out_Color = vec4(col, aColor[3]);
-}"""
+}""".format(maxnumlights = GLObjectCollection._MAX_GLOBAL_LIGHTS)
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
 
@@ -1592,3 +1657,83 @@ void main(void)
         self.init_lights_and_camera()
 
         
+# ======================================================================
+
+class BasicMaterial(Subject):
+
+    default_specular_strength = 0.5
+    default_specular_exponent = 32
+    default_color = (1., 1., 1.)
+
+    def __init__(self, specstr=None, spectight=None, color=None):
+        if specstr is None:
+            self._specstr = BasicMaterial.default_specular_strength
+        else:
+            self.specstr = specstr
+        if spectight is None:
+            self._spectight = BasicMaterial.default_specular_exponent
+        else:
+            self.spectight = spectight
+        if color is None:
+            self._color = BasicMaterial.default_color
+        else:
+            self.color = color
+
+    @property
+    def specstr(self):
+        return self._specstr
+
+    @specstr.setter
+    def specstr(self, value):
+        if float(value) != self._specstr:
+            self._specstr = float(value)
+            self.broadcast("update material")
+
+    @property
+    def specular_strength(self):
+        return self._specstr
+
+    @specular_strength.setter
+    def specular_strength(self, value):
+        self.specstr = value
+
+    @propery
+    def spectight(self):
+        return self._spectight
+
+    @spectight.setter
+    def spectight(self, value):
+        val = int(value)
+        if val < 0:
+            val = 0
+        if val > 255:
+            val = 255
+        if self._spectight != val:
+            self._spectight = val
+            self.broadcast("update material")
+
+    @property
+    def specular_tightness(self):
+        return self._spectight
+
+    @specular_tightness.setter
+    def specular_tightness(self, value):
+        self.spectight = value
+        
+
+    @property
+    def color(self):
+        return self._color
+
+    @color.setter
+    def color(self, value):
+        if len(value) != 1 and len(value) != 3:
+            raise Exception("Color requires 1 or 3 values.")
+        if len(value) == 1:
+            newcolor = (float(value), float(value), float(value))
+        else:
+            newcolor = (float(value[0]), float(value[1]), float(value[2]))
+
+        if self._color != newcolor:
+            self._color = newcolor
+            self.broadcast("update material")

@@ -219,7 +219,7 @@ class GrContext(Observer):
         if len(val) != 3:
             raise Exception("forward needs 3 elements")
         self._forward = numpy.array(val, dtype=float)
-        self._forward /= math.sqrt( self._forward[0]**2 + self_forward[1]**2 + self._forward[2]**2 )
+        self._forward /= math.sqrt( self._forward[0]**2 + self._forward[1]**2 + self._forward[2]**2 )
         self.run_glcode(lambda : self.update_cam_posrot_gl())
 
     @property

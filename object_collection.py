@@ -1679,6 +1679,9 @@ class BasicMaterial(Subject):
         else:
             self.color = color
 
+    def copy(self):
+        return BasicMaterial(specstr=self._specstr, spectight=self._spectight, color=self._color)
+            
     @property
     def specstr(self):
         return self._specstr
@@ -1697,7 +1700,7 @@ class BasicMaterial(Subject):
     def specular_strength(self, value):
         self.specstr = value
 
-    @propery
+    @property
     def spectight(self):
         return self._spectight
 

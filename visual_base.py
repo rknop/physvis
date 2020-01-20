@@ -1534,8 +1534,8 @@ class Arrow(GrObject):
         if (headl > 0.5): headl = 0.5
         shaftl = 1. - headl
             
-        # sys.stderr.write("length={:.3f}, shaftl={:.3f}, shaftw={:.3f}, headw={:.3f}, headl={:.3f}\n"
-        #                  .format(length, shaftl, shaftw, headw, headl))
+        sys.stderr.write("length={:.3f}, shaftl={:.3f}, shaftw={:.3f}, headw={:.3f}, headl={:.3f}\n"
+                         .format(length, shaftl, shaftw, headw, headl))
 
         # Base
         self.vertexdata[0:3*2*4] = [0., -shaftw/2., shaftw/2., 1.,

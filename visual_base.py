@@ -1494,7 +1494,12 @@ class Arrow(GrObject):
             headlength /= shaftwidth
             headwidth /= shaftwidth
             shaftwidth /= length
-
+        else:
+            # Because we're using scaling, I have to divide out the length
+            # ROB THINK ABOUT ALL THIS
+            shaftwidth /= length
+            headwidth /= length
+            
         self.fixedwidth = fixedwidth
         self.shaftwidth = shaftwidth
         self.headwidth = headwidth

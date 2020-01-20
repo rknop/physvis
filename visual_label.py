@@ -186,7 +186,7 @@ class LabelObject(GrObject):
         return self._text
 
     @text.setter
-    def text(self):
+    def text(self, text):
         self._text = text
         self.render_text()
         self.update_everything()
@@ -321,6 +321,20 @@ class LabelObject(GrObject):
             self.render_text()
             self.update_everything()
 
+    @property
+    def color(self):
+        """The color of an object: (red, green, blue)"""
+        return self._color[0:3]
+
+    @color.setter
+    def color(self, rgb):
+        if len(rgb) != 3:
+            sys.stderr.write("ERROR!  Need all of r, g, and b for color.\n")
+            sys.exit(20)
+        self._color[0:3] = numpy.array(rgb)
+        self.render_text()
+        self.update_everything()
+        
     @property
     def linecolor(self):
         """Color of the lines that make up the box; a 3-element list or tuple"""

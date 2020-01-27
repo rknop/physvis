@@ -1087,7 +1087,7 @@ class Shader(object):
 
     def update_lights(self):
         loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
-        GL.glUniform3fv(loc, 1, numpy.array([0.4, 0.4, 0.4]))
+        GL.glUniform3fv(loc, 1, numpy.array([0.2, 0.2, 0.2]))
         loc = GL.glGetUniformLocation(self.progid, "light1color")
         GL.glUniform3fv(loc, 1, numpy.array([0.8, 0.8, 0.8]))
         loc = GL.glGetUniformLocation(self.progid, "light1dir")

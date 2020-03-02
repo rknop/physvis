@@ -481,7 +481,7 @@ class GLUTContext(GrContext):
     @staticmethod
     def thread_main(instance):
         # sys.stderr.write("Starting thread_main\n")
-        GLUT.glutInit(len(sys.argv), sys.argv)
+        GLUT.glutInit(sys.argv)
         GLUT.glutInitContextVersion(3, 3)
         GLUT.glutInitContextFlags(GLUT.GLUT_FORWARD_COMPATIBLE)
         GLUT.glutInitContextProfile(GLUT.GLUT_CORE_PROFILE)

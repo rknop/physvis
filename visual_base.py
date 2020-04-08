@@ -2072,19 +2072,19 @@ class CylindarStack(object):
 
 def main():
     doaxes = False
-    dobox1 = True
-    dobox2 = True
+    dobox1 = False
+    dobox2 = False
     dotet = False
-    doball = True
+    doball = False
     dostaticball = True
     dopeg = False
     dopeg2 = False
     doblob = False
     doarrow = False
-    dohelix = False
-    docurve = False
-    dosincurve = False
-    dohairpin = False
+    dohelix = True
+    docurve = True
+    dosincurve = True
+    dohairpin = True
     dobigcurve =False
     doring = False
     domanyelongatedboxes = False

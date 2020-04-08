@@ -1028,7 +1028,7 @@ class CurveCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
             # sys.stderr.write("...done drawing lines\n");
 
-# GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
+GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
         
 # ======================================================================
 # ======================================================================
@@ -1482,11 +1482,19 @@ layout (std140) uniform Colors
    vec4 color[{maxnumobj}];
 }};
 
+layout (std140) uniform SpecularData
+{{
+   float specstr[{maxnumobj}];
+   int specpow[{maxnumobj}];
+}};
+
 layout(location=0) in vec4 in_Position;
 layout(location=1) in vec3 in_Transverse;
 layout(location=2) in int in_Index;
 out vec3 aTransverse;
 out vec4 aColor;
+flat out float specularStrength;
+flat out int specularPower;
 
 void main(void)
 {{
@@ -1496,6 +1504,8 @@ void main(void)
   tmp = model_matrix[in_Index] * tmp;
   aTransverse = tmp.xyz;
   aColor = color[in_Index];
+  specularStrength = specstr[in_Index];
+  specularPower = specpow[in_Index];
 }}""".format(maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
 
         skeleton_geometry_shader = """
@@ -1508,10 +1518,14 @@ uniform mat4 projection;
 layout(lines) in;
 in vec3 aTransverse[];
 in vec4 aColor[];
+flat in float specularStrength[];
+flat in int specularPower[];
 
 layout(line_strip, max_vertices = 4) out;
 out vec3 aNormal;
 out vec4 bColor;
+flat out specularStrength;
+flat out specularPower;
 
 void main(void)
 {
@@ -1551,10 +1565,15 @@ uniform mat4 projection;
 layout(lines) in;
 in vec3 aTransverse[];
 in vec4 aColor[];
+flat in float specularStrength[];
+flat in int specularPower[];
 
 layout(triangle_strip, max_vertices = 18) out;
+out vec3 fragPos;
 out vec3 aNormal;
 out vec4 bColor;
+flat out float bSpecularStrength;
+flat out int bSpecularPower;
 
 void main(void)
 {
@@ -1569,6 +1588,9 @@ void main(void)
     vec4 qinv;
     vec4 tmp;
     float phi;
+
+    bSpecularStrength = specularStrength[0];
+    bSpecularPower = specularPower[0];
 
     axishat = vec3(gl_in[1].gl_Position - gl_in[0].gl_Position);
     axishat /= length(axishat);
@@ -1622,6 +1644,7 @@ void main(void)
     }
 
     gl_Position = projection * viewrot * viewshift * toppoints[7];
+    fragPos = vec3(toppoints[7]);
     bColor = aColor[1];
     aNormal = topnormal[7];
     EmitVertex();
@@ -1631,14 +1654,17 @@ void main(void)
         gl_Position = projection * viewrot * viewshift * toppoints[i];
         bColor = aColor[1];
         aNormal = topnormal[i];
+        fragPos = vec3(toppoints[i]);
         EmitVertex();
         gl_Position = projection * viewrot * viewshift * bottompoints[i];
+        fragPos = vec3(bottompoints[i]);
         bColor = aColor[0];
         aNormal = bottomnormal[i];
         EmitVertex();
     }
 
     gl_Position = projection * viewrot * viewshift * bottompoints[0];
+    fragPos = vec3(bottompoints[0]);
     bColor = aColor[0];
     aNormal = bottomnormal[0];
     EmitVertex();
@@ -1650,24 +1676,45 @@ void main(void)
         fragment_shader = """
 #version 330
 
-uniform vec3 ambientcolor;
-uniform vec3 light1color;
-uniform vec3 light1dir;
-uniform vec3 light2color;
-uniform vec3 light2dir;
+uniform vec3 camera_position;
 
+uniform vec3 ambientcolor;
+
+uniform int numgloblights;
+layout (std140) uniform GlobalLights
+{{
+  vec3 globlightcolor[{maxnumlights}];
+  vec3 globlightdir[{maxnumlights}];
+}};
+
+in vec3 fragPos;
 in vec3 aNormal;
 in vec4 bColor;
+flat in float bSpecularStrength;
+flat in int bSpecularPower;
 out vec4 out_Color;
 
 void main(void)
-{
+{{
   vec3 norm = normalize(aNormal);
-  vec3 diff1 = max(dot(norm, light1dir), 0.) * light1color;
-  vec3 diff2 = max(dot(norm, light2dir), 0.) * light2color;
-  vec3 col = (ambientcolor + diff1 + diff2) * vec3(bColor);
+  vec3 col = ambientcolor * bColor.xyz;
+  vec3 viewdir = normalize(-camera_position);
+  for (int i = 0 ; i < numgloblights ; ++i)
+  {{
+    vec3 diff = max(dot(norm, globlightdir[i]), 0.) * globlightcolor[i];
+    vec3 reflectdir = normalize( reflect(-globlightdir[i], norm) );
+    vec3 spec = bSpecularStrength * pow(max(dot(-viewdir, reflectdir), 0.), 
+                                        bSpecularPower) * globlightcolor[i];
+    col += spec + diff*bColor.xyz;
+    // col += diff*bColor.xyz;
+  }}
+  // I'm not sure whether or not this clamping is necessary
+  // (I *think* from the math, I will never have a color value < 0)
+  if (col[0]>1.) col[0]=1.;
+  if (col[1]>1.) col[1]=1.;
+  if (col[2]>1.) col[2]=1.;
   out_Color = vec4(col, bColor[3]);
-}"""
+}}""".format(maxnumlights = self._MAX_GLOBAL_LIGHTS)
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile vertex shader....\n")
         self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)

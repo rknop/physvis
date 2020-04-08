@@ -49,11 +49,6 @@ class GrContext(Observer):
 
     """Encapsulates a window (or widget) and OpenGL context in which to draw.
     
-    Right now, the only safe way to get a context is to call
-    GrContext.get_default_instance().  It will give you a GLUT window.
-    Future plans: allow more than one context, and also allow a context
-    that would be a QWidget rather than a GLUT window.
-
     This class maintains the camera information.  Any object collections
     or shaders that are part of the collection must call the context's
     set_camera_posrot() method to update the camera position and

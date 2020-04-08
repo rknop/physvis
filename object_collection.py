@@ -1385,6 +1385,11 @@ void main(void)
 
         skeleton_geometry_shader = """
 #version 330
+
+uniform mat4 viewshift;
+uniform mat4 viewrot;
+uniform mat4 projection;
+
 layout(lines) in;
 in vec3 aTransverse[];
 in vec4 aColor[];
@@ -1395,22 +1400,22 @@ out vec4 bColor;
 
 void main(void)
 {
-    gl_Position = gl_in[0].gl_Position + vec4(aTransverse[0], 0);
+    gl_Position = projection * viewrot * viewshift * (gl_in[0].gl_Position + vec4(aTransverse[0], 0));
     aNormal = vec3(1, 0, 0);
     bColor = aColor[0];
     EmitVertex();
 
-    gl_Position = gl_in[0].gl_Position;
+    gl_Position = projection * viewrot * viewshift * (gl_in[0].gl_Position);
     aNormal = vec3(1, 0, 0);
     bColor = aColor[0];
     EmitVertex();
 
-    gl_Position = gl_in[1].gl_Position;
+    gl_Position = projection * viewrot * viewshift * (gl_in[1].gl_Position);
     aNormal = vec3(1, 0, 0);
     bColor = aColor[1];
     EmitVertex();
 
-    gl_Position = gl_in[1].gl_Position + vec4(aTransverse[1], 0);
+    gl_Position = projection * viewrot * viewshift * (gl_in[1].gl_Position + vec4(aTransverse[1], 0));
     aNormal = vec3(1, 0, 0);
     bColor = aColor[1];
     EmitVertex();

@@ -306,7 +306,10 @@ class GrContext(Observer):
 
         # I'm not dealing with non-equal range properly
         distback = rng[0] * math.tan(fov)
-        
+
+        # Is this right?
+        self._position_of_camera = center - distback * forward
+
         self._camtranslate = numpy.matrix([[ 1., 0., 0., -center[0] ] ,
                                            [ 0., 1., 0., -center[1] ] ,
                                            [ 0., 0., 1., -center[2] ] ,
@@ -564,8 +567,10 @@ class GLUTContext(GrContext):
         GLUT.glutTimerFunc(0, lambda val : self.timer(val), 0)
         GLUT.glutCloseFunc(lambda : self.cleanup())
 
-        self.object_collections.append(object_collection.SimpleObjectCollection(self))
-        self.object_collections.append(object_collection.CurveCollection(self))
+        for coltype in object_collection.GLObjectCollection.collection_classes:
+            self.object_collections.append(object_collection.GLObjectCollection.collection_classes[coltype](self))
+        # self.object_collections.append(object_collection.SimpleObjectCollection(self))
+        # self.object_collections.append(object_collection.CurveCollection(self))
 
         self.window_is_initialized = True
         GLUTContext._instances.append(self)

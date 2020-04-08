@@ -270,6 +270,10 @@ class GrObject(Subject):
             else:
                 self._color[3] = opacity
 
+        # ROB, write an interface for these
+        self._specular_strength = 0.75
+        self._specular_pow = 32
+                
         self.model_matrix = numpy.array( [ [ 1., 0., 0., 0. ],
                                            [ 0., 1., 0., 0. ],
                                            [ 0., 0., 1., 0. ],
@@ -2068,20 +2072,20 @@ class CylindarStack(object):
 
 def main():
     doaxes = False
-    dobox1 = False
-    dobox2 = False
+    dobox1 = True
+    dobox2 = True
     dotet = False
-    doball = False
+    doball = True
     dopeg = False
     dopeg2 = False
     doblob = False
     doarrow = False
-    dohelix = True
-    docurve = True
-    dosincurve = True
-    dohairpin = True
-    dobigcurve = True
-    doring = True
+    dohelix = False
+    docurve = False
+    dosincurve = False
+    dohairpin = False
+    dobigcurve =False
+    doring = False
     domanyelongatedboxes = False
 
     # Make objects

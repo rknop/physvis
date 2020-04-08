@@ -26,7 +26,7 @@
 from grcontext import *
 from physvis_observer import *
 
-_debug_shaders = False
+_debug_shaders = True
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -73,7 +73,6 @@ class GLObjectCollection(Observer):
     #    (No material)
     
     _MAX_OBJS_PER_COLLECTION = 512
-    _MAX_GLOBAL_LIGHTS = 8
     
     collection_classes = {}
     
@@ -81,6 +80,7 @@ class GLObjectCollection(Observer):
     def get_new_collection(obj, context):
         for key in GLObjectCollection.collection_classes:
             if obj._object_type == key:
+                sys.stderr.write("Getting collection of type {}\n".format(key))
                 return GLObjectCollection.collection_classes[key](context)
         raise Exception("No colletion can handle object of type {}\n".format(obj._object_type))
 
@@ -120,15 +120,10 @@ class GLObjectCollection(Observer):
         GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4 * 4 * self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
         self.speculardatabuf = GL.glGenBuffers(1)
-        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.sepculardatabuf)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
         # (4 byte float + 4 byte int) per object
-        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 8*self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 4* 8*self.maxnumobjs, None, GL.GL_DYNAMIC_DRAW)
 
-        self.globallightbuf = GL.glGenBuffers(1)
-        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.globallightbuf)
-        # (2 * (16-byte vec3 (std140 = vec4 alignment) ) per object
-        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 32*self.GLObjectCollection._MAX_GLOBAL_LIGHTS, None, GL.GL_DYNAMIC_DRAW)
-        
         try:
             dex = GL.glGetUniformBlockIndex(self.shader.progid, "ModelMatrix")
             GL.glUniformBlockBinding(self.shader.progid, dex, 0);
@@ -145,8 +140,12 @@ class GLObjectCollection(Observer):
         dex = GL.glGetUniformBlockIndex(self.shader.progid, "SpecularData")
         GL.glUniformBlockBinding(self.shader.progid, dex, 3)
         
-        dex = GL.glGetUniformBlockIndex(self.shader.progid, "GlobalLights")
-        GL.glUniformBlockBinding(self.shader.progid, dex, 4)
+        try:
+            dex = GL.glGetUniformBlockIndex(self.shader.progid, "GlobalLights")
+            GL.glUniformBlockBinding(self.shader.progid, dex, 4)
+        except:
+            sys.stderr.write("self.shader.progid = {}\n".format(self.shader.progid))
+            import pdb; pdb.set_trace()
         
         self.bind_uniform_buffers()
         
@@ -170,7 +169,7 @@ class GLObjectCollection(Observer):
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 1, self.modelnormalmatrixbuffer)
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 2, self.colorbuffer)
         GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 3, self.speculardatabuf)
-        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 4, self.globallightbuf)
+        GL.glBindBufferBase(GL.GL_UNIFORM_BUFFER, 4, self.shader.globallightbuf)
         
     def update_object_matrix(self, obj):
         if not obj.visible: return
@@ -210,6 +209,13 @@ class GLObjectCollection(Observer):
                 GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
                 data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
                 GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
+
+                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
+                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
+                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION
+                                                                     +dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex)*4*4, data)
             
     def update_object_color(self, obj):
         if not obj.visible: return
@@ -224,10 +230,21 @@ class GLObjectCollection(Observer):
                 return
             # sys.stderr.write("Updating an object color.\n")
             dex = self.object_index[obj._id]
+
             GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
             GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, obj._color)
-            self.context.update()
+
+            # Note that std140 layout means the size of each element in the
+            #   array is rounded up to the size of a vec4, which is why there
+            #   are extra *4's below.  (Lots of wasted memory.)
             
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*dex,
+                               numpy.array([obj._specular_strength], dtype=numpy.float32))
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*(GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex),
+                               numpy.array([obj._specular_pow], dtype=numpy.int32))
+            self.context.update()
+
     def receive_message(self, message, subject):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
         if message == "update color":
@@ -306,6 +323,7 @@ class SimpleObjectCollection(GLObjectCollection):
         # sys.stderr.write("About to call super().initglstuff; self.shader = {}\n".format(self.shader))
         # sys.stderr.flush()
         super().initglstuff()
+        self.shader.init_lights_and_camera()
         
         self.vertexbuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
@@ -525,6 +543,7 @@ class LabelObjectCollection(GLObjectCollection):
         self.my_object_type = GLObjectCollection._OBJ_TYPE_LABEL
 
         super().initglstuff()
+        self.shader.init_lights_and_camera()
 
         self.texturearray = GL.glGenTextures(1)
         GL.glActiveTexture(GL.GL_TEXTURE0)
@@ -790,7 +809,7 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
         
             
-GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
+# GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
         
 # ======================================================================
 # CurveCollection
@@ -823,6 +842,7 @@ class CurveCollection(GLObjectCollection):
         self.my_object_type = GLObjectCollection._OBJ_TYPE_CURVE
         
         super().initglstuff()
+        self.shader.init_lights_and_camera()
 
         self.linebuffer = GL.glGenBuffers(1)
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
@@ -1008,7 +1028,7 @@ class CurveCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
             # sys.stderr.write("...done drawing lines\n");
 
-GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
+# GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
         
 # ======================================================================
 # ======================================================================
@@ -1037,7 +1057,7 @@ class Shader(object):
                   "Curve Tube Shader" to render a CurveCollection (round tubes around the curve)
         context — The context for the sader.
         """
-        
+
         if name == "Basic Shader":
             with Subject._threadlock:
                 if ( (not context in Shader._basic_shader) or
@@ -1073,11 +1093,19 @@ class Shader(object):
         self.fragshdrid = None
         self.progid = None
 
+        self._MAX_GLOBAL_LIGHTS = 8
+
         self.ambientcolor = (0.2, 0.2, 0.2)
         self.nlights = 2
         self.lightcolor = [ (0.8, 0.8, 0.8), (0.3, 0.3, 0.3) ]
         self.lightdir = [ (0.22, 0.44, 0.88), (-0.88, -0.22, -0.44) ]
+
+        self.globallightbuf = GL.glGenBuffers(1)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.globallightbuf)
+        # (2 * (16-byte vec3 (std140 = vec4 alignment) ) per object
+        GL.glBufferData(GL.GL_UNIFORM_BUFFER, 32*self._MAX_GLOBAL_LIGHTS, None, GL.GL_DYNAMIC_DRAW)
         
+
     # This makes me feel very queasy.  A wait for another thread in
     #   a __del__ is probably just asking for circular references
     #   to trip you up.  *But*, I gotta run all my GL code in
@@ -1126,16 +1154,20 @@ class Shader(object):
         self.set_camera_posrot()
 
     def update_lights(self):
+        GL.glUseProgram(self.progid)
         loc = GL.glGetUniformLocation(self.progid, "ambientcolor")
         GL.glUniform3fv(loc, 1, numpy.array(self.ambientcolor, dtype=numpy.float32))
 
-        lightdata = numpy.empty( 8*self.nlights, dtype=numpy.float32 )
+        lightdata = numpy.zeros( 8*self._MAX_GLOBAL_LIGHTS, dtype=numpy.float32 )
         for i in range(self.nlights):
-            lightdata[8*i   : 8*i+3] = self.lightcolor[i]
-            lightdata[8*i+4 : 8*i+7] = self.lightdir[i]
+            lightdata[4*i   : 4*i+3] = self.lightcolor[i]
+            lightdata[4*(self._MAX_GLOBAL_LIGHTS+i) : 4*(self._MAX_GLOBAL_LIGHTS+i)+3] = self.lightdir[i]
         GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.globallightbuf)
-        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 0, 32*self.nlights, lightdata)
-
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 0, 32*self._MAX_GLOBAL_LIGHTS, lightdata)
+        numgloblights_location = GL.glGetUniformLocation(self.progid, "numgloblights")
+        GL.glUniform1i(numgloblights_location, self.nlights)
+        sys.stderr.write("Set {} global lights.\n".format(self.nlights))
+        
     def set_camera_perspective(self):
         GL.glUseProgram(self.progid)
         projection_location = GL.glGetUniformLocation(self.progid, "projection")
@@ -1148,7 +1180,13 @@ class Shader(object):
         GL.glUniformMatrix4fv(viewrot_location, 1, GL.GL_FALSE, self.context._camrotate.T)
         viewshift_location = GL.glGetUniformLocation(self.progid, "viewshift")
         GL.glUniformMatrix4fv(viewshift_location, 1, GL.GL_FALSE, self.context._camtranslate.T)
-
+        campos_location = GL.glGetUniformLocation(self.progid, "camera_position")
+        GL.glUniform3f(campos_location,
+                       self.context._position_of_camera[0],
+                       self.context._position_of_camera[1],
+                       self.context._position_of_camera[2])
+                       
+        
         self.context.update()
 
 # ======================================================================
@@ -1198,22 +1236,28 @@ layout(location=2) in int in_Index;
 out vec3 fragPos;
 out vec3 aNormal;
 out vec4 aColor;
-out float specularStrength;
-out int specularPower;
+flat out float specularStrength;
+flat out int specularPower;
 
 void main(void)
 {{
-  vec4 worldpos = model_matrix[in_Index] * in_Position 
+  vec4 worldpos = model_matrix[in_Index] * in_Position;
   fragPos = vec3(worldpos);
   gl_Position =  projection * viewrot * viewshift * worldpos;
   aNormal = model_normal_matrix[in_Index] * in_Normal;
   aColor = color[in_Index];
   specularStrength = specstr[in_Index];
   specularPower = specpow[in_Index];
-}}""".format(maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
+}}""".format(maxnumlights = self._MAX_GLOBAL_LIGHTS, maxnumobj=GLObjectCollection._MAX_OBJS_PER_COLLECTION)
 
         fragment_shader = """
 #version 330
+
+uniform mat4 viewshift;
+uniform mat4 viewrot;
+uniform mat4 projection;
+
+uniform vec3 camera_position;
 
 uniform vec3 ambientcolor;
 
@@ -1222,44 +1266,48 @@ layout (std140) uniform GlobalLights
 {{
   vec3 globlightcolor[{maxnumlights}];
   vec3 globlightdir[{maxnumlights}];
-}}
+}};
 
 in vec3 fragPos;
 in vec3 aNormal;
 in vec4 aColor;
-in float specularStrength;
-in int specularPower;
+flat in float specularStrength;
+flat in int specularPower;
 out vec4 out_Color;
 
 void main(void)
-{
+{{
   vec3 norm = normalize(aNormal);
-  vec3 col = ambientcolor
-  vec3 viewdir = normalize(-fragPos);
+  vec3 col = ambientcolor * aColor.xyz;
+  vec3 viewdir = normalize(-camera_position);
   for (int i = 0 ; i < numgloblights ; ++i)
-  {
+  {{
     vec3 diff = max(dot(norm, globlightdir[i]), 0.) * globlightcolor[i];
-    vec3 reflectdir = reflect(-globlightdir[i], norm);
-    vec3 spec = specularStrength * pow(max(dot(viewdir, reflectdir), 0.), specularPower) * globlightcolor[i];
-    col += spec + diff;
-  }
-  col *= vec(aColor);
+    vec3 reflectdir = normalize( reflect(-globlightdir[i], norm) );
+    vec3 spec = specularStrength * pow(max(dot(-viewdir, reflectdir), 0.), 
+                                       specularPower) * globlightcolor[i];
+    col += spec + diff*aColor.xyz;
+    // col += diff*aColor.xyz;
+  }}
   out_Color = vec4(col, aColor[3]);
-}""".format(maxnumlights = GLObjectCollection._MAX_GLOBAL_LIGHTS)
+  // out_Color = vec4( specularStrength, 1., 1., 1.);
+}}""".format(maxnumlights = self._MAX_GLOBAL_LIGHTS)
 
-        if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\n")
-
+        if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\nVertex Shader...\n")
+        
         self.vtxshdrid = GL.glCreateShader(GL.GL_VERTEX_SHADER)
         GL.glShaderSource(self.vtxshdrid, vertex_shader)
         GL.glCompileShader(self.vtxshdrid)
 
         if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.vtxshdrid)))
-
+        if _debug_shaders: sys.stderr.write("Fragment Shader...\n")
+        
         self.fragshdrid = GL.glCreateShader(GL.GL_FRAGMENT_SHADER)
         GL.glShaderSource(self.fragshdrid, fragment_shader)
         GL.glCompileShader(self.fragshdrid)
 
         if _debug_shaders: sys.stderr.write("{}\n".format(GL.glGetShaderInfoLog(self.fragshdrid)))
+        if _debug_shaders: sys.stderr.write("Linking program....\n")
         
         self.progid = GL.glCreateProgram()
         GL.glAttachShader(self.progid, self.vtxshdrid)
@@ -1278,8 +1326,6 @@ void main(void)
         if err != GL.GL_NO_ERROR:
             sys.stderr.write("Error {} creating shaders: {}\n".format(err, gluErrorString(err)))
             sys.exit(-1)
-
-        self.init_lights_and_camera()
             
 
 # ======================================================================
@@ -1664,84 +1710,84 @@ void main(void)
         
 # ======================================================================
 
-class BasicMaterial(Subject):
+# class BasicMaterial(Subject):
 
-    default_specular_strength = 0.5
-    default_specular_exponent = 32
-    default_color = (1., 1., 1.)
+#     default_specular_strength = 0.5
+#     default_specular_exponent = 32
+#     default_color = (1., 1., 1.)
 
-    def __init__(self, specstr=None, spectight=None, color=None):
-        if specstr is None:
-            self._specstr = BasicMaterial.default_specular_strength
-        else:
-            self.specstr = specstr
-        if spectight is None:
-            self._spectight = BasicMaterial.default_specular_exponent
-        else:
-            self.spectight = spectight
-        if color is None:
-            self._color = BasicMaterial.default_color
-        else:
-            self.color = color
+#     def __init__(self, specstr=None, spectight=None, color=None):
+#         if specstr is None:
+#             self._specstr = BasicMaterial.default_specular_strength
+#         else:
+#             self.specstr = specstr
+#         if spectight is None:
+#             self._spectight = BasicMaterial.default_specular_exponent
+#         else:
+#             self.spectight = spectight
+#         if color is None:
+#             self._color = BasicMaterial.default_color
+#         else:
+#             self.color = color
 
-    def copy(self):
-        return BasicMaterial(specstr=self._specstr, spectight=self._spectight, color=self._color)
+#     def copy(self):
+#         return BasicMaterial(specstr=self._specstr, spectight=self._spectight, color=self._color)
             
-    @property
-    def specstr(self):
-        return self._specstr
+#     @property
+#     def specstr(self):
+#         return self._specstr
 
-    @specstr.setter
-    def specstr(self, value):
-        if float(value) != self._specstr:
-            self._specstr = float(value)
-            self.broadcast("update material")
+#     @specstr.setter
+#     def specstr(self, value):
+#         if float(value) != self._specstr:
+#             self._specstr = float(value)
+#             self.broadcast("update material")
 
-    @property
-    def specular_strength(self):
-        return self._specstr
+#     @property
+#     def specular_strength(self):
+#         return self._specstr
 
-    @specular_strength.setter
-    def specular_strength(self, value):
-        self.specstr = value
+#     @specular_strength.setter
+#     def specular_strength(self, value):
+#         self.specstr = value
 
-    @property
-    def spectight(self):
-        return self._spectight
+#     @property
+#     def spectight(self):
+#         return self._spectight
 
-    @spectight.setter
-    def spectight(self, value):
-        val = int(value)
-        if val < 0:
-            val = 0
-        if val > 255:
-            val = 255
-        if self._spectight != val:
-            self._spectight = val
-            self.broadcast("update material")
+#     @spectight.setter
+#     def spectight(self, value):
+#         val = int(value)
+#         if val < 0:
+#             val = 0
+#         if val > 255:
+#             val = 255
+#         if self._spectight != val:
+#             self._spectight = val
+#             self.broadcast("update material")
 
-    @property
-    def specular_tightness(self):
-        return self._spectight
+#     @property
+#     def specular_tightness(self):
+#         return self._spectight
 
-    @specular_tightness.setter
-    def specular_tightness(self, value):
-        self.spectight = value
+#     @specular_tightness.setter
+#     def specular_tightness(self, value):
+#         self.spectight = value
         
 
-    @property
-    def color(self):
-        return self._color
+#     @property
+#     def color(self):
+#         return self._color
 
-    @color.setter
-    def color(self, value):
-        if len(value) != 1 and len(value) != 3:
-            raise Exception("Color requires 1 or 3 values.")
-        if len(value) == 1:
-            newcolor = (float(value), float(value), float(value))
-        else:
-            newcolor = (float(value[0]), float(value[1]), float(value[2]))
+#     @color.setter
+#     def color(self, value):
+#         if len(value) != 1 and len(value) != 3:
+#             raise Exception("Color requires 1 or 3 values.")
+#         if len(value) == 1:
+#             newcolor = (float(value), float(value), float(value))
+#         else:
+#             newcolor = (float(value[0]), float(value[1]), float(value[2]))
 
-        if self._color != newcolor:
-            self._color = newcolor
-            self.broadcast("update material")
+#         if self._color != newcolor:
+#             self._color = newcolor
+#             self.broadcast("update material")

@@ -1289,8 +1289,12 @@ void main(void)
     col += spec + diff*aColor.xyz;
     // col += diff*aColor.xyz;
   }}
+  // I'm not sure whether or not this clamping is necessary
+  // (I *think* from the math, I will never have a color value < 0)
+  if (col[0]>1.) col[0]=1.;
+  if (col[1]>1.) col[1]=1.;
+  if (col[2]>1.) col[2]=1.;
   out_Color = vec4(col, aColor[3]);
-  // out_Color = vec4( specularStrength, 1., 1., 1.);
 }}""".format(maxnumlights = self._MAX_GLOBAL_LIGHTS)
 
         if _debug_shaders: sys.stderr.write("\nAbout to compile shaders....\nVertex Shader...\n")

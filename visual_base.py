@@ -2076,6 +2076,7 @@ def main():
     dobox2 = True
     dotet = False
     doball = True
+    dostaticball = True
     dopeg = False
     dopeg2 = False
     doblob = False
@@ -2131,7 +2132,10 @@ def main():
         sys.stderr.write("Making ball.\n")
         ball = Sphere(pos= (2., 0., 0.), radius=0.5, color=color.green)
         # ball = Icosahedron(pos = (2., 0., 0.), radius=0.5, color=color.green, flat=True, subdivisions=1)
-    
+
+    if dostaticball:
+        sys.stderr.write("Making static ball.\n")
+        staticball = Sphere(pos= (-1.5, -1., 1.), radius=0.5, color=[1.0, 0.7, 0.2])
 
     if docurve:
         sys.stderr.write("Making curve.\n")

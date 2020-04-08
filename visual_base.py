@@ -1494,7 +1494,12 @@ class Arrow(GrObject):
             headlength /= shaftwidth
             headwidth /= shaftwidth
             shaftwidth /= length
-
+        else:
+            # Because we're using scaling, I have to divide out the length
+            # ROB THINK ABOUT ALL THIS
+            shaftwidth /= length
+            headwidth /= length
+            
         self.fixedwidth = fixedwidth
         self.shaftwidth = shaftwidth
         self.headwidth = headwidth
@@ -1667,9 +1672,17 @@ class FixedLengthCurve(GrObject):
             sys.stderr.write("Created an empty curve, doing nothing.\n")
             return
 
-        self._points = numpy.array(points, dtype=numpy.float32)
-        if len(points.shape) != 2 or points.shape[1] != 3:
-            raise Exception("Illegal points; must be n×3.")
+        # Remove double points
+        tooclose = (1e-8)**2
+        newpoints = [ points[0] ]
+        for i in range(1, len(points)):
+            mag = (points[i][0]-points[i-1][0])**2 + (points[i][1]-points[i-1][1])**2 + (points[i][2]-points[i-1][2])**2
+            if mag > tooclose:
+                newpoints.append(points[i])
+        
+        self._points = numpy.array(newpoints, dtype=numpy.float32)
+        if len(self._points.shape) != 2 or self._points.shape[1] != 3 or self._points.shape[0] < 2:
+            raise Exception("Illegal points; must be n×3 with n≥2.")
         self._transverse = []
         
         self.make_transverse()
@@ -1732,27 +1745,75 @@ class FixedLengthCurve(GrObject):
         # Note: this will div by 0 if any points are doubled
         hatxes = axes / axesmag[:, numpy.newaxis]
 
-        if self._points.shape[0] > 2:
-            # All points but first and last
+        toosmalltransmag = 1e-6
 
-            self._transverse[1:-1, :] = axes[:-1] - axes[1:]
-            
+        if self._points.shape[0] > 2:
+            # All points but first and last, the transverse
+            #   is just along the difference of the unit vectors
+            #   along the two directions of the previous and next.
+            #   This is perpendicular to the "tangent" of the
+            #   curve approximated by that corner.
+
+            self._transverse[1:-1, :] = hatxes[1:] - hatxes[:-1]
+
             # First and last points : take the adjacent transverse, but then only
             # the component perpendicular to the one axis it's sticking to
 
             self._transverse[0, : ] = self._transverse[1, :] - hatxes[0] * (self._transverse[1, :] * hatxes[0]).sum()
-            self._transverse[-1, :] = self._transverse[-2, :] - hatxes[1] * (self._transverse[-2, :] *
-                                                                             hatxes[-1]).sum()
+            self._transverse[-1, :] = self._transverse[-2, :] - hatxes[-1] * (self._transverse[-2, :] *
+                                                                              hatxes[-1]).sum()
+
+            transmag = numpy.sqrt(numpy.square(self._transverse).sum(axis=1))
+
+            # Special case problem... if transmag[0] is 0, then we have to search forward
+            #  for the first transmag that's not 0, and copy all the rest back.  Then, only
+            #  keep the part that's perpendicular to the axis
+            if transmag[0] < toosmalltransmag:
+                w = numpy.where(transmag >= toosmalltransmag)
+                if len(w[0]) == 0:
+                    # This is a cylinder, not a curve... go back to the 2-point solution
+                    # if axis isn't along z, cross z with it get transverse.  Otherwise, cross x with it
+                    if hatxes[0, 2] < 0.9:
+                        self._transverse[:, :] = numpy.array( [ -hatxes[0, 1], hatxes[0, 0], 0. ],
+                                                                dtype=numpy.float32 )
+                    else:
+                        self._transverse[:, :] = numpy.array( [ 0., -hatxes[0, 2], hatxes[0, 1] ],
+                                                                dtype=numpy.flat32 )
+                else:
+                    newtrans = self._transverse[w[0][0], :]
+                    newtrans -= hatxes[0] * (newtrans * hatxes[0]).sum()
+                    self._transverse[:w[0][0]-1, :] = self._transverse[w[0][0], :]
+
+
+            transmag = numpy.sqrt(numpy.square(self._transverse).sum(axis=1))
+
+            # Now find all places where transverse is still 0, and make those
+            #  the same as previous
+            w = numpy.where( transmag < toosmalltransmag )
+            # (Doing a for loop so that if there are multiple 0s in a row, the
+            #   copy propagates forward)
+            for i in w[0]:
+                self._transverse[i, :] = self._transverse[i-1, :]
+                self._transverse[i, :] -= ( (hatxes[i-1]*self._transverse[i]).sum() * hatxes[i-1] )
+                transmag[i] = math.sqrt( numpy.square(self._transverse[i, :]).sum() )
+
+            # Figure out where we have a >90⁰ rotation between two transverses,
+            #   and flip all transverses after that to fix this.
+            transversedot = ( self._transverse[:-1, :] * self._transverse[1:, :] ).sum(axis=1)
+            wflip = numpy.where(transversedot < 0.)
+            for i in wflip[0]:
+                self._transverse[i+1:, :] *= -1.
+
+            self._transverse *= self._radius / transmag[:, numpy.newaxis]
         else:
+            # Just 2 points
             # if axis isn't along z, cross z with it get transverse.  Otherwise, cross x with it
             if hatxes[0, 2] < 0.9:
                 self._transverse[0:1, :] = numpy.array( [ -hatxes[0, 1], hatxes[0, 0], 0. ], dtype=numpy.float32 )
             else:
                 self._transverse[0:1, :] = numpy.array( [ 0., -hatxes[0, 2], hatxes[0, 1] ], dtype=numpy.flat32 )
+
                 
-        transmag = numpy.sqrt(numpy.square(self._transverse).sum(axis=1))
-        self._transverse *= self._radius / transmag[:, numpy.newaxis]
-        
 # ======================================================================
 
 class Ring(FixedLengthCurve):
@@ -1799,18 +1860,29 @@ class Ring(FixedLengthCurve):
         self._thickness = value
         # This is what I call "radius" in the FixedLengthCurve class
         FixedLengthCurve.radius.fset(self, self._thickness)
-        # I want to update the first and last transverse,
-        #   so I'm gonna screw around with FixedLengthCurve's
-        #   internal data.  This is really ugly.  I should
-        #   have something like a "closed" parameter
-        #   for FixedLengthCurve
-        axis1 = self._points[-2, :] - self._points[-1, :]
-        axis2 = self._points[0, :] - self._points[1, :]
-        self._transverse[0, :] = axis2-axis1
-        self._transverse[0, :] *= self._radius / math.sqrt(numpy.square(self._transverse[0, :]).sum())
-        self._transverse[-1, :] = self._transverse[0, :]
+        # # I want to update the first and last transverse,
+        # #   so I'm gonna screw around with FixedLengthCurve's
+        # #   internal data.  This is really ugly.  I should
+        # #   have something like a "closed" parameter
+        # #   for FixedLengthCurve
+        # axis1 = self._points[-2, :] - self._points[-1, :]
+        # axis2 = self._points[0, :] - self._points[1, :]
+        # self._transverse[0, :] = axis2-axis1
+        # self._transverse[0, :] *= self._radius / math.sqrt(numpy.square(self._transverse[0, :]).sum())
+        # self._transverse[-1, :] = self._transverse[0, :]
         self.broadcast("update vertices")
-    
+
+    # Override the version in FixedLength Curve for this special case
+    def make_transverse(self):
+        axes = numpy.empty( self._points.shape )
+        axes[:-1, :] = self._points[1:, :] - self._points[:-1, :]
+        axes[-1, :] = axes[0, :]
+        hatxes = axes / numpy.sqrt( numpy.square(axes).sum(axis=1) )[:, numpy.newaxis]
+        self._transverse = numpy.empty( self._points.shape )
+        self._transverse[1:, :] = axes[1:, :] - axes[:-1, :]
+        self._transverse[0, :] = self._transverse[-1, :]
+        transmag = numpy.sqrt( numpy.square(self._transverse).sum(axis=1) )
+        self._transverse *= self._radius / transmag[:, numpy.newaxis]
         
 # ======================================================================
 
@@ -1996,16 +2068,19 @@ class CylindarStack(object):
 
 def main():
     doaxes = False
-    dobox1 = True
-    dobox2 = True
-    dotet = True
-    doball = True
+    dobox1 = False
+    dobox2 = False
+    dotet = False
+    doball = False
     dopeg = False
     dopeg2 = False
     doblob = False
-    doarrow = True
-    dohelix = False
-    docurve = False
+    doarrow = False
+    dohelix = True
+    docurve = True
+    dosincurve = True
+    dohairpin = True
+    dobigcurve = True
     doring = True
     domanyelongatedboxes = False
 
@@ -2067,6 +2142,51 @@ def main():
         helix = Helix(color = (0.5, 0.5, 0.), radius=0.2, thickness=0.05, length=2., coils=5,
                       num_circ_points=12)
 
+    if dosincurve:
+        sys.stderr.write("Making sin curve.\n")
+        tilt = math.pi/6.
+        xvals = numpy.arange(80) / 10. - 4.
+        yvals = numpy.sin( 2*math.pi * (xvals/2.) )
+        zvals = yvals*numpy.sin(tilt)
+        yvals = yvals*numpy.cos(tilt)
+        points = numpy.empty( (len(xvals), 3) )
+        points[:, 0] = xvals
+        points[:, 1] = yvals
+        points[:, 2] = zvals
+        sincurve = FixedLengthCurve(radius = 0.1, color = (0.9, 0.5, 1.0), points = points)
+
+    if dohairpin:
+        # Test to make sure curves with no bends work
+        sys.stderr.write("Making hairpon\n")
+        tilt = 0.
+        points = []
+        for i in range(5):
+            points.append( [ i-2, 1., 0. ] )
+        numincircle = 16
+        for phi in numpy.arange(numincircle) * math.pi/numincircle:
+            points.append( [ points[4][0] + math.sin(phi), math.cos(phi), 0. ] )
+        for i in range(5):
+            points.append( [ points[4][0] - i, -1., 0. ] )
+        points = numpy.array(points)
+        temp = points[:, 1] * math.sin(tilt)
+        points[:, 1] *= math.cos(tilt)
+        points[:, 2] = temp
+        hairpoin = FixedLengthCurve( radius = 0.2, color = (0.8, 1.0, 0.2), points=points)
+                           
+        
+    if dobigcurve:
+        sys.stderr.write("Making big curve.\n")
+        tilt = 0.
+        xvals = 2.0 * numpy.cos( [ 0., math.pi/4., math.pi/2, 3*math.pi/4, math.pi ] )
+        yvals = 2.0 * numpy.sin( [ 0., math.pi/4., math.pi/2, 3*math.pi/4, math.pi ] )
+        zvals = yvals*numpy.sin(tilt)
+        yvals = yvals*numpy.cos(tilt)
+        points = numpy.empty( (len(xvals), 3) )
+        points[:, 0] = xvals
+        points[:, 1] = yvals
+        points[:, 2] = zvals
+        bigcurve = FixedLengthCurve(radius = 0.25, color = (0.75, 0.75, 0.75), points = points)
+        
     if doring:
         sys.stderr.write("Making ring.\n")
         ring = Ring(color = (0.3, 0.7, 0.9), radius=0.75, thickness=0.1)

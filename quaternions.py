@@ -18,6 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with physvis.  If not, see <https://www.gnu.org/licenses/>.
 
+import math
 import numpy
 
 # ======================================================================
@@ -61,3 +62,11 @@ def quaternion_rotate(p, q):
     qinv = q.copy()
     qinv[0:3] *= -1.
     return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
+
+def axistrig_rotate(v, axis, cosangle_2, sinangle_2):
+    mag = math.sqrt( numpy.square(axis).sum() )
+    uaxis = axis/mag
+    q = numpy.array( [ uaxis[0]*sinangle_2, uaxis[1]*sinangle_2, uaxis[2]*sinangle_2, cosangle_2 ] )
+    return quaternion_rotate(v, q)
+
+    

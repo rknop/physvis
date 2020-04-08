@@ -26,7 +26,7 @@
 from grcontext import *
 from physvis_observer import *
 
-_debug_shaders = True
+_debug_shaders = False
  
 class GLObjectCollection(Observer):
     """The base class for a collection of openGL objects, used internally by a drawing context.
@@ -809,7 +809,7 @@ class LabelObjectCollection(GLObjectCollection):
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
         
             
-# GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
+GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
         
 # ======================================================================
 # CurveCollection
@@ -1366,6 +1366,16 @@ layout (std140) uniform Colors
    vec4 color[{maxnumobj}];
 }};
 
+// This next one is actually not used,
+//  but I need it here because the
+//  context class requires all
+//  shaders to have this uniform.
+layout (std140) uniform SpecularData
+{{
+   float specstr[{maxnumobj}];
+   int specpow[{maxnumobj}];
+}};
+
 layout(location=0) in vec2 label_Position;
 layout(location=1) in vec2 texCoord;
 layout(location=2) in int in_Index;
@@ -1387,11 +1397,20 @@ void main(void)
         fragment_shader = """
 #version 330
 
+uniform vec3 camera_position;
+
+// Ambient color and global lights aren't
+//   used for labels, but the context
+//   class requires all shaders to have
+//   these uniforms.
 uniform vec3 ambientcolor;
-uniform vec3 light1color;
-uniform vec3 light1dir;
-uniform vec3 light2color;
-uniform vec3 light2dir;
+
+uniform int numgloblights;
+layout (std140) uniform GlobalLights
+{{
+  vec3 globlightcolor[{maxnumlights}];
+  vec3 globlightdir[{maxnumlights}];
+}};
 
 uniform sampler2DArray label_textures;
 
@@ -1400,13 +1419,13 @@ flat in int texIndex;
 out vec4 out_Color;
 
 void main(void)
-{
+{{
   vec4 texcolor = texture(label_textures, vec3(uv.x, uv.y, texIndex));
   if (texcolor.a < 0.2)
      discard;
   out_Color = texcolor;
-}
-"""
+}}
+""".format(maxnumlights = self._MAX_GLOBAL_LIGHTS)
 
         # I've cut and paste the rest of this from BasicShader...
         #   this begs some refactoring

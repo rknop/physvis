@@ -245,6 +245,9 @@ class GLObjectCollection(Observer):
                                numpy.array([obj._specular_pow], dtype=numpy.int32))
             self.context.update()
 
+    def yank_and_readd_object(self, subject):
+        raise Exception("Error, yank_and_readd_object not implemented for this collection type.")
+
     def receive_message(self, message, subject):
         # sys.stderr.write("Got message \"{}\" from {}\n".format(message, subject._id))
         if message == "update color":
@@ -258,13 +261,8 @@ class GLObjectCollection(Observer):
         if message == "update everything":
             self.context.run_glcode(lambda : self.push_all_object_info(subject))
         if message == "yank and readd":
-            # import pdb; pdb.set_trace()
-            with Subject._threadlock:
-                # Lock here to avoid the object momentarily blinking out
-                #   (and other race conditions with adding/removing)
-                if subject._id in self.objects and subject.visible:
-                    self.context.remove_object(subject)
-                    self.context.add_object(subject)
+            self.context.run_glcode(lambda : self.yank_and_readd_object(subject))
+
 
 # ======================================================================
 # SimpleObjectCollection
@@ -498,7 +496,7 @@ class SimpleObjectCollection(GLObjectCollection):
             self.do_update_object_color(obj)
 
         self.context.update()    # Redundant... it just happened in the last two function calls
-
+                                    
     # Never call this directly!  It should only be called from within the
     #   draw method of a GrContext
     def draw(self):
@@ -968,6 +966,11 @@ class CurveCollection(GLObjectCollection):
             obj.remove_listener(self)
             
             self.context.update()
+        
+    def yank_and_readd_object(self, obj):
+        with Subject._threadlock:
+            self.do_remove_object(obj)
+            self.do_add_object(obj)
 
     def update_object_vertices(self, obj):
         if not obj.visible: return

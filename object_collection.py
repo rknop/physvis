@@ -257,6 +257,9 @@ class GLObjectCollection(Observer):
             self.update_object_vertices(subject)
         if message == "update everything":
             self.context.run_glcode(lambda : self.push_all_object_info(subject))
+        if message == "yank and readd":
+            self.context.remove_object(subject)
+            self.context.add_object(subject)
 
 # ======================================================================
 # SimpleObjectCollection
@@ -831,7 +834,8 @@ class CurveCollection(GLObjectCollection):
 
         self.curnumlines = 0
         self.line_index = {}
-
+        self.num_lines = {}
+        
         self.pending_objects = 0
         self.pending_lines = 0
 
@@ -884,7 +888,7 @@ class CurveCollection(GLObjectCollection):
             return False
         if len(self.objects) >= self.maxnumobjs:
             return False
-        if self.curnumlines + self.pending_lines + obj.points.shape[0]-1 > self.maxnumlines:
+        if self.curnumlines + self.pending_lines + obj.numpoints-1 > self.maxnumlines:
             return False
         return True
         
@@ -897,15 +901,16 @@ class CurveCollection(GLObjectCollection):
 
         with Subject._threadlock:
             self.pending_objects += 1
-            self.pending_lines += obj.points.shape[0]-1
+            self.pending_lines += obj.numpoints-1
             self.context.run_glcode(lambda : self.do_add_object(obj))
 
     def do_add_object(self, obj):
         with Subject._threadlock:
             self.objects[obj._id] = obj
             self.line_index[obj._id] = self.curnumlines
+            self.num_lines[obj._id] = obj.numpoints-1
             obj.add_listener(self)
-            self.curnumlines += obj.points.shape[0]-1
+            self.curnumlines += obj.numpoints-1
             # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
 
             n = len(self.objects) - 1
@@ -913,14 +918,14 @@ class CurveCollection(GLObjectCollection):
             self.push_all_object_info(obj)
 
             self.pending_objects -= 1
-            self.pending_lines -= obj.points.shape[0]-1
+            self.pending_lines -= obj.numpoints-1
         
     def do_remove_object(self, obj):
         with Subject._threadlock:
             if not obj._id in self.objects: return
             dex = self.object_index[obj._id]
             if dex < len(self.objects)-1:
-                srcoffset = self.line_index[obj._id] + (obj.points.shape[0]-1)
+                srcoffset = self.line_index[obj._id] + self.num_lines[obj._id]
                 dstoffset = self.line_index[obj._id]
                 GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
                 data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
@@ -939,7 +944,7 @@ class CurveCollection(GLObjectCollection):
                 
                 self.do_remove_object_uniform_buffer_data(obj)
 
-            numlinestoyank = obj.points.shape[0]-1
+            numlinestoyank = self.num_lines[obj._id]
             for objid in self.objects:
                 if self.object_index[objid] > dex:
                     self.line_index[objid] -= numlinestoyank
@@ -949,6 +954,7 @@ class CurveCollection(GLObjectCollection):
             del self.objects[obj._id]
             del self.object_index[obj._id]
             del self.line_index[obj._id]
+            del self.num_lines[obj._id]
             obj.remove_listener(self)
             
             self.context.update()
@@ -964,24 +970,24 @@ class CurveCollection(GLObjectCollection):
     #   added the object, or things will go haywire.
     def do_update_object_points(self, obj):
         with Subject._threadlock:
-            if obj.points.shape[0] == 0:
+            if obj.numpoints < 2:
                 return
             if not obj._id in self.objects:
                 return
             
-            linespoints = numpy.empty( [ (obj.points.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
-            transpoints = numpy.empty( [ (obj.trans.shape[0]-1)*2, 4 ], dtype=numpy.float32 )
+            linespoints = numpy.empty( [ (obj.numpoints-1)*2, 4 ], dtype=numpy.float32 )
+            transpoints = numpy.empty( [ (obj.numpoints-1)*2, 4 ], dtype=numpy.float32 )
             linespoints[:, 3] = 1.
             transpoints[:, 3] = 0.
             linespoints[0, 0:3] = obj.points[0, :]
             transpoints[0, 0:3] = obj.trans[0, :]
-            for i in range(1, obj.points.shape[0]-1):
+            for i in range(1, obj.numpoints-1):
                 linespoints[2*i - 1, 0:3] = obj.points[i, :]
                 transpoints[2*i - 1, 0:3] = obj.trans[i, :]
                 linespoints[2*i, 0:3] = obj.points[i, :]
                 transpoints[2*i, 0:3] = obj.trans[i, :]
-            linespoints[-1, 0:3] = obj.points[-1, :]
-            transpoints[-1, 0:3] = obj.trans[-1, :]
+            linespoints[-1, 0:3] = obj.points[obj.numpoints-1, :]
+            transpoints[-1, 0:3] = obj.trans[obj.numpoints-1, :]
 
             offset = self.line_index[obj._id]
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
@@ -997,7 +1003,7 @@ class CurveCollection(GLObjectCollection):
         self.do_update_object_points(obj)
 
         dex = self.object_index[obj._id]
-        objindexcopies = numpy.empty(2*(obj.points.shape[0]-1), dtype=numpy.int32)
+        objindexcopies = numpy.empty(2*(obj.numpoints-1), dtype=numpy.int32)
         objindexcopies[:] = dex
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.line_index[obj._id]*4*1*2, objindexcopies)

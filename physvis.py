@@ -85,6 +85,7 @@ The following ojects are available
   — box
   — cylinder
   — cone
+  — curve
   — ellipsoid
   — faces
   — helix
@@ -270,13 +271,12 @@ that you will be able to get a display as a Qt OpenGL widget
 DIFFERENCES FROM VPYTHON 6           
 
 Many objects are not implemented. physvis includes some objects not in VPython 6
-(e.g. *axis).  (There are also some visual_base.py, e.g. FixedLengthCurve and Icosahedron.
+(e.g. *axis).  (There are also some in visual_base.py, e.g. Icosahedron.)
 There may be some parameters some objects take which weren't there in VPython.
 
 An incomplete list things not implemented:
 
 Objects missing:
-  * curve (but see visual_base.CylindarStack & visual_base.FixedLengthCurve)
   * extrusion
   * local lights
   * points
@@ -365,6 +365,17 @@ def cone(*args, **kwargs):
     radius — the radius of the circle that makes the base of the cone.  (Really a 12-sided polygon, smooth shaded.)
     """
     return vb.Cone(*args, **kwargs)
+
+def curve(pos=None, points=None, *args, **kwargs):
+    """A curve.
+
+    pos or points — A n×3 array of points that make up the centerline of the curve
+    raidus — the radius of the cross-section of the curve
+    """
+    if pos is None:
+        return vb.Curve(points=points, *args, **kwargs)
+    else:
+        return vb.Curve(points=pos, *args, **kwargs)
 
 def ellipsoid(*args, **kwargs):
     """An ellipsoidal solid.

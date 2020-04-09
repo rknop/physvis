@@ -181,41 +181,39 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_matrix(obj))
 
     def do_update_object_matrix(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects:
-                return
-            # sys.stderr.write("Pushing object matrix:\n{}\n".format(obj.model_matrix))
-            dex = self.object_index[obj._id]
-            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
-            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
-            self.context.update()
+        if not obj._id in self.objects:
+            return
+        # sys.stderr.write("Pushing object matrix:\n{}\n".format(obj.model_matrix))
+        dex = self.object_index[obj._id]
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, obj.model_matrix.flatten())
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, obj.inverse_model_matrix.flatten())
+        self.context.update()
 
     def do_remove_object_uniform_buffer_data(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects: return
-            dex = self.object_index[obj._id]
-            # sys.stderr.write("Removing uniform buffer data at dex={}\n".format(dex))
-            if dex < len(self.objects)-1:
-                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
-                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*16, (len(self.objects)-(dex+1))*4*16 )
-                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, data)
+        if not obj._id in self.objects: return
+        dex = self.object_index[obj._id]
+        # sys.stderr.write("Removing unif.buf. for {} at dex={} of {}\n".format(obj._id, dex, len(self.objects)))
+        if dex < len(self.objects)-1:
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelmatrixbuffer)
+            data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*16, (len(self.objects)-(dex+1))*4*16 )
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*16, data)
 
-                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
-                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*12, (len(self.objects)-(dex+1))*4*12 )
-                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, data)
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.modelnormalmatrixbuffer)
+            data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*12, (len(self.objects)-(dex+1))*4*12 )
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*12, data)
 
-                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
-                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
-                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
+            data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
 
-                GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
-                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
-                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
-                data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION
-                                                                     +dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
-                GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex)*4*4, data)
+            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
+            data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, data)
+            data = GL.glGetBufferSubData( GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION
+                                                                 +dex+1)*4*4, (len(self.objects)-(dex+1))*4*4 )
+            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, (GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex)*4*4, data)
             
     def update_object_color(self, obj):
         if not obj.visible: return
@@ -225,25 +223,24 @@ class GLObjectCollection(Observer):
         self.context.run_glcode(lambda : self.do_update_object_color(obj))
 
     def do_update_object_color(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects:
-                return
-            # sys.stderr.write("Updating an object color.\n")
-            dex = self.object_index[obj._id]
+        if not obj._id in self.objects:
+            return
+        # sys.stderr.write("Updating an object color.\n")
+        dex = self.object_index[obj._id]
 
-            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
-            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, obj._color)
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.colorbuffer)
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, dex*4*4, obj._color)
 
-            # Note that std140 layout means the size of each element in the
-            #   array is rounded up to the size of a vec4, which is why there
-            #   are extra *4's below.  (Lots of wasted memory.)
-            
-            GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
-            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*dex,
-                               numpy.array([obj._specular_strength], dtype=numpy.float32))
-            GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*(GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex),
-                               numpy.array([obj._specular_pow], dtype=numpy.int32))
-            self.context.update()
+        # Note that std140 layout means the size of each element in the
+        #   array is rounded up to the size of a vec4, which is why there
+        #   are extra *4's below.  (Lots of wasted memory.)
+
+        GL.glBindBuffer(GL.GL_UNIFORM_BUFFER, self.speculardatabuf)
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*dex,
+                           numpy.array([obj._specular_strength], dtype=numpy.float32))
+        GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 4*4*(GLObjectCollection._MAX_OBJS_PER_COLLECTION+dex),
+                           numpy.array([obj._specular_pow], dtype=numpy.int32))
+        self.context.update()
 
     def yank_and_readd_object(self, subject):
         raise Exception("Error, yank_and_readd_object not implemented for this collection type.")
@@ -383,66 +380,63 @@ class SimpleObjectCollection(GLObjectCollection):
         if not self.canyoutake(obj):
             raise Exception("Error, can't add object, limits reached.")
 
-        with Subject._threadlock:
-            self.pending_objects += 1
-            self.pending_tris += obj.num_triangles
+        self.pending_objects += 1
+        self.pending_tris += obj.num_triangles
 
-            self.context.run_glcode(lambda : self.do_add_object(obj))
+        self.context.run_glcode(lambda : self.do_add_object(obj))
             
 
     def do_add_object(self, obj):
-        with Subject._threadlock:
-            if obj._id in self.objects:
-                return
-            self.object_triangle_index[obj._id] = self.curnumtris
-            self.objects[obj._id] = obj
-            self.curnumtris += obj.num_triangles
-            self.object_index[obj._id] = len(self.objects) - 1
-            self.push_all_object_info(obj)
-            obj.add_listener(self)
+        if obj._id in self.objects:
+            return
+        self.object_triangle_index[obj._id] = self.curnumtris
+        self.objects[obj._id] = obj
+        self.curnumtris += obj.num_triangles
+        self.object_index[obj._id] = len(self.objects) - 1
+        self.push_all_object_info(obj)
+        obj.add_listener(self)
 
-            self.pending_objects -= 1
-            self.pending_tris -= obj.num_triangles
-            # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
+        self.pending_objects -= 1
+        self.pending_tris -= obj.num_triangles
+        # sys.stderr.write("Up to {} objects, {} triangles.\n".format(len(self.objects), self.curnumtris))
 
     def do_remove_object(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects:
-                return
-            dex = self.object_index[obj._id]
-            # sys.stderr.write("Removing object at dex={} out of {}\n".format(dex, len(self.objects)))
-            if dex < len(self.objects)-1:
-                srcoffset = self.object_triangle_index[obj._id] + obj.num_triangles
-                dstoffset = self.object_triangle_index[obj._id]
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
-                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*3, (self.curnumtris - srcoffset)*4*4*3 )
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*3, data)
+        if not obj._id in self.objects:
+            return
+        dex = self.object_index[obj._id]
+        # sys.stderr.write("Removing object at dex={} out of {}\n".format(dex, len(self.objects)))
+        if dex < len(self.objects)-1:
+            srcoffset = self.object_triangle_index[obj._id] + obj.num_triangles
+            dstoffset = self.object_triangle_index[obj._id]
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*3, (self.curnumtris - srcoffset)*4*4*3 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*3, data)
 
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*3*3, (self.curnumtris - srcoffset)*4*3*3 )
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*3*3, data)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*3*3, (self.curnumtris - srcoffset)*4*3*3 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*3*3, data)
 
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
-                data = numpy.empty( (self.curnumtris - srcoffset)*3, dtype=numpy.int32 )
-                GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*3, (self.curnumtris - srcoffset)*4*1*3,
-                                    ctypes.c_void_p(data.__array_interface__['data'][0]) )
-                data[:] -= 1
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*3, data)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+            data = numpy.empty( (self.curnumtris - srcoffset)*3, dtype=numpy.int32 )
+            GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*3, (self.curnumtris - srcoffset)*4*1*3,
+                                ctypes.c_void_p(data.__array_interface__['data'][0]) )
+            data[:] -= 1
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*3, data)
 
-                self.do_remove_object_uniform_buffer_data(obj)
+            self.do_remove_object_uniform_buffer_data(obj)
 
-            for objid in self.objects:
-                if self.object_index[objid] > dex:
-                    self.object_triangle_index[objid] -= obj.num_triangles
-                    self.object_index[objid] -= 1
-            self.curnumtris -= obj.num_triangles
+        for objid in self.objects:
+            if self.object_index[objid] > dex:
+                self.object_triangle_index[objid] -= obj.num_triangles
+                self.object_index[objid] -= 1
+        self.curnumtris -= obj.num_triangles
 
-            del self.objects[obj._id]
-            del self.object_index[obj._id]
-            del self.object_triangle_index[obj._id]
-            obj.remove_listener(self)
-            
-            self.context.update()
+        del self.objects[obj._id]
+        del self.object_index[obj._id]
+        del self.object_triangle_index[obj._id]
+        obj.remove_listener(self)
+
+        self.context.update()
                 
     # Updates positions of verticies and directions of normals.  Can NOT
     # change the number of vertices.
@@ -452,70 +446,67 @@ class SimpleObjectCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_update_object_vertex(obj))
 
     def do_update_object_vertex(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects:
-                return
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
-            self.context.update()
+        if not obj._id in self.objects:
+            return
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata)
+        self.context.update()
 
 
     def push_all_object_info(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects: return
-            dex = self.object_index[obj._id]
+        if not obj._id in self.objects: return
+        dex = self.object_index[obj._id]
 
-            # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
-            #                  .format(dex, obj.num_triangles,
-            #                          self.object_triangle_index[obj._id]))
-            # sys.stderr.write("\nvertexdata: {}\n".format(obj.vertexdata))
-            # sys.stderr.write("\nnormaldata: {}\n".format(obj.normaldata))
-            # sys.stderr.write("\ncolordata: {}\n".format(obj.colordata))
-            # sys.stderr.write("\nmatrixdata: {}\n".format(obj.matrixdata))
-            # sys.stderr.write("\nnormalmatrixdata: {}\n".format(obj.normalmatrixdata))
-            # sys.exit(20)
+        # sys.stderr.write("Pushing object info for index {} (with {} triangles, at offset {}).\n"
+        #                  .format(dex, obj.num_triangles,
+        #                          self.object_triangle_index[obj._id]))
+        # sys.stderr.write("\nvertexdata: {}\n".format(obj.vertexdata))
+        # sys.stderr.write("\nnormaldata: {}\n".format(obj.normaldata))
+        # sys.stderr.write("\ncolordata: {}\n".format(obj.colordata))
+        # sys.stderr.write("\nmatrixdata: {}\n".format(obj.matrixdata))
+        # sys.stderr.write("\nnormalmatrixdata: {}\n".format(obj.normalmatrixdata))
+        # sys.exit(20)
 
-            # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata.flatten())
+        # sys.stderr.write("Pushing vertexdata for obj {}\n".format(dex))
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.vertexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*4*3, obj.vertexdata.flatten())
 
-            # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata.flatten())
+        # sys.stderr.write("Pushing normaldata for obj {}\n".format(dex))
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.normalbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*3*3, obj.normaldata.flatten())
 
-            objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
-            objindexcopies[:] = dex
-            # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
-            # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
+        objindexcopies = numpy.empty(self.objects[obj._id].num_triangles*3, dtype=numpy.int32)
+        objindexcopies[:] = dex
+        # sys.stderr.write("Pushing object_index for obj {}\n".format(dex))
+        # sys.stderr.write("objindexcopies = {}\n".format(objindexcopies))
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.object_triangle_index[obj._id]*4*1*3, objindexcopies)
 
-            self.do_update_object_matrix(obj)
-            self.do_update_object_color(obj)
+        self.do_update_object_matrix(obj)
+        self.do_update_object_color(obj)
 
         self.context.update()    # Redundant... it just happened in the last two function calls
                                     
     # Never call this directly!  It should only be called from within the
     #   draw method of a GrContext
     def draw(self):
-        with Subject._threadlock:
-            # sys.stderr.write("Drawing Simple Object Collection with shader progid {}\n".format(self.shader.progid))
-            GL.glUseProgram(self.shader.progid)
-            self.bind_uniform_buffers()
-            self.bind_vertex_attribs()
-            self.shader.set_camera_perspective()
-            self.shader.set_camera_posrot()
+        # sys.stderr.write("Drawing Simple Object Collection with shader progid {}\n".format(self.shader.progid))
+        GL.glUseProgram(self.shader.progid)
+        self.bind_uniform_buffers()
+        self.bind_vertex_attribs()
+        self.shader.set_camera_perspective()
+        self.shader.set_camera_posrot()
 
-            if self.draw_as_lines:
-                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
-            else:
-                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
-            GL.glBindVertexArray(self.VAO)
-            # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
-            GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.curnumtris*3)
-            # sys.stderr.write("...done drawing triangles.")
+        if self.draw_as_lines:
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
+        else:
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+        GL.glBindVertexArray(self.VAO)
+        # sys.stderr.write("About to draw {} triangles\n".format(self.curnumtris))
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.curnumtris*3)
+        # sys.stderr.write("...done drawing triangles.")
 
 
 GLObjectCollection.register_collection_type(SimpleObjectCollection, GLObjectCollection._OBJ_TYPE_SIMPLE)
@@ -627,25 +618,23 @@ class LabelObjectCollection(GLObjectCollection):
         if not self.canyoutake(obj):
             raise Exception("Error, can't add label, limits reached.")
 
-        with Subject._threadlock:
-            self.pending_labels += 1
-            self.context.run_glcode(lambda : self.do_add_object(obj))
+        self.pending_labels += 1
+        self.context.run_glcode(lambda : self.do_add_object(obj))
 
     def do_add_object(self, obj):
-        with Subject._threadlock:
-            if obj._id in self.objects:
-                return
-            self.objects[obj._id] = obj
-            self.object_index[obj._id] = len(self.objects) - 1
-            for i in range(self.texture_spot_used.shape[0]):
-                if not self.texture_spot_used[i]:
-                    self.label_texture_index[obj._id] = i
-                    self.texture_spot_used[i] = True
-                    break
-            self.push_all_object_info(obj)
-            obj.add_listener(self)
+        if obj._id in self.objects:
+            return
+        self.objects[obj._id] = obj
+        self.object_index[obj._id] = len(self.objects) - 1
+        for i in range(self.texture_spot_used.shape[0]):
+            if not self.texture_spot_used[i]:
+                self.label_texture_index[obj._id] = i
+                self.texture_spot_used[i] = True
+                break
+        self.push_all_object_info(obj)
+        obj.add_listener(self)
 
-            self.pending_labels -= 1
+        self.pending_labels -= 1
 
     def do_remove_object(self, obj):
         if not obj._id in self.objects:
@@ -694,126 +683,123 @@ class LabelObjectCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.push_object_vertices(obj) )
 
     def push_object_vertices(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects:
-                return
-            dex = self.object_index[obj._id]
+        if not obj._id in self.objects:
+            return
+        dex = self.object_index[obj._id]
 
-            # triangle positions
-            # I'm worried about left hand forward
-            tris = numpy.ones( (6, 2) , dtype=numpy.float32)
-            tris[0, 0] = obj.glxoff - obj.fullwid/2.
-            tris[0, 1] = obj.glyoff + obj.fullhei
-            tris[1, 0] = obj.glxoff + obj.fullwid/2.
-            tris[1, 1] = obj.glyoff + obj.fullhei
-            tris[2, 0] = obj.glxoff - obj.fullwid/2.
-            tris[2, 1] = obj.glyoff
-            tris[3, 0] = obj.glxoff + obj.fullwid/2.
-            tris[3, 1] = obj.glyoff + obj.fullhei
-            tris[4, 0] = obj.glxoff + obj.fullwid/2.
-            tris[4, 1] = obj.glyoff
-            tris[5, 0] = obj.glxoff - obj.fullwid/2.
-            tris[5, 1] = obj.glyoff
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
-            
-            # sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
-            #                  "offset ({}, {}) and size ({}, {})\n"
-            #                  .format(obj.pos[0], obj.pos[1], obj.pos[2],
-            #                          obj.glxoff, obj.glyoff,
-            #                          obj.fullwid, obj.fullhei) )
-            # for i in range(6):
-            #     sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
+        # triangle positions
+        # I'm worried about left hand forward
+        tris = numpy.ones( (6, 2) , dtype=numpy.float32)
+        tris[0, 0] = obj.glxoff - obj.fullwid/2.
+        tris[0, 1] = obj.glyoff + obj.fullhei
+        tris[1, 0] = obj.glxoff + obj.fullwid/2.
+        tris[1, 1] = obj.glyoff + obj.fullhei
+        tris[2, 0] = obj.glxoff - obj.fullwid/2.
+        tris[2, 1] = obj.glyoff
+        tris[3, 0] = obj.glxoff + obj.fullwid/2.
+        tris[3, 1] = obj.glyoff + obj.fullhei
+        tris[4, 0] = obj.glxoff + obj.fullwid/2.
+        tris[4, 1] = obj.glyoff
+        tris[5, 0] = obj.glxoff - obj.fullwid/2.
+        tris[5, 1] = obj.glyoff
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.labelposbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, tris)
 
-            # texture coordinates
-            #
-            # I don't understsand this: when I swap 1<->0 in y, the text renders
-            # exactly the same way.  I would think it would flip the thing vertically
-            texcoords = numpy.array( [0., 0.,
-                                      1., 0.,
-                                      0., 1.,
-                                      1., 0.,
-                                      1., 1.,
-                                      0., 1.] , dtype=numpy.float32)
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+        # sys.stderr.write("Pushing object vertices for text at ({}, {}, {}) with "
+        #                  "offset ({}, {}) and size ({}, {})\n"
+        #                  .format(obj.pos[0], obj.pos[1], obj.pos[2],
+        #                          obj.glxoff, obj.glyoff,
+        #                          obj.fullwid, obj.fullhei) )
+        # for i in range(6):
+        #     sys.stderr.write(" ({:6.2f}, {:6.2f})\n".format(tris[i, 0], tris[i, 1]))
+
+        # texture coordinates
+        #
+        # I don't understsand this: when I swap 1<->0 in y, the text renders
+        # exactly the same way.  I would think it would flip the thing vertically
+        texcoords = numpy.array( [0., 0.,
+                                  1., 0.,
+                                  0., 1.,
+                                  1., 0.,
+                                  1., 1.,
+                                  0., 1.] , dtype=numpy.float32)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
 
     def push_all_object_info(self, obj):
-        with Subject._threadlock:
+        sys.stderr.flush()
+        if not obj._id in self.objects:
+            sys.stderr.write("LabelObjectCollection: tried to push object info for label not in collection")
             sys.stderr.flush()
-            if not obj._id in self.objects:
-                sys.stderr.write("LabelObjectCollection: tried to push object info for label not in collection")
-                sys.stderr.flush()
-                return
-            dex = self.object_index[obj._id]
-            texdex = self.label_texture_index[obj._id]
+            return
+        dex = self.object_index[obj._id]
+        texdex = self.label_texture_index[obj._id]
 
-            sys.stderr.flush()
-            self.push_object_vertices(obj)
-            sys.stderr.flush()
+        sys.stderr.flush()
+        self.push_object_vertices(obj)
+        sys.stderr.flush()
 
-            # object index
-            objindexcopies = numpy.empty(6, dtype=numpy.int32)
-            objindexcopies[:] = dex
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, objindexcopies)
+        # object index
+        objindexcopies = numpy.empty(6, dtype=numpy.int32)
+        objindexcopies[:] = dex
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, objindexcopies)
 
-            # texture index
-            texindexcopies = numpy.empty(6, dtype=numpy.int32)
-            texindexcopies[:] = texdex
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, texindexcopies)
-            
-            # texture coordinates
-            texcoords = numpy.array( [0., 0.,
-                                      1., 0.,
-                                      0., 1.,
-                                      1., 0.,
-                                      1., 1.,
-                                      0., 1.] , dtype=numpy.float32)
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
+        # texture index
+        texindexcopies = numpy.empty(6, dtype=numpy.int32)
+        texindexcopies[:] = texdex
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texindexbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*4, texindexcopies)
 
-            # texture image data
-            # ####
-            # sys.stderr.write("Writing texture image to test.ppm, alpha in test.pgm\n")
-            # ofppm = open("test.ppm", "wb")
-            # ofpgm = open("test.pgm", "wb")
-            # ofppm.write("P6 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
-            # ofpgm.write("P5 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
-            # for j in range(LabelObjectCollection._TEXTURE_SIZE):
-            #     for i in range(LabelObjectCollection._TEXTURE_SIZE):
-            #         ofppm.write(obj.texturedata[j, i, (0, 1, 2)])
-            #         ofpgm.write(obj.texturedata[j, i, 3])
-            # ofppm.close()
-            # ofpgm.close()
-            # ####
-            GL.glActiveTexture(GL.GL_TEXTURE0)
-            GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
-            GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex,
-                               LabelObjectCollection._TEXTURE_SIZE, LabelObjectCollection._TEXTURE_SIZE, 1,
-                               GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, obj.texturedata)
+        # texture coordinates
+        texcoords = numpy.array( [0., 0.,
+                                  1., 0.,
+                                  0., 1.,
+                                  1., 0.,
+                                  1., 1.,
+                                  0., 1.] , dtype=numpy.float32)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.texcoordbuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dex*6*2*4, texcoords)
 
-            self.do_update_object_matrix(obj)
-            # Color is irrelevant here
+        # texture image data
+        # ####
+        # sys.stderr.write("Writing texture image to test.ppm, alpha in test.pgm\n")
+        # ofppm = open("test.ppm", "wb")
+        # ofpgm = open("test.pgm", "wb")
+        # ofppm.write("P6 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
+        # ofpgm.write("P5 {sz} {sz} 255\n".format(sz=LabelObjectCollection._TEXTURE_SIZE).encode("ascii"))
+        # for j in range(LabelObjectCollection._TEXTURE_SIZE):
+        #     for i in range(LabelObjectCollection._TEXTURE_SIZE):
+        #         ofppm.write(obj.texturedata[j, i, (0, 1, 2)])
+        #         ofpgm.write(obj.texturedata[j, i, 3])
+        # ofppm.close()
+        # ofpgm.close()
+        # ####
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D_ARRAY, self.texturearray)
+        GL.glTexSubImage3D(GL.GL_TEXTURE_2D_ARRAY, 0, 0, 0, texdex,
+                           LabelObjectCollection._TEXTURE_SIZE, LabelObjectCollection._TEXTURE_SIZE, 1,
+                           GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, obj.texturedata)
 
-            self.context.update()   # Redundant... just happened in do_update_object_matrix
+        self.do_update_object_matrix(obj)
+        # Color is irrelevant here
+
+        self.context.update()   # Redundant... just happened in do_update_object_matrix
 
     # Never call this directly!  It should only be called from within the
     #   draw method of a GrContext
     def draw(self):
-        with Subject._threadlock:
-            GL.glUseProgram(self.shader.progid)
-            GL.glEnable(GL.GL_BLEND);
-            GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);  
-            self.bind_uniform_buffers()
-            self.bind_vertex_attribs()
-            self.shader.set_camera_perspective()
-            self.shader.set_camera_posrot()
+        GL.glUseProgram(self.shader.progid)
+        GL.glEnable(GL.GL_BLEND);
+        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA);  
+        self.bind_uniform_buffers()
+        self.bind_vertex_attribs()
+        self.shader.set_camera_perspective()
+        self.shader.set_camera_posrot()
 
-            GL.glBindVertexArray(self.VAO)
-            GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
-        
+        GL.glBindVertexArray(self.VAO)
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, len(self.objects)*6)
+
             
 GLObjectCollection.register_collection_type(LabelObjectCollection, GLObjectCollection._OBJ_TYPE_LABEL)
         
@@ -902,75 +888,82 @@ class CurveCollection(GLObjectCollection):
         if not self.canyoutake(obj):
             raise Exception("Error, can't add curve, wrong type or limits reached.")
 
-        with Subject._threadlock:
-            self.pending_objects += 1
-            self.pending_lines += max(0, obj.numpoints-1)
-            self.context.run_glcode(lambda : self.do_add_object(obj))
+        self.pending_objects += 1
+        self.pending_lines += max(0, obj.numpoints-1)
+        self.context.run_glcode(lambda : self.do_add_object(obj))
 
     # RACE CONDITION WARNING
     #  If obj.numpoints changed between
     #  canyoutake and now,
     #  the number of pending_lines will be wrong!!!!!!
-    def do_add_object(self, obj):
-        with Subject._threadlock:
-            self.objects[obj._id] = obj
-            objpoints = obj.numpoints
-            self.line_index[obj._id] = self.curnumlines
-            self.num_lines[obj._id] = max(0, objpoints-1)
-            obj.add_listener(self)
-            self.curnumlines += max(0, objpoints-1)
-            # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
+    def do_add_object(self, obj, notpending=False):
+        self.objects[obj._id] = obj
+        objpoints = obj.numpoints
+        self.line_index[obj._id] = self.curnumlines
+        self.num_lines[obj._id] = max(0, objpoints-1)
+        obj.add_listener(self)
+        self.curnumlines += max(0, objpoints-1)
+        # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
 
-            n = len(self.objects) - 1
-            self.object_index[obj._id] = n
-            self.push_all_object_info(obj)
+        n = len(self.objects) - 1
+        self.object_index[obj._id] = n
+        # sys.stderr.write("Adding object {} at dex {} of {}\n".format(obj._id, n, len(self.objects)))
+        self.push_all_object_info(obj)
 
+        if notpending:
             self.pending_objects -= 1
             self.pending_lines -= max(0, objpoints-1)
         
     def do_remove_object(self, obj):
-        with Subject._threadlock:
-            if not obj._id in self.objects: return
-            dex = self.object_index[obj._id]
-            if dex < len(self.objects)-1:
-                srcoffset = self.line_index[obj._id] + self.num_lines[obj._id]
-                dstoffset = self.line_index[obj._id]
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
-                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
+        if not obj._id in self.objects: return
+        dex = self.object_index[obj._id]
+        # sys.stderr.write("Removing curve {} ({}) out of {}\n".format(dex, obj._id, len(self.objects)))
+        if dex < len(self.objects)-1:
+            srcoffset = self.line_index[obj._id] + self.num_lines[obj._id]
+            dstoffset = self.line_index[obj._id]
+            # Because the number of lines could be 0, don't do shit we don't have to do
+            # if srcoffset != dstoffset:
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2,
+                                          (self.curnumlines - srcoffset)*4*4*2 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
 
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
-                data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2, (self.curnumlines - srcoffset)*4*4*2 )
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
+            data = GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*4*2,
+                                          (self.curnumlines - srcoffset)*4*4*2 )
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*4*2, data)
 
-                GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
-                data = numpy.empty( (self.curnumlines - srcoffset)*2, dtype=numpy.int32 )
-                GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*2, (self.curnumlines - srcoffset)*4*1*2,
-                                    ctypes.c_void_p(data.__array_interface__['data'][0]) )
-                data[:] -= 1
-                GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*2, data)
-                
-                self.do_remove_object_uniform_buffer_data(obj)
+            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
+            data = numpy.empty( (self.curnumlines - srcoffset)*2, dtype=numpy.int32 )
+            GL.glGetBufferSubData( GL.GL_ARRAY_BUFFER, srcoffset*4*1*2,
+                                   (self.curnumlines - srcoffset)*4*1*2,
+                                   ctypes.c_void_p(data.__array_interface__['data'][0]) )
+            data[:] -= 1
+            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, dstoffset*4*1*2, data)
 
-            numlinestoyank = self.num_lines[obj._id]
-            for objid in self.objects:
-                if self.object_index[objid] > dex:
-                    self.line_index[objid] -= numlinestoyank
-                    self.object_index[objid] -= 1
-            self.curnumlines -= numlinestoyank
+            self.do_remove_object_uniform_buffer_data(obj)
 
-            del self.objects[obj._id]
-            del self.object_index[obj._id]
-            del self.line_index[obj._id]
-            del self.num_lines[obj._id]
-            obj.remove_listener(self)
-            
-            self.context.update()
+        numlinestoyank = self.num_lines[obj._id]
+        for objid in self.objects:
+            if self.object_index[objid] > dex:
+                self.line_index[objid] -= numlinestoyank
+                self.object_index[objid] -= 1
+        self.curnumlines -= numlinestoyank
+
+        del self.objects[obj._id]
+        del self.object_index[obj._id]
+        del self.line_index[obj._id]
+        del self.num_lines[obj._id]
+        obj.remove_listener(self)
+
+        self.context.update()
         
     def yank_and_readd_object(self, obj):
-        with Subject._threadlock:
-            self.do_remove_object(obj)
-            self.do_add_object(obj)
+        # sys.stderr.write("yanking {}\n".format(obj._id))
+        self.do_remove_object(obj)
+        # import pdb; pdb.set_trace()
+        # sys.stderr.write("readding {}\n".format(obj._id))
+        self.do_add_object(obj, notpending=True)
 
     def update_object_vertices(self, obj):
         if not obj.visible: return
@@ -980,44 +973,44 @@ class CurveCollection(GLObjectCollection):
         self.context.run_glcode(lambda : self.do_update_object_points(obj))
 
     def do_update_object_points(self, obj):
-        with Subject._threadlock:
-            # Use our count of points rather than the
-            #  object's, as the object's may have
-            #  changed... but our count represents
-            #  what's in the buffers.  There is a
-            #  wee race condition where we might
-            #  be drawing stuff that is now junk
-            #  in the object's points data...
-            #  though right now I don't support
-            #  reducing the number of points in the
-            #  curve.  But I might later....
-            if not obj._id in self.objects:
-                return
+        # Use our count of points rather than the
+        #  object's, as the object's may have
+        #  changed... but our count represents
+        #  what's in the buffers.  There is a
+        #  wee race condition where we might
+        #  be drawing stuff that is now junk
+        #  in the object's points data...
+        #  though right now I don't support
+        #  reducing the number of points in the
+        #  curve.  But I might later....
+        if not obj._id in self.objects:
+            return
 
-            numpoints = self.num_lines[obj._id]+1 
-            if numpoints < 2:
-                return
-           
-            linespoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
-            transpoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
-            linespoints[:, 3] = 1.
-            transpoints[:, 3] = 0.
-            linespoints[0, 0:3] = obj.points[0, :]
-            transpoints[0, 0:3] = obj.trans[0, :]
-            for i in range(1, numpoints-1):
-                linespoints[2*i - 1, 0:3] = obj.points[i, :]
-                transpoints[2*i - 1, 0:3] = obj.trans[i, :]
-                linespoints[2*i, 0:3] = obj.points[i, :]
-                transpoints[2*i, 0:3] = obj.trans[i, :]
-            linespoints[-1, 0:3] = obj.points[numpoints-1, :]
-            transpoints[-1, 0:3] = obj.trans[numpoints-1, :]
+        numpoints = self.num_lines[obj._id]+1 
+        if numpoints < 2:
+            return
 
-            offset = self.line_index[obj._id]
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
-            GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
-            GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
-            self.context.update()
+        linespoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
+        transpoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
+        linespoints[:, 3] = 1.
+        transpoints[:, 3] = 0.
+        linespoints[0, 0:3] = obj.points[0, :]
+        transpoints[0, 0:3] = obj.trans[0, :]
+        for i in range(1, numpoints-1):
+            linespoints[2*i - 1, 0:3] = obj.points[i, :]
+            transpoints[2*i - 1, 0:3] = obj.trans[i, :]
+            linespoints[2*i, 0:3] = obj.points[i, :]
+            transpoints[2*i, 0:3] = obj.trans[i, :]
+        linespoints[-1, 0:3] = obj.points[numpoints-1, :]
+        transpoints[-1, 0:3] = obj.trans[numpoints-1, :]
+
+        offset = self.line_index[obj._id]
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
+        # 4 floats per point * 4 bytes per float * 2 points per line
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, linespoints)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.transversebuffer)
+        GL.glBufferSubData(GL.GL_ARRAY_BUFFER, offset*4*4*2, transpoints)
+        self.context.update()
         
     def push_all_object_info(self, obj):
         if not obj._id in self.objects:
@@ -1042,21 +1035,20 @@ class CurveCollection(GLObjectCollection):
     #
     # (This has a lot of redundant code with the same method in SimpleObjectCollection.)
     def draw(self):
-        with Subject._threadlock:
-            # sys.stderr.write("Drawing Curve Tube Collection with shader progid {}\n".format(self.shader.progid))
-            GL.glUseProgram(self.shader.progid)
-            self.bind_uniform_buffers()
-            self.bind_vertex_attribs()
-            self.shader.set_camera_perspective()
-            self.shader.set_camera_posrot()
-            if self.draw_as_lines:
-                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
-            else:
-                GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
-            GL.glBindVertexArray(self.VAO)
-            # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
-            GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
-            # sys.stderr.write("...done drawing lines\n");
+        # sys.stderr.write("Drawing Curve Tube Collection with shader progid {}\n".format(self.shader.progid))
+        GL.glUseProgram(self.shader.progid)
+        self.bind_uniform_buffers()
+        self.bind_vertex_attribs()
+        self.shader.set_camera_perspective()
+        self.shader.set_camera_posrot()
+        if self.draw_as_lines:
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_LINE)
+        else:
+            GL.glPolygonMode(GL.GL_FRONT_AND_BACK, GL.GL_FILL)
+        GL.glBindVertexArray(self.VAO)
+        # sys.stderr.write("About to draw {} lines\n".format(self.curnumlines))
+        GL.glDrawArrays(GL.GL_LINES, 0, self.curnumlines*2)
+        # sys.stderr.write("...done drawing lines\n");
 
 GLObjectCollection.register_collection_type(CurveCollection, GLObjectCollection._OBJ_TYPE_CURVE)
         

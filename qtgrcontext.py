@@ -75,6 +75,8 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
         if not self.window_is_initialized:
             return
         try:
+            # Make sure that no rendering is happening while we do idle shit
+            GL.glFinish()
             while not self.things_to_run.empty():
                 func = self.things_to_run.get()
                 func()
@@ -99,7 +101,6 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
         with Subject._threadlock:
             # sys.stderr.write("About to draw collections\n")
             for collection in self.object_collections:
-                
                 collection.draw()
 
                 err = GL.glGetError()

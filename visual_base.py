@@ -1728,56 +1728,51 @@ class Curve(GrObject):
 
     # Adds a point to the end of the curve
     # Yoink one from the front if the total number is beyond retain
-    # I'm not sure I like that I'm locking here, becasue
-    #   excessive locking leads to performance issues.
-    #   But, I'm worried about race conditions with
-    #   the drawing thread and the number of points.
     def add_point(self, pos):
         """Add a new point to the end of the curve, and remove the first point from the curve.
 
         pos — The position of the new point.
         """
 
-        with Subject._threadlock:
-            lengthchanged = False
-            pos = numpy.array(pos)
-            if pos.shape != (3,):
-                raise Exception("Must pass 3 elements to add_point, you passed {}".format(pos.shape))
+        lengthchanged = False
+        pos = numpy.array(pos)
+        if pos.shape != (3,):
+            raise Exception("Must pass 3 elements to add_point, you passed {}".format(pos.shape))
 
-            if self._numpoints == 0:
-                self._points[0, :] = pos
-                self._numpoints += 1
-                self._transverse[0, :] = [0., 0., self.radius ]
-                if self._visible: self.broadcast("yank and readd")
-                return
+        if self._numpoints == 0:
+            self._points[0, :] = pos
+            self._numpoints += 1
+            self._transverse[0, :] = [0., 0., self.radius ]
+            if self._visible: self.broadcast("yank and readd")
+            return
 
-            axishat = numpy.array(pos) - numpy.array(self._points[-1])
-            magaxis = math.sqrt( numpy.square(axishat).sum() )
-            if magaxis < Curve._TOO_CLOSE:
-                return
+        axishat = numpy.array(pos) - numpy.array(self._points[-1])
+        magaxis = math.sqrt( numpy.square(axishat).sum() )
+        if magaxis < Curve._TOO_CLOSE:
+            return
 
-            if self._numpoints == 1:
-                self._points[1, :] = pos
-                self._numpoints += 1
-                self.make_transverse()
-                if self._visible: self.broadcast("yank and readd")
+        if self._numpoints == 1:
+            self._points[1, :] = pos
+            self._numpoints += 1
+            self.make_transverse()
+            if self._visible: self.broadcast("yank and readd")
 
+        else:
+            if self._numpoints >= self.retain:
+                # is this safe?
+                self._points[:-1, :] = self._points[1:, :]
+                self._transverse[:-1, :] = self._transverse[1:, :]
             else:
-                if self._numpoints >= self.retain:
-                    # is this safe?
-                    self._points[:-1, :] = self._points[1:, :]
-                    self._transverse[:-1, :] = self._transverse[1:, :]
-                else:
-                    self._numpoints += 1
-                    lengthchanged = True
+                self._numpoints += 1
+                lengthchanged = True
 
-                self._points[self._numpoints-1, :] = pos
-                self.make_transverse(startat=self._numpoints-2)
+            self._points[self._numpoints-1, :] = pos
+            self.make_transverse(startat=self._numpoints-2)
 
-                if lengthchanged:
-                    if self._visible: self.broadcast("yank and readd")
-                else:
-                    self.broadcast("update vertices")
+            if lengthchanged:
+                if self._visible: self.broadcast("yank and readd")
+            else:
+                self.broadcast("update vertices")
 
     @property
     def numpoints(self):
@@ -1794,30 +1789,28 @@ class Curve(GrObject):
         """The array of points on the curve.  Returned by reference, I think, so be careful."""
         return self._points[0:self._numpoints, :]
 
-    # See locking comment on add_points
     @points.setter
     def points(self, points):
-        with Subject._threadlock:
-            if points is None or len(points) == 0:
-                self._numpoints = 0
-                if self._visible: self.broadcast("yank and readd")
-                return
+        if points is None or len(points) == 0:
+            self._numpoints = 0
+            if self._visible: self.broadcast("yank and readd")
+            return
 
-            if len(points.shape) != 2 or points.shape[1] != 3:
-                raise Exception("Illegal points; must be n×3.")
-            if points.shape[0] > self.retain:
-                raise Exception("Tried to set points to an array longer than retain.")
+        if len(points.shape) != 2 or points.shape[1] != 3:
+            raise Exception("Illegal points; must be n×3.")
+        if points.shape[0] > self.retain:
+            raise Exception("Tried to set points to an array longer than retain.")
 
-            self._points[0:points.shape[0], :] = points
-            numchanged = False
-            if points.shape[0] != self._numpoints:
-                self._numpoints = points.shape[0]
-                numchanged = True
-            self.make_transverse()
-            if numchanged:
-                if self._visible: self.broadcast("yank and readd")
-            else:
-                self.broadcast("update vertices")
+        self._points[0:points.shape[0], :] = points
+        numchanged = False
+        if points.shape[0] != self._numpoints:
+            self._numpoints = points.shape[0]
+            numchanged = True
+        self.make_transverse()
+        if numchanged:
+            if self._visible: self.broadcast("yank and readd")
+        else:
+            self.broadcast("update vertices")
 
     @property
     def trans(self):
@@ -1929,7 +1922,7 @@ class Curve(GrObject):
             if hatxes[0, 2] < 0.9:
                 self._transverse[0:1, :] = numpy.array( [ -hatxes[0, 1], hatxes[0, 0], 0. ], dtype=numpy.float32 )
             else:
-                self._transverse[0:1, :] = numpy.array( [ 0., -hatxes[0, 2], hatxes[0, 1] ], dtype=numpy.flat32 )
+                self._transverse[0:1, :] = numpy.array( [ 0., -hatxes[0, 2], hatxes[0, 1] ], dtype=numpy.float32 )
             transmag = numpy.sqrt( numpy.square(self._transverse[0:1, :].sum(axis=1)) )
             self._transverse[0:1, :] *= self.radius / transmag[:, numpy.newaxis]
 

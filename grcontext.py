@@ -376,10 +376,9 @@ class GrContext(Observer):
         
             
     def update_cam_posrot_gl(self):
-        with Subject._threadlock:
-            self.determine_camera_matrices()
-            for collection in self.object_collections:
-                collection.shader.set_camera_posrot()
+        self.determine_camera_matrices()
+        for collection in self.object_collections:
+            collection.shader.set_camera_posrot()
 
     def determine_perspective_matrix(self):
         # Math from
@@ -466,16 +465,20 @@ class GLUTContext(GrContext):
             
     @staticmethod
     def class_idle():
-        with Subject._threadlock:
-            try:
-                while not GLUTContext._global_things_to_run.empty():
-                    func = GLUTContext._global_things_to_run.get()
-                    func()
-            except queue.Empty:
-                pass
-            for instance in GLUTContext._instances:
-                instance.idle()
-            
+        # Make sure that no rendering is happening while we do idle shit
+        GL.glFinish()
+        # sys.stderr.write("Start GLUTContext class idle\n")
+        try:
+            while not GLUTContext._global_things_to_run.empty():
+                func = GLUTContext._global_things_to_run.get()
+                func()
+        except queue.Empty:
+            pass
+        for instance in GLUTContext._instances:
+            instance.idle()
+
+        # sys.stderr.write("Finish GLUTContext class idle\n")
+                
     @staticmethod
     def thread_main(instance):
         # sys.stderr.write("Starting thread_main\n")
@@ -509,16 +512,15 @@ class GLUTContext(GrContext):
     def idle(self):
         if hasattr(self, "window") and self.window is not None:
             GLUT.glutSetWindow(self.window)
-            with Subject._threadlock:
-                try:
-                    while not self.things_to_run.empty():
-                        func = self.things_to_run.get()
-                        func()
-                except queue.Empty:
-                    pass
-
-                for func in self.idle_funcs:
+            try:
+                while not self.things_to_run.empty():
+                    func = self.things_to_run.get()
                     func()
+            except queue.Empty:
+                pass
+
+            for func in self.idle_funcs:
+                func()
 
 
     # ======================================================================
@@ -770,26 +772,26 @@ class GLUTContext(GrContext):
     def draw(self):
         """The OpenGL draw routine."""
         
+        # sys.stderr.write("Start GLUTContext.draw\n")
         GL.glClearColor(self.background_color[0], self.background_color[1],
                         self.background_color[2], self.background_color[3])
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)
         GL.glEnable(GL.GL_DEPTH_TEST)
 
-        with Subject._threadlock:
-            # sys.stderr.write("About to draw collections\n")
-            for collection in self.object_collections:
-                
-                collection.draw()
+        # sys.stderr.write("About to draw collections\n")
+        for collection in self.object_collections:
+            collection.draw()
 
-                err = GL.glGetError()
-                if err != GL.GL_NO_ERROR:
-                    sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
-                    sys.exit(-1)
+            err = GL.glGetError()
+            if err != GL.GL_NO_ERROR:
+                sys.stderr.write("Error {} drawing: {}\n".format(err, gluErrorString(err)))
+                sys.exit(-1)
 
-            GLUT.glutSwapBuffers()
-            # sys.stderr.write("Done drawing collections.\n")
+        GLUT.glutSwapBuffers()
+        # sys.stderr.write("Done drawing collections.\n")
 
-            Rater.get().set()
+        Rater.get().set()
+        # sys.stderr.write("End GLUTContext.draw\n")
             
         self.framecount += 1
 

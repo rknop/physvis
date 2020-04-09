@@ -211,7 +211,7 @@ class GrObject(Subject):
     
     def __init__(self, context=None, pos=None, axis=None, up=None, scale=None,
                  color=None, opacity=None, make_trail=False, interval=10, retain=50,
-                 *args, **kwargs):
+                 trail_radius = 0.02, trail_color=None, *args, **kwargs):
         """Parameters:
         
         context — the context in which this object will exist
@@ -223,6 +223,8 @@ class GrObject(Subject):
         make_trail — True to leave behind a trail
         interval — Only add a trail segment after the object has moved this many times (default: 10)
         retain — Only keep this many trail segments (the most recent ones) (Default: 50)
+        trail_radius — radius of trail cross-section (def: 0.02)
+        trail_color — color of trail (def: same as object)
         """
 
         super().__init__(*args, **kwargs)
@@ -299,6 +301,8 @@ class GrObject(Subject):
         self._interval = interval
         self._nexttrail = interval
         self._retain = retain
+        self._trail_radius = trail_radius
+        self._trail_color = trail_color
         self.make_trail = make_trail
 
     def finish_init(self):
@@ -494,6 +498,16 @@ class GrObject(Subject):
         self.set_object_rotation()
 
     @property
+    def trail_radius(self):
+        return self._trail_radius
+
+    @trail_radius.setter
+    def trail_radius(self, val):
+        self._trail_radius = val
+        if self._trail is not None:
+            self._trail.radius = self._trail_radius
+
+    @property
     def rotation(self):
         """Returns (for now) a quaternion representing the rotation of the object away from [1, 0, 0]"""
         return self._rotation
@@ -614,8 +628,13 @@ class GrObject(Subject):
         self._visible = value
         if value == True:
             self.context.add_object(self)
+            if self._trail is not None:
+                self._trail.visible = True
         else:
+            # import pdb; pdb.set_trace()
             self.context.remove_object(self)
+            if self._trail is not None:
+                self._trail.visible = False
 
     @property
     def color(self):
@@ -689,14 +708,17 @@ class GrObject(Subject):
     def initialize_trail(self):
         """(Internal, do not call.)"""
         self.kill_trail()
-        # sys.stderr.write("Initializing trail at pos {} with color {}.\n".format(self._pos, self._color))
-        self._trail = CylindarStack(color=self._color, maxpoints=self._retain,
-                                    points=[ self._pos ], num_edge_points=6)
-        # points = numpy.empty( [ self._retain, 3 ] , dtype=numpy.float32 )
-        # points[:, :] = self._pos[numpy.newaxis, :]
-        # self._trail = Curve(color=self._color, points=points, radius=0.05)
+        if self._trail_color is None:
+            color = self.color
+        else:
+            color = self._trail_color
+        self._trail = Curve( color=color, retain=self._retain, points=[ self._pos ],
+                             radius=self._trail_radius)
         self._nexttrail = self._interval
 
+    def clear_trail(self):
+        self._trail.points = []
+        
     def update_trail(self):
         """(Internal, do not call.)"""
         if not self._make_trail: return
@@ -1679,7 +1701,9 @@ class Curve(GrObject):
         self._numpoints = 0
 
         if points is not None:
-            points = numpy.array(points)
+            points = numpy.array(points, dtype=numpy.float32)
+            if len(points.shape) == 1 and points.shape[0] == 3:
+                points = numpy.array( [points], dtype=numpy.float32)
             if len(points.shape) != 2 or points.shape[1] != 3:
                 raise Exception("To make a curve, points must be n×3.")
 
@@ -1718,7 +1742,7 @@ class Curve(GrObject):
             self._points[0, :] = pos
             self._numpoints += 1
             self._transverse[0, :] = [0., 0., self.radius ]
-            self.broadcast("yank and readd")
+            if self._visible: self.broadcast("yank and readd")
             return
 
         axishat = numpy.array(pos) - numpy.array(self._points[-1])
@@ -1730,7 +1754,7 @@ class Curve(GrObject):
             self._points[1, :] = pos
             self._numpoints += 1
             self.make_transverse()
-            self.broadcast("yank and readd")
+            if self._visible: self.broadcast("yank and readd")
 
         else:
             if self._numpoints >= self.retain:
@@ -1745,7 +1769,7 @@ class Curve(GrObject):
             self.make_transverse(startat=self._numpoints-2)
         
             if lengthchanged:
-                self.broadcast("yank and readd")
+                if self._visible: self.broadcast("yank and readd")
             else:
                 self.broadcast("update vertices")
 
@@ -1755,16 +1779,27 @@ class Curve(GrObject):
         return self._numpoints
 
     @property
+    def retain(self):
+        """Number of points that are kept.  Can't be changed after initialization."""
+        return self._retain
+    
+    @property
     def points(self):
         """The array of points on the curve.  Returned by reference, I think, so be careful."""
         return self._points[0:self._numpoints, :]
 
     @points.setter
     def points(self, points):
+        if points is Null or len(points) == 0:
+            self._numpoints = 0
+            if self._visible: self.broadcast("yank and readd")
+            return
+        
         if len(points.shape) != 2 or points.shape[1] != 3:
             raise Exception("Illegal points; must be n×3.")
         if points.shape[0] > self.retain:
             raise Exception("Tried to set points to an array longer than retain.")
+
         self._points[0:points.shape[0], :] = points
         numchanged = False
         if points.shape[0] != self._numpoints:
@@ -1772,7 +1807,7 @@ class Curve(GrObject):
             numchanged = True
         self.make_transverse()
         if numchanged:
-            self.broadcast("yank and readd")
+            if self._visible: self.broadcast("yank and readd")
         else:
             self.broadcast("update vertices")
 
@@ -1828,7 +1863,7 @@ class Curve(GrObject):
             else:
                 self._transverse[0, : ] = self._transverse[1, :] - hatxes[0] * (self._transverse[1, :] *
                                                                                 hatxes[0]).sum()
-            self._transverse[num, :] = self._transverse[num-2, :] - hatxes[-1] * (self._transverse[num-2, :] *
+            self._transverse[num-1, :] = self._transverse[num-2, :] - hatxes[-1] * (self._transverse[num-2, :] *
                                                                                   hatxes[-1]).sum()
 
             transmag = numpy.sqrt(numpy.square(self._transverse[:num]).sum(axis=1))
@@ -2147,7 +2182,7 @@ class CylindarStack(object):
 def main():
     doaxes = False
     dobox1 = False
-    dobox2 = False
+    dobox2 = True
     dotet = False
     doball = False
     dostaticball = True
@@ -2156,10 +2191,10 @@ def main():
     doblob = False
     doarrow = False
     dohelix = True
-    docurve = True
-    dosincurve = True
-    dohairpin = True
-    dobigcurve = True
+    docurve = False
+    dosincurve = False
+    dohairpin = False
+    dobigcurve = False
     doring = True
     domanyelongatedboxes = False
 
@@ -2176,9 +2211,12 @@ def main():
     if dobox1:
         sys.stderr.write("Making box1.\n")
         box1 = Box(pos=(-0.5, -0.5, 0), length=0.25, width=0.25, height=0.25, color=[0.5, 0., 1.])
+
     if dobox2:
         sys.stderr.write("Making box2.\n")
-        box2 = Box(pos=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red)
+        box2_base_trail_radius = 0.05
+        box2 = Box(pos=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red,
+                   trail_radius=box2_base_trail_radius)
 
     if dotet:
         sys.stderr.write("Making tetrahedron.\n")
@@ -2291,6 +2329,8 @@ def main():
                                   length=1.5, width=0.05, height=0.05))
 
 
+    import pdb; pdb.set_trace()
+    
     # Updates
 
     t = 0.
@@ -2298,7 +2338,7 @@ def main():
     phi = 0.
     phi2 = 0.
     fps = 30
-    GrContext.print_fps = True
+    # GrContext.print_fps = True
     printfpsevery = 30
     dphi = 2*math.pi/(4.*fps)
 
@@ -2340,6 +2380,8 @@ def main():
                                                         1.5*math.sin(phi),
                                                         1.5*math.cos(phi) ] ),
                                          q )
+            # import pdb; pdb.set_trace()
+            box2.trail_radius = box2_base_trail_radius * ( 1 + 0.9*math.sin(phi2) )
             
             if first:
                 box2.interval = 5
@@ -2347,10 +2389,10 @@ def main():
                 box2.make_trail = True
                 first = False
 
-            # if phi > math.pi:
-            #     box2.visible = False
-            # else:
-            #     box2.visible = True
+            if phi > math.pi:
+                box2.visible = False
+            else:
+                box2.visible = True
                 
         if doarrow:
             arrow.axis = [math.cos(phi) * (1. + 0.5*math.cos(phi)),

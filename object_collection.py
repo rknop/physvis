@@ -258,8 +258,13 @@ class GLObjectCollection(Observer):
         if message == "update everything":
             self.context.run_glcode(lambda : self.push_all_object_info(subject))
         if message == "yank and readd":
-            self.context.remove_object(subject)
-            self.context.add_object(subject)
+            # import pdb; pdb.set_trace()
+            with Subject._threadlock:
+                # Lock here to avoid the object momentarily blinking out
+                #   (and other race conditions with adding/removing)
+                if subject._id in self.objects:
+                    self.context.remove_object(subject)
+                    self.context.add_object(subject)
 
 # ======================================================================
 # SimpleObjectCollection

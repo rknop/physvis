@@ -23,6 +23,7 @@ This&nbsp;module&nbsp;depends&nbsp;on&nbsp;you&nbsp;having&nbsp;the&nbsp;other&n
 &nbsp;&nbsp;*&nbsp;numpy<br>
 &nbsp;&nbsp;*&nbsp;scipy<br>
 &nbsp;&nbsp;*&nbsp;PyOpenGL&nbsp;(modules&nbsp;OpenGL.GL&nbsp;and&nbsp;OpenGL.GLUT)<br>
+&nbsp;&nbsp;*&nbsp;PyQt5<br>
 &nbsp;<br>
 USING&nbsp;OBJECTS:<br>
 &nbsp;<br>
@@ -73,6 +74,7 @@ The&nbsp;following&nbsp;ojects&nbsp;are&nbsp;available<br>
 &nbsp;&nbsp;—&nbsp;box<br>
 &nbsp;&nbsp;—&nbsp;cylinder<br>
 &nbsp;&nbsp;—&nbsp;cone<br>
+&nbsp;&nbsp;—&nbsp;curve<br>
 &nbsp;&nbsp;—&nbsp;ellipsoid<br>
 &nbsp;&nbsp;—&nbsp;faces<br>
 &nbsp;&nbsp;—&nbsp;helix<br>
@@ -192,10 +194,13 @@ didn't&nbsp;subclass&nbsp;properly.&nbsp;&nbsp;You&nbsp;can&nbsp;fix&nbsp;this&n
 result&nbsp;to&nbsp;a&nbsp;float.&nbsp;&nbsp;Really,&nbsp;you're&nbsp;probably&nbsp;better&nbsp;off&nbsp;treating&nbsp;the<br>
 vector&nbsp;class&nbsp;as&nbsp;its&nbsp;own&nbsp;thing&nbsp;and&nbsp;not&nbsp;relying&nbsp;too&nbsp;muich&nbsp;on&nbsp;the&nbsp;fact&nbsp;that<br>
 it's&nbsp;a&nbsp;numpy&nbsp;array.&nbsp;&nbsp;For&nbsp;instance,&nbsp;in&nbsp;this&nbsp;example,&nbsp;it's&nbsp;better&nbsp;just&nbsp;to<br>
-do&nbsp;v1.<a href="#-dot">dot</a>(v2).)<br>
+do&nbsp;v1.<a href="#-dot">dot</a>(v2).&nbsp;&nbsp;I'm&nbsp;not&nbsp;100%&nbsp;happy&nbsp;with&nbsp;this&nbsp;implementation,&nbsp;but&nbsp;will&nbsp;do<br>
+my&nbsp;best&nbsp;not&nbsp;to&nbsp;break&nbsp;this&nbsp;documented&nbsp;interface&nbsp;if&nbsp;I&nbsp;change&nbsp;it&nbsp;in&nbsp;the<br>
+future.)<br>
 &nbsp;<br>
 &nbsp;<br>
 CONTROLLING&nbsp;DISPLAYS&nbsp;(WINDOWS)<br>
+&nbsp;<br>
 &nbsp;<br>
 You&nbsp;can&nbsp;get&nbsp;a&nbsp;new&nbsp;display&nbsp;with&nbsp;the&nbsp;function&nbsp;"<a href="#-display">display</a>()",&nbsp;e.g.:<br>
 &nbsp;<br>
@@ -251,20 +256,30 @@ the&nbsp;function&nbsp;"<a href="#-scene">scene</a>()"&nbsp;returns&nbsp;a&nbsp;
 can&nbsp;call&nbsp;".select()"&nbsp;on&nbsp;it&nbsp;and&nbsp;pass&nbsp;it&nbsp;to&nbsp;objects&nbsp;to&nbsp;put&nbsp;them&nbsp;in&nbsp;that<br>
 first&nbsp;display.<br>
 &nbsp;<br>
-Currently,&nbsp;all&nbsp;displays&nbsp;are&nbsp;GLUT&nbsp;windows.&nbsp;&nbsp;In&nbsp;the&nbsp;future,&nbsp;I'm&nbsp;hoping<br>
-that&nbsp;you&nbsp;will&nbsp;be&nbsp;able&nbsp;to&nbsp;get&nbsp;a&nbsp;display&nbsp;as&nbsp;a&nbsp;Qt&nbsp;OpenGL&nbsp;widget<br>
+QT5&nbsp;INTEGRATION<br>
+&nbsp;<br>
+If&nbsp;you&nbsp;rely&nbsp;on&nbsp;the&nbsp;default&nbsp;displays,&nbsp;they're&nbsp;GLUT&nbsp;windows.&nbsp;&nbsp;However,<br>
+there&nbsp;is&nbsp;also&nbsp;support&nbsp;for&nbsp;a&nbsp;physvis&nbsp;Qt&nbsp;widget,&nbsp;allowing&nbsp;you&nbsp;to&nbsp;embed&nbsp;a<br>
+physvis&nbsp;display&nbsp;within&nbsp;a&nbsp;Qt&nbsp;GUI.&nbsp;&nbsp;You&nbsp;need&nbsp;to&nbsp;include&nbsp;the&nbsp;"qtgrcontext"<br>
+module&nbsp;to&nbsp;use&nbsp;this.&nbsp;&nbsp;If&nbsp;you&nbsp;make&nbsp;a&nbsp;qtgrcontext.QtGrContext&nbsp;object&nbsp;before<br>
+you&nbsp;make&nbsp;any&nbsp;other&nbsp;physvis&nbsp;displays,&nbsp;that&nbsp;becomes&nbsp;the&nbsp;default&nbsp;display.<br>
+See&nbsp;qttest.py&nbsp;or&nbsp;rollrace.py&nbsp;for&nbsp;examples.&nbsp;&nbsp;(Both&nbsp;of&nbsp;use&nbsp;the&nbsp;visual_base<br>
+interface&nbsp;rather&nbsp;than&nbsp;the&nbsp;physvis,&nbsp;but&nbsp;the&nbsp;physvis&nbsp;interface&nbsp;should&nbsp;work<br>
+just&nbsp;as&nbsp;well.)&nbsp;&nbsp;If&nbsp;using&nbsp;Qt,&nbsp;you&nbsp;have&nbsp;to&nbsp;be&nbsp;a&nbsp;little&nbsp;careful&nbsp;to&nbsp;run<br>
+things&nbsp;all&nbsp;in&nbsp;the&nbsp;right&nbsp;threads.&nbsp;&nbsp;I&nbsp;*think*&nbsp;the&nbsp;physvis&nbsp;backend&nbsp;handles<br>
+this&nbsp;properly.<br>
 &nbsp;<br>
 &nbsp;<br>
 DIFFERENCES&nbsp;FROM&nbsp;VPYTHON&nbsp;6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;<br>
-Many&nbsp;objects&nbsp;are&nbsp;not&nbsp;implemented.&nbsp;physvis&nbsp;includes&nbsp;some&nbsp;objects&nbsp;not&nbsp;in&nbsp;VPython&nbsp;6<br>
-(e.g.&nbsp;*axis).&nbsp;&nbsp;(There&nbsp;are&nbsp;also&nbsp;some&nbsp;visual_base.py,&nbsp;e.g.&nbsp;FixedLengthCurve&nbsp;and&nbsp;Icosahedron.<br>
-There&nbsp;may&nbsp;be&nbsp;some&nbsp;parameters&nbsp;some&nbsp;objects&nbsp;take&nbsp;which&nbsp;weren't&nbsp;there&nbsp;in&nbsp;VPython.<br>
+Some&nbsp;objects&nbsp;are&nbsp;not&nbsp;implemented;&nbsp;additionally,&nbsp;physvis&nbsp;includes&nbsp;some<br>
+objects&nbsp;not&nbsp;in&nbsp;VPython&nbsp;6&nbsp;(e.g.&nbsp;*axis&nbsp;and&nbsp;the&nbsp;Platonic&nbsp;solids&nbsp;other&nbsp;than<br>
+cube&nbsp;(except&nbsp;for&nbsp;dodecahedron,&nbsp;which&nbsp;I&nbsp;still&nbsp;need&nbsp;to&nbsp;do)).&nbsp;&nbsp;There&nbsp;may&nbsp;be<br>
+some&nbsp;parameters&nbsp;some&nbsp;objects&nbsp;take&nbsp;which&nbsp;weren't&nbsp;there&nbsp;in&nbsp;VPython.<br>
 &nbsp;<br>
 An&nbsp;incomplete&nbsp;list&nbsp;things&nbsp;not&nbsp;implemented:<br>
 &nbsp;<br>
 Objects&nbsp;missing:<br>
-&nbsp;&nbsp;*&nbsp;curve&nbsp;(but&nbsp;see&nbsp;visual_base.CylindarStack&nbsp;&amp;&nbsp;visual_base.FixedLengthCurve)<br>
 &nbsp;&nbsp;*&nbsp;extrusion<br>
 &nbsp;&nbsp;*&nbsp;local&nbsp;lights<br>
 &nbsp;&nbsp;*&nbsp;points<br>
@@ -282,13 +297,12 @@ Object&nbsp;properties&nbsp;missing&nbsp;or&nbsp;not&nbsp;working:<br>
 Global&nbsp;features&nbsp;missing:<br>
 &nbsp;&nbsp;*&nbsp;Automatic&nbsp;zoom&nbsp;updating&nbsp;to&nbsp;make&nbsp;all&nbsp;objects&nbsp;visible<br>
 &nbsp;&nbsp;*&nbsp;custom&nbsp;lighting<br>
-&nbsp;&nbsp;*&nbsp;Widgets,&nbsp;embedding&nbsp;display&nbsp;in&nbsp;a&nbsp;UI&nbsp;library&nbsp;(see&nbsp;below&nbsp;re:&nbsp;wxPython)<br>
 &nbsp;&nbsp;*&nbsp;Graphs&nbsp;(I'll&nbsp;probably&nbsp;never&nbsp;do&nbsp;this;&nbsp;just&nbsp;use&nbsp;matplotlib)<br>
 &nbsp;&nbsp;*&nbsp;Custom&nbsp;mouse&nbsp;and&nbsp;keyboard&nbsp;events<br>
 &nbsp;&nbsp;*&nbsp;Shapes&nbsp;library<br>
 &nbsp;&nbsp;*&nbsp;Paths&nbsp;library<br>
 &nbsp;<br>
-Things&nbsp;Changed:<br>
+Things&nbsp;Changed&nbsp;from&nbsp;VPython&nbsp;6:<br>
 &nbsp;&nbsp;*&nbsp;There&nbsp;is&nbsp;no&nbsp;"scene"&nbsp;variable;&nbsp;the&nbsp;"<a href="#-scene">scene</a>()"&nbsp;function&nbsp;gets&nbsp;you&nbsp;the&nbsp;default&nbsp;display.<br>
 &nbsp;&nbsp;*&nbsp;I&nbsp;believe&nbsp;the&nbsp;default&nbsp;range&nbsp;of&nbsp;a&nbsp;display&nbsp;is&nbsp;different&nbsp;(bigger)<br>
 &nbsp;&nbsp;*&nbsp;For&nbsp;label,&nbsp;sizes&nbsp;(height,&nbsp;xoffset,&nbsp;yoffset)&nbsp;are&nbsp;not&nbsp;in&nbsp;the&nbsp;same&nbsp;units&nbsp;as&nbsp;VPython&nbsp;6<br>
@@ -300,14 +314,7 @@ Things&nbsp;Changed:<br>
 &nbsp;&nbsp;*&nbsp;context=&nbsp;parameter&nbsp;of&nbsp;objects&nbsp;is&nbsp;new&nbsp;(I&nbsp;think)<br>
 &nbsp;&nbsp;*&nbsp;For&nbsp;faces,&nbsp;you&nbsp;don't&nbsp;have&nbsp;to&nbsp;specify&nbsp;the&nbsp;normals;&nbsp;it&nbsp;will&nbsp;default&nbsp;to<br>
 &nbsp;&nbsp;&nbsp;&nbsp;flat&nbsp;faces&nbsp;and&nbsp;calculate&nbsp;the&nbsp;normals&nbsp;if&nbsp;you&nbsp;don't&nbsp;give&nbsp;them.<br>
-&nbsp;&nbsp;*&nbsp;You&nbsp;can&nbsp;give&nbsp;a&nbsp;faces&nbsp;(3*n*3)&nbsp;array&nbsp;for&nbsp;n&nbsp;triangles,&nbsp;or&nbsp;a&nbsp;(3*n,&nbsp;3)&nbsp;array.<br>
-&nbsp;<br>
-wxPython&nbsp;interaction&nbsp;is&nbsp;not&nbsp;implemented;&nbsp;for&nbsp;a&nbsp;very&nbsp;long&nbsp;time,&nbsp;it&nbsp;looked<br>
-like&nbsp;wxPython&nbsp;was&nbsp;dead&nbsp;and&nbsp;would&nbsp;not&nbsp;support&nbsp;Python&nbsp;3.&nbsp;&nbsp;That's&nbsp;no&nbsp;longer<br>
-true,&nbsp;but&nbsp;PyQt&nbsp;(or&nbsp;PySide2,&nbsp;or,&nbsp;really,&nbsp;probably&nbsp;QtPy&nbsp;as&nbsp;a&nbsp;front-end&nbsp;to<br>
-both)&nbsp;may&nbsp;still&nbsp;be&nbsp;a&nbsp;better&nbsp;choice.&nbsp;&nbsp;For&nbsp;now,&nbsp;it&nbsp;uses&nbsp;GLUT&nbsp;to&nbsp;open&nbsp;the<br>
-one&nbsp;default&nbsp;window&nbsp;for&nbsp;display.&nbsp;&nbsp;In&nbsp;the&nbsp;future,&nbsp;I&nbsp;hope&nbsp;to&nbsp;integrate&nbsp;it<br>
-with&nbsp;some&nbsp;standard&nbsp;Python&nbsp;widget&nbsp;library.</tt></p>
+&nbsp;&nbsp;*&nbsp;You&nbsp;can&nbsp;give&nbsp;a&nbsp;faces&nbsp;(3*n*3)&nbsp;array&nbsp;for&nbsp;n&nbsp;triangles,&nbsp;or&nbsp;a&nbsp;(3*n,&nbsp;3)&nbsp;array.</tt></p>
 <p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#aa55cc">
@@ -346,6 +353,16 @@ width&nbsp;—&nbsp;The&nbsp;size&nbsp;of&nbsp;the&nbsp;box&nbsp;along&nbsp;the&
 &nbsp;<br>
 radius&nbsp;—&nbsp;the&nbsp;radius&nbsp;of&nbsp;the&nbsp;circle&nbsp;that&nbsp;makes&nbsp;the&nbsp;base&nbsp;of&nbsp;the&nbsp;cone.&nbsp;&nbsp;(Really&nbsp;a&nbsp;12-sided&nbsp;polygon,&nbsp;smooth&nbsp;shaded.)</tt></dd></dl>
  <dl><dt><a name="-cross"><strong>cross</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;cross&nbsp;product&nbsp;of&nbsp;two&nbsp;vectors.</tt></dd></dl>
+ <dl><dt><a name="-curve"><strong>curve</strong></a>(pos=None, points=None, *args, **kwargs)</dt><dd><tt>A&nbsp;curve.&nbsp;&nbsp;Note&nbsp;that&nbsp;pos&nbsp;here&nbsp;specifies&nbsp;one&nbsp;or&nbsp;many&nbsp;points;<br>
+the&nbsp;_position_&nbsp;of&nbsp;the&nbsp;curve&nbsp;always&nbsp;starts&nbsp;at&nbsp;(0,&nbsp;0,&nbsp;0).<br>
+If&nbsp;you&nbsp;change&nbsp;the&nbsp;pos&nbsp;attribute&nbsp;of&nbsp;a&nbsp;curve&nbsp;after&nbsp;you've&nbsp;made&nbsp;it,<br>
+it&nbsp;will&nbsp;move&nbsp;the&nbsp;whole&nbsp;curve.&nbsp;&nbsp;Use&nbsp;the&nbsp;points&nbsp;attribute&nbsp;to<br>
+replace&nbsp;the&nbsp;points&nbsp;list&nbsp;with&nbsp;something&nbsp;new.<br>
+&nbsp;<br>
+pos&nbsp;or&nbsp;points&nbsp;—&nbsp;A&nbsp;n×3&nbsp;array&nbsp;of&nbsp;points&nbsp;that&nbsp;make&nbsp;up&nbsp;the&nbsp;centerline&nbsp;of&nbsp;the&nbsp;curve.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Use&nbsp;points,&nbsp;not&nbsp;pos.&nbsp;&nbsp;pos&nbsp;is&nbsp;here&nbsp;for&nbsp;VPython&nbsp;6&nbsp;compatibility,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;but&nbsp;I&nbsp;may&nbsp;revert&nbsp;it&nbsp;to&nbsp;its&nbsp;standard&nbsp;usage&nbsp;in&nbsp;the&nbsp;future.<br>
+raidus&nbsp;—&nbsp;the&nbsp;radius&nbsp;of&nbsp;the&nbsp;cross-section&nbsp;of&nbsp;the&nbsp;curve</tt></dd></dl>
  <dl><dt><a name="-cylinder"><strong>cylinder</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;cylinder,&nbsp;oriented&nbsp;by&nbsp;default&nbsp;along&nbsp;the&nbsp;x-axis.<br>
 &nbsp;<br>
 radius&nbsp;—&nbsp;The&nbsp;transverse&nbsp;radius&nbsp;of&nbsp;the&nbsp;cylinder.<br>

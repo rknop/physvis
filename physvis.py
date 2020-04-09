@@ -35,6 +35,7 @@ This module depends on you having the other nonstandard modules installed:
   * numpy
   * scipy
   * PyOpenGL (modules OpenGL.GL and OpenGL.GLUT)
+  * PyQt5
 
 USING OBJECTS:
 
@@ -205,10 +206,13 @@ didn't subclass properly.  You can fix this by just typecasting the
 result to a float.  Really, you're probably better off treating the
 vector class as its own thing and not relying too muich on the fact that
 it's a numpy array.  For instance, in this example, it's better just to
-do v1.dot(v2).)
+do v1.dot(v2).  I'm not 100% happy with this implementation, but will do
+my best not to break this documented interface if I change it in the
+future.)
 
 
 CONTROLLING DISPLAYS (WINDOWS)
+
 
 You can get a new display with the function "display()", e.g.:
 
@@ -264,15 +268,26 @@ the function "scene()" returns a handle to that first display, so you
 can call ".select()" on it and pass it to objects to put them in that
 first display.
 
-Currently, all displays are GLUT windows.  In the future, I'm hoping
-that you will be able to get a display as a Qt OpenGL widget
+QT5 INTEGRATION
+
+If you rely on the default displays, they're GLUT windows.  However,
+there is also support for a physvis Qt widget, allowing you to embed a
+physvis display within a Qt GUI.  You need to include the "qtgrcontext"
+module to use this.  If you make a qtgrcontext.QtGrContext object before
+you make any other physvis displays, that becomes the default display.
+See qttest.py or rollrace.py for examples.  (Both of use the visual_base
+interface rather than the physvis, but the physvis interface should work
+just as well.)  If using Qt, you have to be a little careful to run
+things all in the right threads.  I *think* the physvis backend handles
+this properly.
 
 
 DIFFERENCES FROM VPYTHON 6           
 
-Many objects are not implemented. physvis includes some objects not in VPython 6
-(e.g. *axis).  (There are also some in visual_base.py, e.g. Icosahedron.)
-There may be some parameters some objects take which weren't there in VPython.
+Some objects are not implemented; additionally, physvis includes some
+objects not in VPython 6 (e.g. *axis and the Platonic solids other than
+cube (except for dodecahedron, which I still need to do)).  There may be
+some parameters some objects take which weren't there in VPython.
 
 An incomplete list things not implemented:
 
@@ -294,13 +309,12 @@ Object properties missing or not working:
 Global features missing:
   * Automatic zoom updating to make all objects visible
   * custom lighting
-  * Widgets, embedding display in a UI library (see below re: wxPython)
   * Graphs (I'll probably never do this; just use matplotlib)
   * Custom mouse and keyboard events
   * Shapes library
   * Paths library
 
-Things Changed:
+Things Changed from VPython 6:
   * There is no "scene" variable; the "scene()" function gets you the default display.
   * I believe the default range of a display is different (bigger)
   * For label, sizes (height, xoffset, yoffset) are not in the same units as VPython 6
@@ -313,13 +327,6 @@ Things Changed:
   * For faces, you don't have to specify the normals; it will default to
     flat faces and calculate the normals if you don't give them.
   * You can give a faces (3*n*3) array for n triangles, or a (3*n, 3) array.
-
-wxPython interaction is not implemented; for a very long time, it looked
-like wxPython was dead and would not support Python 3.  That's no longer
-true, but PyQt (or PySide2, or, really, probably QtPy as a front-end to
-both) may still be a better choice.  For now, it uses GLUT to open the
-one default window for display.  In the future, I hope to integrate it
-with some standard Python widget library.
 
 """
 
@@ -367,9 +374,15 @@ def cone(*args, **kwargs):
     return vb.Cone(*args, **kwargs)
 
 def curve(pos=None, points=None, *args, **kwargs):
-    """A curve.
+    """A curve.  Note that pos here specifies one or many points;
+    the _position_ of the curve always starts at (0, 0, 0).
+    If you change the pos attribute of a curve after you've made it,
+    it will move the whole curve.  Use the points attribute to
+    replace the points list with something new.
 
-    pos or points — A n×3 array of points that make up the centerline of the curve
+    pos or points — A n×3 array of points that make up the centerline of the curve.
+                    Use points, not pos.  pos is here for VPython 6 compatibility,
+                    but I may revert it to its standard usage in the future.
     raidus — the radius of the cross-section of the curve
     """
     if pos is None:

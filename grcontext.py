@@ -813,7 +813,7 @@ class GLUTContext(GrContext):
         newcollection.add_object(obj)
         self.object_collections.append(newcollection)
 
-    def remove_object(self, obj):
+    def do_remove_object(self, obj):
         for collection in self.object_collections:
-            collection.remove_object(obj)
+            collection.do_remove_object(obj)
 

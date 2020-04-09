@@ -1728,50 +1728,56 @@ class Curve(GrObject):
 
     # Adds a point to the end of the curve
     # Yoink one from the front if the total number is beyond retain
+    # I'm not sure I like that I'm locking here, becasue
+    #   excessive locking leads to performance issues.
+    #   But, I'm worried about race conditions with
+    #   the drawing thread and the number of points.
     def add_point(self, pos):
         """Add a new point to the end of the curve, and remove the first point from the curve.
 
         pos — The position of the new point.
         """
-        lengthchanged = False
-        pos = numpy.array(pos)
-        if pos.shape != (3,):
-            raise Exception("Must pass 3 elements to add_point, you passed {}".format(pos.shape))
 
-        if self._numpoints == 0:
-            self._points[0, :] = pos
-            self._numpoints += 1
-            self._transverse[0, :] = [0., 0., self.radius ]
-            if self._visible: self.broadcast("yank and readd")
-            return
+        with Subject._threadlock:
+            lengthchanged = False
+            pos = numpy.array(pos)
+            if pos.shape != (3,):
+                raise Exception("Must pass 3 elements to add_point, you passed {}".format(pos.shape))
 
-        axishat = numpy.array(pos) - numpy.array(self._points[-1])
-        magaxis = math.sqrt( numpy.square(axishat).sum() )
-        if magaxis < Curve._TOO_CLOSE:
-            return
-        
-        if self._numpoints == 1:
-            self._points[1, :] = pos
-            self._numpoints += 1
-            self.make_transverse()
-            if self._visible: self.broadcast("yank and readd")
-
-        else:
-            if self._numpoints >= self.retain:
-                # is this safe?
-                self._points[:-1, :] = self._points[1:, :]
-                self._transverse[:-1, :] = self._transverse[1:, :]
-            else:
+            if self._numpoints == 0:
+                self._points[0, :] = pos
                 self._numpoints += 1
-                lengthchanged = True
-
-            self._points[self._numpoints-1, :] = pos
-            self.make_transverse(startat=self._numpoints-2)
-        
-            if lengthchanged:
+                self._transverse[0, :] = [0., 0., self.radius ]
                 if self._visible: self.broadcast("yank and readd")
+                return
+
+            axishat = numpy.array(pos) - numpy.array(self._points[-1])
+            magaxis = math.sqrt( numpy.square(axishat).sum() )
+            if magaxis < Curve._TOO_CLOSE:
+                return
+
+            if self._numpoints == 1:
+                self._points[1, :] = pos
+                self._numpoints += 1
+                self.make_transverse()
+                if self._visible: self.broadcast("yank and readd")
+
             else:
-                self.broadcast("update vertices")
+                if self._numpoints >= self.retain:
+                    # is this safe?
+                    self._points[:-1, :] = self._points[1:, :]
+                    self._transverse[:-1, :] = self._transverse[1:, :]
+                else:
+                    self._numpoints += 1
+                    lengthchanged = True
+
+                self._points[self._numpoints-1, :] = pos
+                self.make_transverse(startat=self._numpoints-2)
+
+                if lengthchanged:
+                    if self._visible: self.broadcast("yank and readd")
+                else:
+                    self.broadcast("update vertices")
 
     @property
     def numpoints(self):
@@ -1788,28 +1794,30 @@ class Curve(GrObject):
         """The array of points on the curve.  Returned by reference, I think, so be careful."""
         return self._points[0:self._numpoints, :]
 
+    # See locking comment on add_points
     @points.setter
     def points(self, points):
-        if points is Null or len(points) == 0:
-            self._numpoints = 0
-            if self._visible: self.broadcast("yank and readd")
-            return
-        
-        if len(points.shape) != 2 or points.shape[1] != 3:
-            raise Exception("Illegal points; must be n×3.")
-        if points.shape[0] > self.retain:
-            raise Exception("Tried to set points to an array longer than retain.")
+        with Subject._threadlock:
+            if points is None or len(points) == 0:
+                self._numpoints = 0
+                if self._visible: self.broadcast("yank and readd")
+                return
 
-        self._points[0:points.shape[0], :] = points
-        numchanged = False
-        if points.shape[0] != self._numpoints:
-            self._numpoints = points.shape[0]
-            numchanged = True
-        self.make_transverse()
-        if numchanged:
-            if self._visible: self.broadcast("yank and readd")
-        else:
-            self.broadcast("update vertices")
+            if len(points.shape) != 2 or points.shape[1] != 3:
+                raise Exception("Illegal points; must be n×3.")
+            if points.shape[0] > self.retain:
+                raise Exception("Tried to set points to an array longer than retain.")
+
+            self._points[0:points.shape[0], :] = points
+            numchanged = False
+            if points.shape[0] != self._numpoints:
+                self._numpoints = points.shape[0]
+                numchanged = True
+            self.make_transverse()
+            if numchanged:
+                if self._visible: self.broadcast("yank and readd")
+            else:
+                self.broadcast("update vertices")
 
     @property
     def trans(self):
@@ -2184,14 +2192,14 @@ def main():
     dobox1 = False
     dobox2 = True
     dotet = False
-    doball = False
+    doball = True
     dostaticball = True
     dopeg = False
     dopeg2 = False
     doblob = False
     doarrow = False
     dohelix = True
-    docurve = False
+    docurve = True
     dosincurve = False
     dohairpin = False
     dobigcurve = False
@@ -2329,7 +2337,7 @@ def main():
                                   length=1.5, width=0.05, height=0.05))
 
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     
     # Updates
 
@@ -2338,7 +2346,7 @@ def main():
     phi = 0.
     phi2 = 0.
     fps = 30
-    # GrContext.print_fps = True
+    GrContext.print_fps = True
     printfpsevery = 30
     dphi = 2*math.pi/(4.*fps)
 
@@ -2408,10 +2416,12 @@ def main():
                 nextcurvepointadd += curvepointaddevery
             curve.radius = 0.05 + 0.04*math.sin(phi)
 
-            # if phi2 > math.pi and phi2 < 3.*math.pi/2.:
-            #     curve.visible = False
-            # else:
-            #     curve.visible = True
+            if phi2 > math.pi and phi2 < 3.*math.pi/2.:
+                curve.visible = False
+            else:
+                # sys.stderr.write("Making curve visible.\n")
+                # import pdb; pdb.set_trace()
+                curve.visible = True
                 
         if doring:
             ring.axis = [ math.cos(phi), math.sin(phi)*math.cos(phi2), math.sin(phi)*math.sin(phi2) ]

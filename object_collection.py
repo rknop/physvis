@@ -262,7 +262,7 @@ class GLObjectCollection(Observer):
             with Subject._threadlock:
                 # Lock here to avoid the object momentarily blinking out
                 #   (and other race conditions with adding/removing)
-                if subject._id in self.objects:
+                if subject._id in self.objects and subject.visible:
                     self.context.remove_object(subject)
                     self.context.add_object(subject)
 
@@ -893,7 +893,7 @@ class CurveCollection(GLObjectCollection):
             return False
         if len(self.objects) >= self.maxnumobjs:
             return False
-        if self.curnumlines + self.pending_lines + obj.numpoints-1 > self.maxnumlines:
+        if self.curnumlines + self.pending_lines + max(0, obj.numpoints-1) > self.maxnumlines:
             return False
         return True
         
@@ -906,16 +906,21 @@ class CurveCollection(GLObjectCollection):
 
         with Subject._threadlock:
             self.pending_objects += 1
-            self.pending_lines += obj.numpoints-1
+            self.pending_lines += max(0, obj.numpoints-1)
             self.context.run_glcode(lambda : self.do_add_object(obj))
 
+    # RACE CONDITION WARNING
+    #  If obj.numpoints changed between
+    #  canyoutake and now,
+    #  the number of pending_lines will be wrong!!!!!!
     def do_add_object(self, obj):
         with Subject._threadlock:
             self.objects[obj._id] = obj
+            objpoints = obj.numpoints
             self.line_index[obj._id] = self.curnumlines
-            self.num_lines[obj._id] = obj.numpoints-1
+            self.num_lines[obj._id] = max(0, objpoints-1)
             obj.add_listener(self)
-            self.curnumlines += obj.numpoints-1
+            self.curnumlines += max(0, objpoints-1)
             # sys.stderr.write("Up to {} curves, {} curve segments.\n".format(len(self.objects), self.curnumlines))
 
             n = len(self.objects) - 1
@@ -923,7 +928,7 @@ class CurveCollection(GLObjectCollection):
             self.push_all_object_info(obj)
 
             self.pending_objects -= 1
-            self.pending_lines -= obj.numpoints-1
+            self.pending_lines -= max(0, objpoints-1)
         
     def do_remove_object(self, obj):
         with Subject._threadlock:
@@ -971,28 +976,38 @@ class CurveCollection(GLObjectCollection):
 
         self.context.run_glcode(lambda : self.do_update_object_points(obj))
 
-    # Don't change the number of points in the line from when you first
-    #   added the object, or things will go haywire.
     def do_update_object_points(self, obj):
         with Subject._threadlock:
-            if obj.numpoints < 2:
-                return
+            # Use our count of points rather than the
+            #  object's, as the object's may have
+            #  changed... but our count represents
+            #  what's in the buffers.  There is a
+            #  wee race condition where we might
+            #  be drawing stuff that is now junk
+            #  in the object's points data...
+            #  though right now I don't support
+            #  reducing the number of points in the
+            #  curve.  But I might later....
             if not obj._id in self.objects:
                 return
-            
-            linespoints = numpy.empty( [ (obj.numpoints-1)*2, 4 ], dtype=numpy.float32 )
-            transpoints = numpy.empty( [ (obj.numpoints-1)*2, 4 ], dtype=numpy.float32 )
+
+            numpoints = self.num_lines[obj._id]+1 
+            if numpoints < 2:
+                return
+           
+            linespoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
+            transpoints = numpy.empty( [ (numpoints-1)*2, 4 ], dtype=numpy.float32 )
             linespoints[:, 3] = 1.
             transpoints[:, 3] = 0.
             linespoints[0, 0:3] = obj.points[0, :]
             transpoints[0, 0:3] = obj.trans[0, :]
-            for i in range(1, obj.numpoints-1):
+            for i in range(1, numpoints-1):
                 linespoints[2*i - 1, 0:3] = obj.points[i, :]
                 transpoints[2*i - 1, 0:3] = obj.trans[i, :]
                 linespoints[2*i, 0:3] = obj.points[i, :]
                 transpoints[2*i, 0:3] = obj.trans[i, :]
-            linespoints[-1, 0:3] = obj.points[obj.numpoints-1, :]
-            transpoints[-1, 0:3] = obj.trans[obj.numpoints-1, :]
+            linespoints[-1, 0:3] = obj.points[numpoints-1, :]
+            transpoints[-1, 0:3] = obj.trans[numpoints-1, :]
 
             offset = self.line_index[obj._id]
             GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.linebuffer)
@@ -1006,9 +1021,10 @@ class CurveCollection(GLObjectCollection):
             return
         
         self.do_update_object_points(obj)
-
+        
+        numpoints = self.num_lines[obj._id]+1
         dex = self.object_index[obj._id]
-        objindexcopies = numpy.empty(2*(obj.numpoints-1), dtype=numpy.int32)
+        objindexcopies = numpy.empty(2*(numpoints-1), dtype=numpy.int32)
         objindexcopies[:] = dex
         GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self.objindexbuffer)
         GL.glBufferSubData(GL.GL_ARRAY_BUFFER, self.line_index[obj._id]*4*1*2, objindexcopies)
@@ -1177,7 +1193,7 @@ class Shader(object):
         GL.glBufferSubData(GL.GL_UNIFORM_BUFFER, 0, 32*self._MAX_GLOBAL_LIGHTS, lightdata)
         numgloblights_location = GL.glGetUniformLocation(self.progid, "numgloblights")
         GL.glUniform1i(numgloblights_location, self.nlights)
-        sys.stderr.write("Set {} global lights.\n".format(self.nlights))
+        # sys.stderr.write("Set {} global lights.\n".format(self.nlights))
         
     def set_camera_perspective(self):
         GL.glUseProgram(self.progid)

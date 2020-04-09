@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 #
-# (c) 2019 by Rob Knop
+# (c) 2020 by Rob Knop
 #
 # This file is part of physvis
 #
@@ -87,6 +87,7 @@ The following ojects are available
   — cylinder
   — cone
   — curve
+  — dodecahedron
   — ellipsoid
   — faces
   — helix
@@ -286,8 +287,8 @@ DIFFERENCES FROM VPYTHON 6
 
 Some objects are not implemented; additionally, physvis includes some
 objects not in VPython 6 (e.g. *axis and the Platonic solids other than
-cube (except for dodecahedron, which I still need to do)).  There may be
-some parameters some objects take which weren't there in VPython.
+cube).  There may be some parameters some objects take which weren't
+there in VPython.
 
 An incomplete list things not implemented:
 
@@ -318,7 +319,9 @@ Things Changed from VPython 6:
   * There is no "scene" variable; the "scene()" function gets you the default display.
   * I believe the default range of a display is different (bigger)
   * For label, sizes (height, xoffset, yoffset) are not in the same units as VPython 6
-       There's also no reference line, just the (maybe boxed) text.
+       The
+
+re's also no reference line, just the (maybe boxed) text.
   * axes() object is new
   * icosahedron() object is new
   * tetrahedron() object is new
@@ -389,6 +392,10 @@ def curve(pos=None, points=None, *args, **kwargs):
         return vb.Curve(points=points, *args, **kwargs)
     else:
         return vb.Curve(points=pos, *args, **kwargs)
+
+def dodecahedron(*args, **kwargs):
+    """A dodecahedron with points distance 1 from the origin, xz face is flat."""
+    return vb.Dodecahedron(*args, **kwargs)
 
 def ellipsoid(*args, **kwargs):
     """An ellipsoidal solid.

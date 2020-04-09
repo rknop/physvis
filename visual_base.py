@@ -968,7 +968,132 @@ class Octahedron(Faces):
         super().__init__(verts, smooth=False, *args, **kwargs)
 
 # ======================================================================
-#
+
+class Dodecahedron(Faces):
+    """A dodecahedron"""
+
+    classinit = False
+    facepoints = None
+    
+    @staticmethod
+    def doclassinit():
+        if Dodecahedron.classinit: return
+        
+        # This may seem overdone; why not just a table of point
+        #  positions?  I do not have a good answer to that question.
+        points = numpy.zeros([20, 3])
+        c72 = math.cos(72./180.*math.pi)
+        s72 = math.sin(72./180.*math.pi)
+        rot72z = numpy.array( [ [ c72, s72, 0 ],
+                                [-s72, c72, 0 ],
+                                [   0,   0, 1 ] ] )
+        # Top 5, each edge rotated 72⁰ relative to the previous
+        points[0] = [0., 0., 0.]
+        points[1] = [1., 0., 0.]
+        points[2] = points[1] + numpy.matmul(rot72z, points[1]-points[0])
+        points[3] = points[2] + numpy.matmul(rot72z, points[2]-points[1])
+        points[4] = points[3] + numpy.matmul(rot72z, points[3]-points[2])
+
+        # Point 5 is the next one down connected to point 0.  It satisfies (given p0 is at 0):
+        #  (p5-p0)·(p5-p0) = 1         x² + y² + z² = 1
+        #  (p5-p0)·(p0-p4) = cos(72⁰)  -x*p04x - y*p04y = cos(72⁰)
+        #  (p5-p0)·(p0-p1) = cos(72⁰)  x = -cos(72⁰)
+        points[5][0] = -c72
+        points[5][1] = (c72 - c72*points[4][0]) / (-points[4][1])
+        points[5][2] =  -math.sqrt(1. - points[5][0]**2 - points[5][1]**2)
+
+        # Points 6 through 9 are just rotated by successive 72⁰ and hanging off of succesive points
+        diff = numpy.matmul(rot72z, points[5])
+        points[6] = points[1] + diff
+        diff = numpy.matmul(rot72z, diff)
+        points[7] = points[2] + diff
+        diff = numpy.matmul(rot72z, diff)
+        points[8] = points[3] + diff
+        diff = numpy.matmul(rot72z, diff)
+        points[9] = points[4] + diff
+
+        # Recenter all of these points
+        cm = points[0:10, :].sum(axis=0)/10.
+        points[0:10, :] -= cm
+
+        # The next 10 points relative to each other is just a 180⁰ rotation about x
+        points[10:20, 0] = points[0:10, 0]
+        points[10:20, 1:3] = -points[0:10, 1:3]
+
+        # point 18 is connected to points 5 and 6. Satisfies:
+        # (p18-p5)·(p5-p0) = cos(72⁰)
+        # Current p18 of offset incorrectly in z
+        # (p18x - p5x)*(p5x-p0x) + (p18y - p5y)*(p5y-p0y) + (p18z+zoff - p5z)*(p5z-p0z) = cos(72⁰)
+        # zoff = ( cos(72⁰) - (p18x-p5x)*(p5x-p0x) - (p18y-p5y)*(p5y-p0x) ) / (p5z-p0z) + p5z - p18z
+        zoff = ( c72 -
+                 (points[18][0]-points[5][0]) * (points[5][0]-points[0][0]) -
+                 (points[18][1]-points[5][1]) * (points[5][1]-points[0][1])
+                 ) / (points[5][2]-points[0][2]) + points[5][2] - points[18][2]
+        points[10:20, 2] += zoff
+
+        # Recenter again
+        cm = points.sum(axis=0)/20.
+        points -= cm
+
+        # Renormalize; make all points dist 1 from origin
+        mag = math.sqrt( numpy.square(points[0, :]).sum() )
+        points /= mag
+    
+        # (Note: pentagon normals go the wrong way)
+        # Edges and Faces: 0-1, 1-2, 2-3, 3-4, 4-0
+        #                  0-5, 5-18, 18-6, 6-1, 1-0
+        #                  1-6, 6-17, 17-7, 7-2, 2-1
+        #                  2-7, 7-16, 16-8, 8-3, 3-2
+        #                  3-8, 8-15, 15-9, 9-4, 4-3
+        #                  4-9, 9-19, 19-5, 5-0, 0-4
+        #                  10-15, 15-8, 8-16, 16-11, 11-10
+        #                  11-16, 16-7, 7-17, 17-12, 12-11
+        #                  12-17, 17-6, 6-18, 18-13, 13-12
+        #                  13-18, 18-5, 5-19, 19-14, 14-13
+        #                  14-19, 19-9, 9-15, 15-10, 10-14
+        #                  10-11, 11-12, 12-13, 13-14, 14-15
+        #
+        # Break ABCDE pentagons into triangles as:
+        # CBA, CAD, DAE
+
+        facepoints = numpy.array( [ [ 0, 1, 2, 3, 4 ],
+                                    [ 0, 5, 18, 6, 1],
+                                    [ 1, 6, 17, 7, 2],
+                                    [ 2, 7, 16, 8, 3],
+                                    [ 3, 8, 15, 9, 4],
+                                    [ 4, 9, 19, 5, 0],
+                                    [ 10, 15, 8, 16, 11],
+                                    [ 11, 16, 7, 17, 12],
+                                    [ 12, 17, 6, 18, 13],
+                                    [ 13, 18, 5, 19, 14],
+                                    [ 14, 19, 9, 15, 10],
+                                    [ 10, 11, 12, 13, 14] ] )
+
+        nfaces = 12
+        faces = numpy.empty( (nfaces, 3, 3, 3) )
+
+        for face in range(nfaces):
+            faces[face, 0, 0, :] = points[facepoints[face, 2]]
+            faces[face, 0, 1, :] = points[facepoints[face, 1]]
+            faces[face, 0, 2, :] = points[facepoints[face, 0]]
+            faces[face, 1, 0, :] = points[facepoints[face, 2]]
+            faces[face, 1, 1, :] = points[facepoints[face, 0]]
+            faces[face, 1, 2, :] = points[facepoints[face, 3]]
+            faces[face, 2, 0, :] = points[facepoints[face, 3]]
+            faces[face, 2, 1, :] = points[facepoints[face, 0]]
+            faces[face, 2, 2, :] = points[facepoints[face, 4]]
+        faces.shape = (nfaces*3*3, 3)
+        Dodecahedron.facepoints = faces
+        Dodecahedron.classinit = True
+        
+        
+    def __init__(self, *args, **kwargs):
+        if not Dodecahedron.classinit:
+            Dodecahedron.doclassinit()
+        super().__init__(Dodecahedron.facepoints, smooth=False, *args, **kwargs)
+
+
+# ======================================================================
 # The Icosahedron code may seem a little over-verbose.  I originally
 # wrote it using indexed buffers, back when I did one GL draw call for
 # each object.  (Slow.)  Now that I dump all triangles into one giant
@@ -1181,7 +1306,7 @@ class Icosahedron(GrObject):
         return (newverts, newedges, newfaces)
 
 
-    def __init__(self, radius=1., flat=False, subdivisions=0, *args, **kwargs):
+    def __init__(self, radius=1., flat=True, subdivisions=0, *args, **kwargs):
         """Parameters:
 
         radius — The radius of the icosahedron (to the points) or sphere (default: 1)
@@ -1232,7 +1357,7 @@ class Sphere(Icosahedron):
 
         Plus the usual GrObject parameters
         """
-        super().__init__(subdivisions=subdivisions, *args, **kwargs)
+        super().__init__(subdivisions=subdivisions, flat=False, *args, **kwargs)
 
 
 class Ellipsoid(Icosahedron):
@@ -1248,7 +1373,7 @@ class Ellipsoid(Icosahedron):
 
         Plus the usual GrObject parameters.
         """
-        super().__init__(subdivisions=subdivisions, *args, **kwargs)
+        super().__init__(subdivisions=subdivisions, flat=False, *args, **kwargs)
 
         self.length = length
         self.width = width
@@ -2081,20 +2206,20 @@ class Helix(Curve):
 def main():
     doaxes = False
     dobox1 = False
-    dobox2 = True
-    dotet = False
+    dobox2 = False
+    doplatonics = False
     doball = True
     dostaticball = True
     dopeg = False
     dopeg2 = False
-    doblob = False
+    doblob = True
     doarrow = False
-    dohelix = True
-    docurve = True
+    dohelix = False
+    docurve = False
     dosincurve = False
     dohairpin = False
     dobigcurve = False
-    doring = True
+    doring = False
     domanyelongatedboxes = False
 
     # Make objects
@@ -2117,9 +2242,16 @@ def main():
         box2 = Box(pos=( 0.5,  0.5, 0), length=0.25, width=0.25, height=0.25, color=color.red,
                    trail_radius=box2_base_trail_radius)
 
-    if dotet:
-        sys.stderr.write("Making tetrahedron.\n")
-        tet = Tetrahedron(pos=( 0.75, -0.75, 0.75))
+    if doplatonics:
+        sys.stderr.write("Making platonic solids.\n")
+        r = 2.0
+        posphis = [ 0., 2./5*math.pi, 4./5.*math.pi, 6./5.*math.pi, 8./5.*math.pi ]
+        colors = [ color.red, color.green, color.blue, color.yellow, color.magenta ]
+        tet = Tetrahedron( pos=( r*math.cos(posphis[0]), r*math.sin(posphis[0]), 0.), color=colors[0] )
+        cube = Box( pos=( r*math.cos(posphis[1]), r*math.sin(posphis[1]), 0.), color=colors[1] )
+        octa = Octahedron( pos=( r*math.cos(posphis[2]), r*math.sin(posphis[2]), 0.), color=colors[2] )
+        dod = Dodecahedron( pos=( r*math.cos(posphis[3]), r*math.sin(posphis[3]), 0.), color=colors[3] )
+        ico = Icosahedron( pos=( r*math.cos(posphis[4]), r*math.sin(posphis[4]), 0.), color=colors[4] )
         
     if dopeg:
         sys.stderr.write("Making peg.\n")

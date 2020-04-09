@@ -75,6 +75,7 @@ The&nbsp;following&nbsp;ojects&nbsp;are&nbsp;available<br>
 &nbsp;&nbsp;—&nbsp;cylinder<br>
 &nbsp;&nbsp;—&nbsp;cone<br>
 &nbsp;&nbsp;—&nbsp;curve<br>
+&nbsp;&nbsp;—&nbsp;dodecahedron<br>
 &nbsp;&nbsp;—&nbsp;ellipsoid<br>
 &nbsp;&nbsp;—&nbsp;faces<br>
 &nbsp;&nbsp;—&nbsp;helix<br>
@@ -274,8 +275,8 @@ DIFFERENCES&nbsp;FROM&nbsp;VPYTHON&nbsp;6&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nb
 &nbsp;<br>
 Some&nbsp;objects&nbsp;are&nbsp;not&nbsp;implemented;&nbsp;additionally,&nbsp;physvis&nbsp;includes&nbsp;some<br>
 objects&nbsp;not&nbsp;in&nbsp;VPython&nbsp;6&nbsp;(e.g.&nbsp;*axis&nbsp;and&nbsp;the&nbsp;Platonic&nbsp;solids&nbsp;other&nbsp;than<br>
-cube&nbsp;(except&nbsp;for&nbsp;dodecahedron,&nbsp;which&nbsp;I&nbsp;still&nbsp;need&nbsp;to&nbsp;do)).&nbsp;&nbsp;There&nbsp;may&nbsp;be<br>
-some&nbsp;parameters&nbsp;some&nbsp;objects&nbsp;take&nbsp;which&nbsp;weren't&nbsp;there&nbsp;in&nbsp;VPython.<br>
+cube).&nbsp;&nbsp;There&nbsp;may&nbsp;be&nbsp;some&nbsp;parameters&nbsp;some&nbsp;objects&nbsp;take&nbsp;which&nbsp;weren't<br>
+there&nbsp;in&nbsp;VPython.<br>
 &nbsp;<br>
 An&nbsp;incomplete&nbsp;list&nbsp;things&nbsp;not&nbsp;implemented:<br>
 &nbsp;<br>
@@ -306,7 +307,9 @@ Things&nbsp;Changed&nbsp;from&nbsp;VPython&nbsp;6:<br>
 &nbsp;&nbsp;*&nbsp;There&nbsp;is&nbsp;no&nbsp;"scene"&nbsp;variable;&nbsp;the&nbsp;"<a href="#-scene">scene</a>()"&nbsp;function&nbsp;gets&nbsp;you&nbsp;the&nbsp;default&nbsp;display.<br>
 &nbsp;&nbsp;*&nbsp;I&nbsp;believe&nbsp;the&nbsp;default&nbsp;range&nbsp;of&nbsp;a&nbsp;display&nbsp;is&nbsp;different&nbsp;(bigger)<br>
 &nbsp;&nbsp;*&nbsp;For&nbsp;label,&nbsp;sizes&nbsp;(height,&nbsp;xoffset,&nbsp;yoffset)&nbsp;are&nbsp;not&nbsp;in&nbsp;the&nbsp;same&nbsp;units&nbsp;as&nbsp;VPython&nbsp;6<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;There's&nbsp;also&nbsp;no&nbsp;reference&nbsp;line,&nbsp;just&nbsp;the&nbsp;(maybe&nbsp;boxed)&nbsp;text.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The<br>
+&nbsp;<br>
+re's&nbsp;also&nbsp;no&nbsp;reference&nbsp;line,&nbsp;just&nbsp;the&nbsp;(maybe&nbsp;boxed)&nbsp;text.<br>
 &nbsp;&nbsp;*&nbsp;<a href="#-axes">axes</a>()&nbsp;object&nbsp;is&nbsp;new<br>
 &nbsp;&nbsp;*&nbsp;<a href="#-icosahedron">icosahedron</a>()&nbsp;object&nbsp;is&nbsp;new<br>
 &nbsp;&nbsp;*&nbsp;<a href="#-tetrahedron">tetrahedron</a>()&nbsp;object&nbsp;is&nbsp;new<br>
@@ -378,6 +381,7 @@ by&nbsp;using&nbsp;the&nbsp;"context=disp"&nbsp;parameter&nbsp;in&nbsp;the&nbsp;
 object.<br>
 &nbsp;<br>
 See&nbsp;overall&nbsp;module&nbsp;documentation&nbsp;at&nbsp;the&nbsp;top&nbsp;for&nbsp;properties&nbsp;of&nbsp;displays.</tt></dd></dl>
+ <dl><dt><a name="-dodecahedron"><strong>dodecahedron</strong></a>(*args, **kwargs)</dt><dd><tt>A&nbsp;dodecahedron&nbsp;with&nbsp;points&nbsp;distance&nbsp;1&nbsp;from&nbsp;the&nbsp;origin,&nbsp;xz&nbsp;face&nbsp;is&nbsp;flat.</tt></dd></dl>
  <dl><dt><a name="-dot"><strong>dot</strong></a>(A, B)</dt><dd><tt>Return&nbsp;the&nbsp;dot&nbsp;product&nbsp;of&nbsp;the&nbsp;two&nbsp;vectors.</tt></dd></dl>
  <dl><dt><a name="-ellipsoid"><strong>ellipsoid</strong></a>(*args, **kwargs)</dt><dd><tt>An&nbsp;ellipsoidal&nbsp;solid.<br>
 &nbsp;<br>

@@ -9,9 +9,16 @@ from physvis import *
 peg = cylinder(pos=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
 peg.axis = (0.5, 0.5, 0.5)
 
-tend = 5.
+# tend = 5.
+tend = 200.
 
-n = 15
+if len(sys.argv)>1:
+    n = int(sys.argv[1])
+    if n < 2:
+        n = 2
+else:
+    n = 15
+
 sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
 boxes = []
 phases = []

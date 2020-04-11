@@ -64,7 +64,7 @@ def quaternion_rotate(p, q):
     return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
 
 def axistrig_rotate(v, axis, cosangle_2, sinangle_2):
-    mag = math.sqrt( numpy.square(axis).sum() )
+    mag = math.sqrt( axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2] )
     uaxis = axis/mag
     q = numpy.array( [ uaxis[0]*sinangle_2, uaxis[1]*sinangle_2, uaxis[2]*sinangle_2, cosangle_2 ] )
     return quaternion_rotate(v, q)

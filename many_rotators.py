@@ -9,7 +9,9 @@ from physvis import *
 peg = cylinder(pos=(0., 0., 0.), radius=0.125, color=color.orange, num_edge_points=32)
 peg.axis = (0.5, 0.5, 0.5)
 
-n = 10
+tend = 5.
+
+n = 15
 sys.stderr.write("Making {} elongated boxes.\n".format(n*n))
 boxes = []
 phases = []
@@ -34,7 +36,8 @@ theta = math.pi/4.
 st = math.sin(theta)
 ct = math.cos(theta)
 
-while True:
+t=0.
+while t < tend:
 
     # Animated angle
     phi += dphi
@@ -48,6 +51,7 @@ while True:
                          ct ]
 
     rate(fps)
+    t += 1./fps
     nextprint -= 1
     if nextprint <= 0 :
         nextprint = printfpsevery

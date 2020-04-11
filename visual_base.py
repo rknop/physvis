@@ -409,8 +409,8 @@ class GrObject(Subject):
     def axis(self, value):
         if len(value) != 3:
             raise Exception("axis must have 3 values")
-        newaxis = numpy.array( ( float(value[0]), float(value[1]), float(value[2]) ) )
-        axismag = math.sqrt( newaxis[0]**2 + newaxis[1]**2 + newaxis[2]**2 )
+        newaxis = numpy.array( value, dtype=float )
+        axismag = math.sqrt( newaxis[0]*newaxis[0] + newaxis[1]*newaxis[1] + newaxis[2]*newaxis[2] )
         if axismag < 1e-8:
             raise Exception("axis too short")
         newaxis /= axismag
@@ -427,7 +427,7 @@ class GrObject(Subject):
         #   Rotate about self._axis × newaxis (normalized)
 
         # The dot product self._axis · newaxis gives the cos of the angle to rotate (both vectors are normalized)
-        # But, because of floating point inefficiencies, I still gotta normalize it
+        # But, because of floating point inefficiencies, I still gotta clip it
         cosrot = self._axis[0]*newaxis[0] + self._axis[1]*newaxis[1] + self._axis[2]*newaxis[2]
         if cosrot > 1.: cosrot = 1.
         elif cosrot < -1.: cosrot = -1.
@@ -443,22 +443,20 @@ class GrObject(Subject):
                 return
             else:
                 # newaxis is opposite self._axis.  Try crossing with zhat to get a rotaxis
-                rotax = [ self._axis[1], -self._axis[0], 0. ]
+                rotax = numpy.array( [ self._axis[1], -self._axis[0], 0. ] )
                 # If that didn't work, then use yhat
-                rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+                rotaxmag = math.sqrt( rotax[0]*rotax[0] + rotax[1]**rotax[1] + rotax[2]*rotax[2] )
                 if rotaxmag < 1e-10:
-                    rotax = [ -self._axis[2], 0., self._axis[0] ]
-                    rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+                    rotax = numpy.array( [ -self._axis[2], 0., self._axis[0] ] )
+                    rotaxmag = math.sqrt( rotax[0]*rotax[0] + rotax[1]*rotax[1] + rotax[2]*rotax[2] )
                     
         else:
-            rotax = [ self._axis[1]*newaxis[2] - self._axis[2]*newaxis[1],
-                      self._axis[2]*newaxis[0] - self._axis[0]*newaxis[2],
-                      self._axis[0]*newaxis[1] - self._axis[1]*newaxis[0] ]
-            rotaxmag = math.sqrt( rotax[0]**2 + rotax[1]**2 + rotax[2]**2 )
+            rotax = numpy.array( [ self._axis[1]*newaxis[2] - self._axis[2]*newaxis[1],
+                                   self._axis[2]*newaxis[0] - self._axis[0]*newaxis[2],
+                                   self._axis[0]*newaxis[1] - self._axis[1]*newaxis[0] ] )
+            rotaxmag = math.sqrt( numpy.square(rotax).sum() )
 
-        rotax[0] /= rotaxmag
-        rotax[1] /= rotaxmag
-        rotax[2] /= rotaxmag
+        rotax /= rotaxmag
 
         cosrot_2 = math.sqrt( (1+cosrot) / 2. )
         sinrot_2 = math.sqrt( (1-cosrot) / 2. )
@@ -593,24 +591,47 @@ class GrObject(Subject):
     def update_model_matrix(self):
         """(Internal function to update stuff needed by OpenGL.)"""
         q = self._rotation
-        s = 1./( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3] )   # 1./(q*q).sum() )
-        rot = numpy.matrix(
-            [[ 1.-2*s*(q[1]*q[1]+q[2]*q[2]) ,    2*s*(q[0]*q[1]-q[2]*q[3]) ,    2*s*(q[0]*q[2]+q[1]*q[3])],
-             [    2*s*(q[0]*q[1]+q[2]*q[3]) , 1.-2*s*(q[0]*q[0]+q[2]*q[2]) ,    2*s*(q[1]*q[2]-q[0]*q[3])],
-             [    2*s*(q[0]*q[2]-q[1]*q[3]) ,    2*s*(q[1]*q[2]+q[0]*q[3]) , 1.-2*s*(q[0]*q[0]+q[1]*q[1])]],
+        s = 1./( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3] )
+        q0 = q[0]
+        q1 = q[1]
+        q2 = q[2]
+        q3 = q[3]
+        rot = numpy.array(
+            [[ 1.-2*s*(q1*q1+q2*q2) ,    2*s*(q0*q1-q2*q3) ,    2*s*(q0*q2+q1*q3)],
+             [    2*s*(q0*q1+q2*q3) , 1.-2*s*(q0*q0+q2*q2) ,    2*s*(q1*q2-q0*q3)],
+             [    2*s*(q0*q2-q1*q3) ,    2*s*(q1*q2+q0*q3) , 1.-2*s*(q0*q0+q1*q1)]],
             dtype=numpy.float32)
-        mat = numpy.matrix( [[ self._scale[0], 0., 0., 0. ],
-                             [ 0., self._scale[1], 0., 0. ],
-                             [ 0., 0., self._scale[2], 0. ],
-                             [ 0., 0., 0., 1.]], dtype=numpy.float32 )
-        rotation = numpy.identity(4, dtype=numpy.float32)
+        # Inverse quaternion, just flip the sign on elements 0, 1, 2
+        invrot = numpy.array(
+            [[ 1.-2*s*(q1*q1+q2*q2) ,    2*s*(q0*q1+q2*q3) ,    2*s*(q0*q2-q1*q3)],
+             [    2*s*(q0*q1-q2*q3) , 1.-2*s*(q0*q0+q2*q2) ,    2*s*(q1*q2+q0*q3)],
+             [    2*s*(q0*q2+q1*q3) ,    2*s*(q1*q2-q0*q3) , 1.-2*s*(q0*q0+q1*q1)]],
+            dtype=numpy.float32)
+        sca = numpy.array( [[ self._scale[0], 0., 0., 0. ],
+                            [ 0., self._scale[1], 0., 0. ],
+                            [ 0., 0., self._scale[2], 0. ],
+                            [ 0., 0., 0., 1.]], dtype=numpy.float32 )
+        invsca = numpy.array( [[ 1./self._scale[0], 0., 0., 0. ],
+                               [ 0., 1./self._scale[1], 0., 0. ],
+                               [ 0., 0., 1./self._scale[2], 0. ],
+                               [ 0., 0., 0., 1.]], dtype=numpy.float32 )
+        # Turns out this is *slightly* faster tha numpy.identity(4, dtype=numpy.float32)
+        rotation = numpy.array( [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1] ], dtype=numpy.float32)
         rotation[0:3, 0:3] = rot.T
-        mat *= rotation
-        translation = numpy.identity(4, dtype=numpy.float32)
+        invrotation = numpy.array( [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1] ], dtype=numpy.float32)
+        invrotation[0:3, 0:3] = invrot.T
+        translation = numpy.array( [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1] ], dtype=numpy.float32)
         translation[3, 0:3] = self._pos
-        mat *= translation
+        invtrans = numpy.array( [ [1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1] ], dtype=numpy.float32)
+        invtrans[3, 0:3] = -self._pos
+        mat = numpy.matmul(sca, rotation)
+        mat = numpy.matmul(mat, translation)
         self.model_matrix[:] = mat
-        self.inverse_model_matrix[0:3, 0:3] = numpy.linalg.inv(mat[0:3, 0:3]).T
+        mat = numpy.matmul(invtrans, invrotation)
+        mat = numpy.matmul(mat, invsca)
+        self.inverse_model_matrix[0:3, 0:3] = mat[0:3, 0:3].T
+        # It was faster to construct the inverse manually here
+        # self.inverse_model_matrix[0:3, 0:3] = numpy.linalg.inv(mat[0:3, 0:3]).T
 
         self.broadcast("update matrix")
 

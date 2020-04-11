@@ -477,6 +477,8 @@ class GLUTContext(GrContext):
         for instance in GLUTContext._instances:
             instance.idle()
 
+        # Make sure we get called again
+        GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
         # sys.stderr.write("Finish GLUTContext class idle\n")
                 
     @staticmethod
@@ -493,11 +495,14 @@ class GLUTContext(GrContext):
         GLUT.glutInitWindowSize(instance.width, instance.height)
         GLUT.glutInitWindowPosition(0, 0)
         instance.window = GLUT.glutCreateWindow(bytes(instance._title, encoding='UTF-8'))
-        # freeglut on windows seems to need this here, even though I have a
-        #  "for real" display func in gl_init
+        # Urgh.... according to the docs, I'm MUST register a display function
+        #   for any GLUT window I create.  But... I don't want to do this until
+        #   later (in self.__init__).  So, register a null function now,
+        #   and hope that registering a new function is an OK thing to do.
         GLUT.glutDisplayFunc(lambda : None)
 
-        GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
+        # GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
+        GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
         sys.stderr.write("Going into GLUT.GLUT main loop.\n")
         GLUTContext._class_init = True
 

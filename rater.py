@@ -41,7 +41,7 @@ class Rater(threading.Event):
 
     _instance = None
     _exit_whole_program = False
-
+    
     @staticmethod
     def get():
         """Return the singleton Rater instance"""
@@ -81,6 +81,25 @@ class Rater(threading.Event):
             # sys.stderr.write("Sleeping for {} seconds\n".format(sleeptime))
             if sleeptime > 0:
                 time.sleep(sleeptime)
+            else:
+                # Gotta make sure the thread yields!
+                # ...doesn't seem to let the drawing happen...
+                # time.sleep(0.0001)
+                pass
+        # This is here because drawing (really, the updating done in the
+        #   idle function of the draw thread) will never happen if it
+        #   doesn't get some idle time to do so.  This lets the draw
+        #   happen even if we're going full tilt and didn't sleep.  The
+        #   issue with it is that if the actual rate at which this rate
+        #   function is called and the timeout of the idle function is
+        #   not well-synchornized, then I think we end up waiting here
+        #   for extra time.  I think.  In any event, profiling tells me
+        #   that I'm spending time in thread waiting even when the main
+        #   calculation goes slower than the rate statement (i.e. when
+        #   we're not sleeping).  I have to come up with a better way to
+        #   synchoronize things, or at least make sure that the idle
+        #   function of the graphics system (GLUT or Qt) main loop
+        #   happens.
         self.wait()
         self.clear()
         self._time_of_last_rate_call = time.perf_counter()

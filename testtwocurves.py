@@ -4,6 +4,7 @@
 import sys
 import time
 import math
+import argparse
 import numpy
 import physvis as vis
 import qtgrcontext
@@ -13,76 +14,80 @@ import PyQt5.QtWidgets as qt
 import PyQt5.QtGui as qtgui
 
 
-QT = False
+class TwoCurves(object):
 
-app = None
-setup = False
-phiT1 = 5.
-phiT2 = 3.
-zT1 = 10.
-zT2 = 7.
-rT1 = 3.
-rT2 = 5.
-curve1 = None
-curve2 = None
-fps = 60.
-t = 0.
-endt = 10.
+    def __init__(self, endt=10., fps=100, printevery=2., *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-lasttime = 0.
+        self.curve1 = vis.curve(color=vis.color.red, radius=0.1, retain=400)
+        self.curve2 = vis.curve(color=vis.color.green, radius=0.1, retain=400)
 
-def mainloop(wid):
-    global setup, curve1, curve2, fps, t
-    global phiT1, phiT2, zT1, zT2, rT1, rT2
-    global lasttime
-    
-    if not setup:
-        curve1 = vis.curve(color=vis.color.red, radius=0.1, retain=400)
-        curve2 = vis.curve(color=vis.color.green, radius=0.1, retain=400)
-        setup = True
+        self.phiT1 = 5.
+        self.phiT2 = 3.
+        self.zT1 = 10.
+        self.zT2 = 7.
+        self.rT1 = 3.
+        self.rT2 = 5.
+        self.fps = fps
+        self.t = 0.
+        self.endt = endt
         
-    curve1.add_point( [ -2 + (1+0.8*math.sin(2*math.pi*t/rT1)) * math.cos(2*math.pi*t/phiT1),
-                        -math.cos(2*math.pi*t/zT1),
-                        (1+0.8*math.sin(2*math.pi*t/rT1)) * math.sin(2*math.pi*t/phiT1) ] )
-    curve2.add_point( [ 2 + (1+0.8*math.sin(2*math.pi*t/rT2)) * math.cos(2*math.pi*t/phiT2),
-                        -math.cos(2*math.pi*t/zT2),
-                        (1+0.8*math.sin(2*math.pi*t/rT2)) * math.sin(2*math.pi*t/phiT2) ] )
-    t += 1./fps
-    if t >= endt:
-        if QT:
-            app.closeAllWindows()
-            app.exit()
-        else:
-            sys.exit()
-    
-    newtime = time.perf_counter()
-    try:
-        dtime = newtime - lasttime
-        sys.stderr.write("Main loop {} fps\n".format(1./dtime))
-    except(NameError):
-        pass
-    lasttime = newtime
+        self.printevery = printevery
+        self.lastprint = time.perf_counter()
+        self.framecount = 0
 
-def click(which, wid=None, *args, **kwargs):
-    sys.stderr.write("which={}\n".format(which))
-    sys.stderr.write("args:\n")
-    for arg in args:
-        sys.stderr.write("   {}\n".format(arg))
-    sys.stderr.write("kwargs:\n")
-    for arg in kwargs:
-        sys.stderr.write("   {}={}\n".format(arg, kwargs[arg]))
+    def update(self, app):
+        self.curve1.add_point( [ -2 + ( (1 + 0.8*math.sin(2*math.pi * self.t/self.rT1)) *
+                                        math.cos(2*math.pi * self.t/self.phiT1) ) ,
+                                 -math.cos(2*math.pi * self.t/self.zT1) ,
+                                 (1 + 0.8*math.sin(2*math.pi * self.t/self.rT1)) *
+                                 math.sin(2*math.pi * self.t/self.phiT1) ] )
+        self.curve2.add_point( [ 2 + ( (1 + 0.8*math.sin(2*math.pi * self.t/self.rT2)) *
+                                       math.cos(2*math.pi * self.t/self.phiT2) ) ,
+                                 -math.cos(2*math.pi * self.t/self.zT2) ,
+                                 (1 + 0.8*math.sin(2*math.pi * self.t/self.rT2)) *
+                                 math.sin(2*math.pi * self.t/self.phiT2) ] )
+        self.t += 1./self.fps
+        if self.t >= self.endt:
+            # Figure out the elegant way to really end
+            if app is not None:
+                app.closeAllWindows()
+                app.exit()
+            else:
+                sys.exit()
 
-    if wid is not None:
-        sys.stderr.write("OpenGL Info:\n")
-        wid.gl_version_info()
-
+        self.framecount += 1
+        curtime = time.perf_counter()
+        if curtime - self.lastprint > self.printevery:
+            sys.stderr.write("Main loop {} fps\n".format( self.framecount / (curtime-self.lastprint) ))
+            self.lastprint = curtime
+            self.framecount = 0
 
 def main():
-    global QT, fps, app
+    description = "Draw two growing curves"
+    epilog = "Try setting fps to various different values.  If your graphics system syncs to the monitor's vblank (many of them do), this will limit how many calculation updates you can have per second to that rate.  At least *some* systems can disable this synchronization by setting the environment variable vblank_mode to 0; your OS and graphics card driver may have different ways to do this.  Try setting fps to different values (and using -g) and playing with this to see what you can effectively get."
 
-    GrContext.print_fps = True
+    parser = argparse.ArgumentParser(description=description, epilog=epilog)
+    parser.add_argument("-t", "--endt", type=float, default=10., dest="endt",
+                        help="Run until the simulation gets to this time in seconds (default: 10)")
+    parser.add_argument("-q", "--qt", action="store_true", default=False, dest="qt",
+                        help="Use the Qt backend (default: GLUT)")
+    parser.add_argument("-f", "--fps", type=int, default=60, dest="fps",
+                        help="Try to do this many updates per second (default: 60)")
+    parser.add_argument("-p", "--printevery", type=float, default=2., dest="printevery",
+                        help="Print updates per second every (roughtly) this many real seconds (default: 2)")
+    parser.add_argument("-g", "--gfps", action="store_true", default=False, dest="gfps",
+                        help="Print graphics frames per second")
+    args = parser.parse_args()
+
+    fps = args.fps
+    endt = args.endt
+    useqt = args.qt
+    printevery = args.printevery
+
+    GrContext.print_fps = args.gfps
     
-    if QT:
+    if useqt:
         app = qt.QApplication([])
         window = qt.QWidget()
         vbox = qt.QVBoxLayout()
@@ -92,14 +97,16 @@ def main():
         vbox.addWidget(wid, 1)
         window.show()
 
-        mainlooptimer = qtcore.QTimer()
-        mainlooptimer.timeout.connect(lambda : mainloop(wid) )
-        mainlooptimer.start(1000./fps)
+    curver = TwoCurves(endt=endt, fps=fps, printevery=printevery)
 
+    if useqt:
+        mainlooptimer = qtcore.QTimer()
+        mainlooptimer.timeout.connect(lambda : curver.update(app))
+        mainlooptimer.start(1000./fps)
         app.exec_()
     else:
         while True:
-            mainloop(None)
+            curver.update(None)
             vis.rate(fps)
 
     
@@ -107,4 +114,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

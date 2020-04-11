@@ -43,7 +43,12 @@ import numpy
 def quaternion_multiply(p, q):
     """Multiply a vector or quaternion p by a quaternion q.
 
+    In this context, a quaternion is [ sin(θ/2)*ux, sin(θ/2)*uy,
+    sin(θ/2)*uz, cos(θ/2) ] where (ux, uy, uz) is the unit vector about
+    which to rotate and θ is the angle by which to rotate.
+
     If p is a quaternion, the returned quaternion represents rotation q followed by rotation p
+
     """
 
     if len(p) == 3:
@@ -58,12 +63,19 @@ def quaternion_multiply(p, q):
                           pr*qr - px*qx - py*qy - pz*qz ] , dtype=numpy.float32 )
 
 def quaternion_rotate(p, q):
-    """Rotate vector p by quaternion q."""
+    """Rotate vector p by quaternion q.
+
+    In this context, a quaternion is [ sin(θ/2)*ux, sin(θ/2)*uy,
+    sin(θ/2)*uz, cos(θ/2) ] where (ux, uy, uz) is the unit vector about
+    which to rotate and θ is the angle by which to rotate.
+    """
     qinv = q.copy()
     qinv[0:3] *= -1.
     return quaternion_multiply(q, quaternion_multiply(p, qinv))[0:3]
 
 def axistrig_rotate(v, axis, cosangle_2, sinangle_2):
+    """Rotate vector v about axis by angle θ, where cosangle_2=cos(θ/2) and sinangle_2=sin(θ/2)"""
+    
     mag = math.sqrt( axis[0]*axis[0] + axis[1]*axis[1] + axis[2]*axis[2] )
     uaxis = axis/mag
     q = numpy.array( [ uaxis[0]*sinangle_2, uaxis[1]*sinangle_2, uaxis[2]*sinangle_2, cosangle_2 ] )

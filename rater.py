@@ -82,24 +82,33 @@ class Rater(threading.Event):
             if sleeptime > 0:
                 time.sleep(sleeptime)
             else:
-                # Gotta make sure the thread yields!
-                # ...doesn't seem to let the drawing happen...
-                # time.sleep(0.0001)
+                # Let other threads have a go
+                time.sleep(0)
                 pass
-        # This is here because drawing (really, the updating done in the
-        #   idle function of the draw thread) will never happen if it
-        #   doesn't get some idle time to do so.  This lets the draw
-        #   happen even if we're going full tilt and didn't sleep.  The
-        #   issue with it is that if the actual rate at which this rate
-        #   function is called and the timeout of the idle function is
-        #   not well-synchornized, then I think we end up waiting here
-        #   for extra time.  I think.  In any event, profiling tells me
-        #   that I'm spending time in thread waiting even when the main
-        #   calculation goes slower than the rate statement (i.e. when
-        #   we're not sleeping).  I have to come up with a better way to
-        #   synchoronize things, or at least make sure that the idle
-        #   function of the graphics system (GLUT or Qt) main loop
-        #   happens.
+
+        # This .wait() here is to make sure that the drawing thread can
+        #   go.  The sleep(0) above isn't enough (or, even, it turns
+        #   out, the other sleep, if it's short enough) because the
+        #   frequency of drawing might be synced to a monitor's vertical
+        #   blank frequency.  That means that if rater isn't sleeping
+        #   enough here, the very brief time it yields to other threads
+        #   might not include the instant that the drawing thread wants
+        #   to go.  As such, we have to wait here so that we know we've
+        #   slept long enough for the drawing thread to go.  (The drawing
+        #   thread sets the flag that this wait() waits for.)
+        #
+        # This has two implications.  First, rater will never allow you
+        #   to have more cycles per second than the vblank of your
+        #   monitor (if that's what the OpenGL drawing is synced to).
+        #   So, if that's 60Hz, any rate call with a number greater than
+        #   60 will act as if it were only 60.  Second, if your drawing
+        #   thread takes up time close to or greater than the period
+        #   you request from .rate(), there may be a period interaction
+        #   between the frequency .rate() is really called and the
+        #   frequency at which drawing can happen that means we'll spend
+        #   some fraction of the cycle waiting here even though we're
+        #   not sleeping at all above.
+        #
         self.wait()
         self.clear()
         self._time_of_last_rate_call = time.perf_counter()

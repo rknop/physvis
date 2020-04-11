@@ -29,7 +29,19 @@ import OpenGL.GLU as GLU
 from grcontext import *
 
 class QtGrContext(GrContext, qt.QOpenGLWidget):
+    """A Qt wigdet that encapsulates a physvis display.  Can be put in a Qt
+    GUI where you'd put any other widget, and can also be used with the context
+    argument of graphics objects.
+    """
+    
     def __init__(self, width=500, height=400, title="PhysVis", *args, **kwargs):
+        """Parameters:
+
+        width — width of the display (default: 500)
+        height — height of the display (default: 400)
+        title — a title used for fps printing and maybe other things (default: Physvis)
+        """
+        
         self._width = width
         self._height = height
         self._title = title

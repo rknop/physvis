@@ -7,9 +7,6 @@ import qtgrcontext
 import grcontext
 import numpy
 import visual_base as vb
-import PyQt5.QtCore as qtcore
-import PyQt5.QtWidgets as qt
-import PyQt5.QtGui as qtgui
 
 wedgefaces = [ [+0.5, 0., -0.5],  [ 0.5, 0.,  0.5],   [-0.5, 0.,  0.5],
                [-0.5, 0.,  0.5],  [-0.5, 0., -0.5],   [ 0.5, 0., -0.5],

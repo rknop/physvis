@@ -771,6 +771,11 @@ class Faces(GrObject):
     """
 
     def __init__(self, vertices, normals=None, smooth=False, *args, **kwargs):
+        """Parameters:
+
+        vertices — The vertices of all the triangles; must be [3*nfaces, 3]
+        normals — An array of normals, the same shape as vertices.  Optional.
+        """
         super().__init__(*args, **kwargs)
 
         self.num_triangles = vertices.shape[0]//3
@@ -898,7 +903,7 @@ class Box(GrObject):
         height — The size of the box along the y-axis (up-down with default camera orientation)
         width — The size of the box along the z-axis (in-out with default camera orientatino)
 
-        Plus standard GrObject parameters: context, pos, axis, up, scale, color, make_trail, interval, retain
+        Plus standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
 
         super().__init__(*args, **kwargs)
@@ -948,6 +953,11 @@ class Tetrahedron(Faces):
     """A tetrahedron"""
 
     def __init__(self, *args, **kwargs):
+        """Creates a tetrahedron centered (I think) on the origin.
+
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
+        """
+
         norm = 2*math.sqrt(2/3)
         sqrt6 = math.sqrt(6)
         sqrt3 = math.sqrt(3)
@@ -1109,6 +1119,10 @@ class Dodecahedron(Faces):
         
         
     def __init__(self, *args, **kwargs):
+        """Create a dodecahedron with point-radius 1 centered on the origin.
+
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
+        """
         if not Dodecahedron.classinit:
             Dodecahedron.doclassinit()
         super().__init__(Dodecahedron.facepoints, smooth=False, *args, **kwargs)
@@ -1331,11 +1345,11 @@ class Icosahedron(GrObject):
         """Parameters:
 
         radius — The radius of the icosahedron (to the points) or sphere (default: 1)
-        flat — If True, render faces flat; otherwise, smooth shade them to approximate a sphere. (default: False)
+        flat — If True, render faces flat; otherwise, smooth shade them to approximate a sphere. (default: True)
         subdivisions — How many times to subdivide the icosahedron; each subdivision increases number of faces 4×
                        (default 0)
 
-        Plus the usual GrObject parameters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
 
         super().__init__(*args, **kwargs)
@@ -1370,13 +1384,14 @@ class Icosahedron(GrObject):
 
 class Sphere(Icosahedron):
     """A sphere, modelled by default as a 2x subdivided icosahedron (320 faces)."""
+
     def __init__(self, subdivisions=2, *args, **kwargs):
         """Parameters:
 
         subdivisions — higher = more faces (default: 2) (More than 3 is excessive, even 3 is probably excessive.)
         radius — radius of the sphere (default 1)
 
-        Plus the usual GrObject parameters
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
         super().__init__(subdivisions=subdivisions, flat=False, *args, **kwargs)
 
@@ -1392,7 +1407,7 @@ class Ellipsoid(Icosahedron):
         width — diameter along z-axis (for unrotated object)
         height — diameter along y-axis (for unrotated object)
 
-        Plus the usual GrObject parameters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
         super().__init__(subdivisions=subdivisions, flat=False, *args, **kwargs)
 
@@ -1515,7 +1530,7 @@ class Cylinder(GrObject):
         num_edge_points — How many faces the end polygons have (default: 16)
         (Use axis to set both the orientation and length of the cylinder.)
 
-        Plus the usual GrObject parameters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
 
         super().__init__(*args, **kwargs)
@@ -1649,7 +1664,7 @@ class Arrow(GrObject):
         
         Control the orientation and length of the arrow with axis.
 
-        Plus the usual GrObject parameters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
 
         super().__init__(*args, **kwargs)
@@ -1830,7 +1845,7 @@ class Curve(GrObject):
         radius — The radius of the tube that will be drawn around the path.
         retain — Max number of points to retain (default: 150)
 
-        Plus the other standard GrObject parameters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
         
         super().__init__(*args, **kwargs)
@@ -2076,7 +2091,19 @@ class Curve(GrObject):
 # ======================================================================
 
 class Ring(Curve):
+    """One to rule them all... and in the darkness bind them."""
+    
     def __init__(self, radius=0.5, thickness=None, num_circ_points=36, *args, **kwargs):
+        """Creates an annular tube centered on the origin.
+
+        Parameters:
+        
+        radius — The radius of the ring (the center of the tube) (Defaut: 0.5)
+        thickness — The radius of the cross-section of the annulus (Default: 0.2*radius)
+        num_circ_points — Number of points around the ring (default: 36)
+
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
+        """
         self._ring_radius = radius
         if thickness is None:
             self._thickness = 0.2 * self._ring_radius
@@ -2164,7 +2191,7 @@ class Helix(Curve):
         num_circ_points — The number of points on the path in one winding of the spring (default: 12)
         thickness — The thickness of the actual spring wire (default: 0.05 * radius)
 
-        Plus the usual GrObject paramters.
+        Uses standard GrObject parameters: context, pos, axis, up, scale, color, etc. from GrObject.
         """
         
         self._helixradius = radius
@@ -2225,6 +2252,12 @@ class Helix(Curve):
 # ======================================================================
 
 def main():
+    """If you run this module as a standalone program, there's a bunch of
+    tests that can be turned on and off with boolean flags in the main()
+    function.
+
+    """
+
     doaxes = False
     dobox1 = False
     dobox2 = False

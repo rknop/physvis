@@ -117,7 +117,7 @@ class GrContext(Observer):
     @staticmethod
     def get_new(qt=False, *args, **kwargs):
         if qt:
-            raise Exception("Qt contexts not yet implemented")
+            raise Exception("Qt contexts not yet implemented.")
         else:
             return GLUTContext(*args, **kwargs)
     
@@ -151,6 +151,7 @@ class GrContext(Observer):
 
     @property
     def foreground(self):
+        """The default color for newly created objects."""
         return self.default_color
 
     @foreground.setter
@@ -166,6 +167,7 @@ class GrContext(Observer):
         
     @property
     def background(self):
+        """The background color of the display (defaults to black)."""
         return self.background_color
 
     @background.setter
@@ -178,12 +180,15 @@ class GrContext(Observer):
             self.background_color[:] = val
         else:
             raise Exception("foreground must have 1, 3, or 4 values")
+
     @property
     def width(self):
+        """The width in pixels of the display."""
         return self._width
 
     @property
     def height(self):
+        """The height in pixels of the display."""
         return self._height
 
     @width.setter
@@ -196,6 +201,7 @@ class GrContext(Observer):
 
     @property
     def center(self):
+        """The point that the camera looks at."""
         return self._center
 
     @center.setter
@@ -207,6 +213,7 @@ class GrContext(Observer):
 
     @property
     def forward(self):
+        """The direction the camera is facing."""
         return self._forward
 
     @forward.setter
@@ -219,6 +226,7 @@ class GrContext(Observer):
 
     @property
     def up(self):
+        """The camera will rotate about its forward axis in an attempt to make this direction up on the screen."""
         return self._up
 
     @up.setter
@@ -231,6 +239,7 @@ class GrContext(Observer):
 
     @property
     def fov(self):
+        """Field of view of the camrea in radians."""
         return self._fov
 
     @fov.setter
@@ -241,6 +250,7 @@ class GrContext(Observer):
         
     @property
     def range(self):
+        """It's complicated and I don't think I've done it right."""
         return self._range
 
     @range.setter
@@ -257,6 +267,7 @@ class GrContext(Observer):
 
     @property
     def scale(self):
+        """Related to range, and I don't think I've done it right."""
         return 1./self._range
 
     @scale.setter
@@ -407,6 +418,7 @@ class GrContext(Observer):
             collection.shader.set_camera_perspective()
     
     def gl_version_info(self):
+        """Get some perhaps-misleading information about the OpenGL version."""
         self.run_glcode(lambda : GrContext.do_gl_version_info())
 
     # It seems to be unhappy if you call this outside
@@ -477,8 +489,8 @@ class GLUTContext(GrContext):
         for instance in GLUTContext._instances:
             instance.idle()
 
-        # Make sure we get called again
-        GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
+        # If we're using a timer and not an idle function to call this, make sure we get called again
+        # GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
         # sys.stderr.write("Finish GLUTContext class idle\n")
                 
     @staticmethod
@@ -501,8 +513,9 @@ class GLUTContext(GrContext):
         #   and hope that registering a new function is an OK thing to do.
         GLUT.glutDisplayFunc(lambda : None)
 
-        # GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
-        GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
+        # Not sure if I want this as a timer or an idle func
+        GLUT.glutIdleFunc(lambda : GLUTContext.class_idle())
+        # GLUT.glutTimerFunc(10, lambda val : GLUTContext.class_idle(), 0)
         sys.stderr.write("Going into GLUT.GLUT main loop.\n")
         GLUTContext._class_init = True
 
@@ -532,6 +545,12 @@ class GLUTContext(GrContext):
     # Instance methods
 
     def __init__(self, width=500, height=400, title="PhysVis", *args, **kwargs):
+        """Parameters:
+
+        width — width of the display (window will be this plus borders)
+        height — height of the display
+        title — title of the window
+        """
         self._width = width
         self._height = height
         self._title = title

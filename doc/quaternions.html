@@ -27,17 +27,27 @@
 <font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
     
 <tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
-<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="numpy.html">numpy</a><br>
-</td><td width="25%" valign=top></td><td width="25%" valign=top></td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="math.html">math</a><br>
+</td><td width="25%" valign=top><a href="numpy.html">numpy</a><br>
+</td><td width="25%" valign=top></td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
 <table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
 <tr bgcolor="#eeaa77">
 <td colspan=3 valign=bottom>&nbsp;<br>
 <font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
     
 <tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
-<td width="100%"><dl><dt><a name="-quaternion_multiply"><strong>quaternion_multiply</strong></a>(p, q)</dt><dd><tt>Multiply&nbsp;a&nbsp;vector&nbsp;or&nbsp;quaternion&nbsp;p&nbsp;by&nbsp;a&nbsp;quaternion&nbsp;q.<br>
+<td width="100%"><dl><dt><a name="-axistrig_rotate"><strong>axistrig_rotate</strong></a>(v, axis, cosangle_2, sinangle_2)</dt><dd><tt>Rotate&nbsp;vector&nbsp;v&nbsp;about&nbsp;axis&nbsp;by&nbsp;angle&nbsp;θ,&nbsp;where&nbsp;cosangle_2=cos(θ/2)&nbsp;and&nbsp;sinangle_2=sin(θ/2)</tt></dd></dl>
+ <dl><dt><a name="-quaternion_multiply"><strong>quaternion_multiply</strong></a>(p, q)</dt><dd><tt>Multiply&nbsp;a&nbsp;vector&nbsp;or&nbsp;quaternion&nbsp;p&nbsp;by&nbsp;a&nbsp;quaternion&nbsp;q.<br>
+&nbsp;<br>
+In&nbsp;this&nbsp;context,&nbsp;a&nbsp;quaternion&nbsp;is&nbsp;[&nbsp;sin(θ/2)*ux,&nbsp;sin(θ/2)*uy,<br>
+sin(θ/2)*uz,&nbsp;cos(θ/2)&nbsp;]&nbsp;where&nbsp;(ux,&nbsp;uy,&nbsp;uz)&nbsp;is&nbsp;the&nbsp;unit&nbsp;vector&nbsp;about<br>
+which&nbsp;to&nbsp;rotate&nbsp;and&nbsp;θ&nbsp;is&nbsp;the&nbsp;angle&nbsp;by&nbsp;which&nbsp;to&nbsp;rotate.<br>
 &nbsp;<br>
 If&nbsp;p&nbsp;is&nbsp;a&nbsp;quaternion,&nbsp;the&nbsp;returned&nbsp;quaternion&nbsp;represents&nbsp;rotation&nbsp;q&nbsp;followed&nbsp;by&nbsp;rotation&nbsp;p</tt></dd></dl>
- <dl><dt><a name="-quaternion_rotate"><strong>quaternion_rotate</strong></a>(p, q)</dt><dd><tt>Rotate&nbsp;vector&nbsp;p&nbsp;by&nbsp;quaternion&nbsp;q.</tt></dd></dl>
+ <dl><dt><a name="-quaternion_rotate"><strong>quaternion_rotate</strong></a>(p, q)</dt><dd><tt>Rotate&nbsp;vector&nbsp;p&nbsp;by&nbsp;quaternion&nbsp;q.<br>
+&nbsp;<br>
+In&nbsp;this&nbsp;context,&nbsp;a&nbsp;quaternion&nbsp;is&nbsp;[&nbsp;sin(θ/2)*ux,&nbsp;sin(θ/2)*uy,<br>
+sin(θ/2)*uz,&nbsp;cos(θ/2)&nbsp;]&nbsp;where&nbsp;(ux,&nbsp;uy,&nbsp;uz)&nbsp;is&nbsp;the&nbsp;unit&nbsp;vector&nbsp;about<br>
+which&nbsp;to&nbsp;rotate&nbsp;and&nbsp;θ&nbsp;is&nbsp;the&nbsp;angle&nbsp;by&nbsp;which&nbsp;to&nbsp;rotate.</tt></dd></dl>
 </td></tr></table>
 </body></html>

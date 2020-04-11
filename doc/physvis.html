@@ -57,11 +57,15 @@ loop,&nbsp;put&nbsp;the&nbsp;statement<br>
 &nbsp;&nbsp;<a href="#-rate">rate</a>(30)<br>
 &nbsp;<br>
 This&nbsp;does&nbsp;two&nbsp;things.&nbsp;&nbsp;First,&nbsp;it&nbsp;allows&nbsp;the&nbsp;display&nbsp;to&nbsp;update.&nbsp;&nbsp;Second,&nbsp;it&nbsp;limits&nbsp;your<br>
-loop&nbsp;to&nbsp;run&nbsp;no&nbsp;more&nbsp;than&nbsp;30&nbsp;times&nbsp;a&nbsp;second.&nbsp;&nbsp;(You&nbsp;can&nbsp;replace&nbsp;30&nbsp;with&nbsp;a&nbsp;different&nbsp;number,<br>
-of&nbsp;course.&nbsp;&nbsp;It&nbsp;doesn't&nbsp;make&nbsp;sense&nbsp;to&nbsp;do&nbsp;more&nbsp;than&nbsp;30&nbsp;or&nbsp;60&nbsp;frames&nbsp;per&nbsp;second.&nbsp;&nbsp;If&nbsp;you&nbsp;want<br>
-to&nbsp;do&nbsp;calculations&nbsp;more&nbsp;often&nbsp;than&nbsp;that,&nbsp;do&nbsp;multiple&nbsp;calculations&nbsp;in&nbsp;your&nbsp;loop,&nbsp;and&nbsp;only<br>
-update&nbsp;object&nbsp;properties&nbsp;once&nbsp;per&nbsp;loop.)&nbsp;&nbsp;Your&nbsp;loop&nbsp;may&nbsp;run&nbsp;slower&nbsp;than&nbsp;that&nbsp;if&nbsp;the<br>
-computer&nbsp;takes&nbsp;more&nbsp;than&nbsp;1/30&nbsp;seconds&nbsp;to&nbsp;process&nbsp;everything&nbsp;in&nbsp;your&nbsp;loop.<br>
+loop&nbsp;to&nbsp;run&nbsp;no&nbsp;more&nbsp;than&nbsp;30&nbsp;times&nbsp;a&nbsp;second.&nbsp;&nbsp;Your&nbsp;loop&nbsp;may&nbsp;run&nbsp;slower&nbsp;than&nbsp;that&nbsp;if&nbsp;the<br>
+computer&nbsp;takes&nbsp;more&nbsp;than&nbsp;1/30&nbsp;seconds&nbsp;to&nbsp;process&nbsp;everything&nbsp;in&nbsp;your&nbsp;loop.&nbsp;&nbsp;(You&nbsp;can<br>
+replace&nbsp;30&nbsp;with&nbsp;a&nbsp;different&nbsp;number,&nbsp;of&nbsp;course.&nbsp;&nbsp;From&nbsp;a&nbsp;human&nbsp;visual&nbsp;point&nbsp;of&nbsp;view,&nbsp;it<br>
+doesn't&nbsp;make&nbsp;sense&nbsp;to&nbsp;do&nbsp;more&nbsp;than&nbsp;30&nbsp;or&nbsp;60&nbsp;frames&nbsp;per&nbsp;second.&nbsp;&nbsp;If&nbsp;you&nbsp;want&nbsp;to&nbsp;do<br>
+calculations&nbsp;more&nbsp;often&nbsp;than&nbsp;that,&nbsp;do&nbsp;multiple&nbsp;calculations&nbsp;in&nbsp;your&nbsp;loop,&nbsp;and&nbsp;only&nbsp;update<br>
+object&nbsp;properties&nbsp;once&nbsp;per&nbsp;loop.&nbsp;&nbsp;What's&nbsp;more,&nbsp;your&nbsp;rate&nbsp;may&nbsp;be&nbsp;clamped&nbsp;anyway&nbsp;to<br>
+something&nbsp;liek&nbsp;60&nbsp;updates&nbsp;per&nbsp;second&nbsp;based&nbsp;on&nbsp;the&nbsp;graphics&nbsp;system&nbsp;framerate.&nbsp;&nbsp;See&nbsp;comments<br>
+in&nbsp;Rater.py&nbsp;for&nbsp;a&nbsp;description&nbsp;of&nbsp;this,&nbsp;and&nbsp;run&nbsp;"python3&nbsp;testtwocurves.py&nbsp;--help"&nbsp;for<br>
+options&nbsp;on&nbsp;that&nbsp;program&nbsp;to&nbsp;play&nbsp;with&nbsp;this.)<br>
 &nbsp;<br>
 The&nbsp;user&nbsp;can&nbsp;rotate&nbsp;the&nbsp;orientation&nbsp;of&nbsp;the&nbsp;display&nbsp;by&nbsp;holding&nbsp;down&nbsp;the&nbsp;right&nbsp;mouse&nbsp;button<br>
 and&nbsp;moving&nbsp;the&nbsp;mouse.&nbsp;&nbsp;Roll&nbsp;the&nbsp;mouse&nbsp;wheel,&nbsp;or&nbsp;hold&nbsp;down&nbsp;the&nbsp;middle&nbsp;mouse&nbsp;button&nbsp;and&nbsp;move<br>

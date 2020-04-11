@@ -69,11 +69,15 @@ loop, put the statement
   rate(30)
 
 This does two things.  First, it allows the display to update.  Second, it limits your
-loop to run no more than 30 times a second.  (You can replace 30 with a different number,
-of course.  It doesn't make sense to do more than 30 or 60 frames per second.  If you want
-to do calculations more often than that, do multiple calculations in your loop, and only
-update object properties once per loop.)  Your loop may run slower than that if the
-computer takes more than 1/30 seconds to process everything in your loop.
+loop to run no more than 30 times a second.  Your loop may run slower than that if the
+computer takes more than 1/30 seconds to process everything in your loop.  (You can
+replace 30 with a different number, of course.  From a human visual point of view, it
+doesn't make sense to do more than 30 or 60 frames per second.  If you want to do
+calculations more often than that, do multiple calculations in your loop, and only update
+object properties once per loop.  What's more, your rate may be clamped anyway to
+something liek 60 updates per second based on the graphics system framerate.  See comments
+in Rater.py for a description of this, and run "python3 testtwocurves.py --help" for
+options on that program to play with this.)
 
 The user can rotate the orientation of the display by holding down the right mouse button
 and moving the mouse.  Roll the mouse wheel, or hold down the middle mouse button and move

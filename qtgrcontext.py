@@ -51,6 +51,7 @@ class QtGrContext(GrContext, qt.QOpenGLWidget):
         fmt = qtgui.QSurfaceFormat()
         fmt.setMajorVersion(3)
         fmt.setMinorVersion(3)
+        fmt.setSwapInterval(0) # Let video card vsync setting decide
         self.setFormat(fmt)
 
         self.window_is_initialized = False

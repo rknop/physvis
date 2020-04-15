@@ -171,7 +171,7 @@ class GrContext(Observer):
         return self.background_color
 
     @background.setter
-    def foreground(self, val):
+    def background(self, val):
         val = numpy.array(val)
         if len(val) == 1 or len(val) == 3:
             self.background_color[0:3] = val

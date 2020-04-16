@@ -558,7 +558,7 @@ class GrObject(Subject):
             if self._axis[1] < 0.:
                 baserot = numpy.array( [0., 1., 0., 0.] )      # rot by π about y
             else:
-                baserot = numpy.array( [0., 0., 0., 1.] )      # no rotatiob
+                baserot = numpy.array( [0., 0., 0., 1.] )      # no rotation
         else:
             cosphi = self._axis[1] / yzmag
             cosphi_2 = math.sqrt( (1+cosphi) / 2. )
@@ -574,11 +574,13 @@ class GrObject(Subject):
                                      sintheta_2 * cosphi_2,
                                      costheta_2 * cosphi_2 ] )
         # Finally, rotate around axis by an angle determined by up
-        if self._up[2] < 0.:
-            psirot = -1
+        rotup = quaternion_rotate( self._up, baserot )
+        if rotup[2] < 0.:
+            psirot = 1
         else:
-            psirot = 1.
-        cospsi = self._up[1]
+            psirot = -1.
+        cospsi = rotup[1]
+        # sys.stderr.write("up={}, rotup={}, cospsi={}\n".format(self._up, rotup, cospsi))
         cospsi_2 = math.sqrt( (1+cospsi)/2. )
         sinpsi_2 = math.sqrt( (1-cospsi)/2. )
         self._rotation = quaternion_multiply( [ sinpsi_2 * self._axis[0] * psirot,
@@ -1726,8 +1728,8 @@ class Arrow(GrObject):
         if (headl > 0.5): headl = 0.5
         shaftl = 1. - headl
             
-        sys.stderr.write("length={:.3f}, shaftl={:.3f}, shaftw={:.3f}, headw={:.3f}, headl={:.3f}\n"
-                         .format(length, shaftl, shaftw, headw, headl))
+        # sys.stderr.write("length={:.3f}, shaftl={:.3f}, shaftw={:.3f}, headw={:.3f}, headl={:.3f}\n"
+        #                  .format(length, shaftl, shaftw, headw, headl))
 
         # Base
         self.vertexdata[0:3*2*4] = [0., -shaftw/2., shaftw/2., 1.,

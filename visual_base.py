@@ -445,7 +445,7 @@ class GrObject(Subject):
                 # newaxis is opposite self._axis.  Try crossing with zhat to get a rotaxis
                 rotax = numpy.array( [ self._axis[1], -self._axis[0], 0. ] )
                 # If that didn't work, then use yhat
-                rotaxmag = math.sqrt( rotax[0]*rotax[0] + rotax[1]**rotax[1] + rotax[2]*rotax[2] )
+                rotaxmag = math.sqrt( rotax[0]*rotax[0] + rotax[1]*rotax[1] + rotax[2]*rotax[2] )
                 if rotaxmag < 1e-10:
                     rotax = numpy.array( [ -self._axis[2], 0., self._axis[0] ] )
                     rotaxmag = math.sqrt( rotax[0]*rotax[0] + rotax[1]*rotax[1] + rotax[2]*rotax[2] )

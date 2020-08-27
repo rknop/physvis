@@ -521,11 +521,11 @@ class GLUTContext(GrContext):
 
         GLUT.glutMainLoop()
 
-    def add_idle_func(func):
+    def add_idle_func(self, func):
         self.idle_funcs.append(func)
 
-    def remove_idle_func(func):
-        self.idle_funcs = [x for x in GLUTContext.idle_funcs if x != func]
+    def remove_idle_func(self, func):
+        self.idle_funcs = [x for x in self.idle_funcs if x != func]
 
     def idle(self):
         if hasattr(self, "window") and self.window is not None:
@@ -843,3 +843,21 @@ class GLUTContext(GrContext):
         for collection in self.object_collections:
             collection.do_remove_object(obj)
 
+    # **********************************************************************
+    # imageobj is { "finished": bool,
+    #               "width": int,   ( to be loaded with image width )
+    #               "height": int,  ( to be loaded with image height ),
+    #               "data": object  ( to be loaded with GL.glReadPixels RGBA data )
+            
+    def snapshot( self, imageobj ):
+        imageobj["finished"] = False
+        def getsnapshot( ):
+            sys.stderr.write( "Getting snapshot.\n" )
+            sys.stderr.flush()
+            imageobj["data"] = GL.glReadPixels( 0, 0, self._width, self._height,
+                                                GL.GL_RGB, GL.GL_UNSIGNED_BYTE )
+            imageobj["width"] = self._width
+            imageobj["height"] = self._height
+            imageobj["finished"] = True
+            self.remove_idle_func( getsnapshot )
+        self.add_idle_func( getsnapshot )
